@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Company>TerkWerX</Company>
+    <Product>Tappy</Product>
+    <Authors>TerkWerX</Authors>
+    <Copyright>Copyright © 2026 TerkWerX</Copyright>
+    <RepositoryUrl>https://github.com/TerkWerX/TAPPY</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <DebugType Condition="'$(Configuration)' == 'Release'">embedded</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

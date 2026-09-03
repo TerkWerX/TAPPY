@@ -1,0 +1,66 @@
+name: Unknown controller support
+description: Help document a numpad, keypad, or vendor-HID hand controller safely
+title: "[Unknown controller]: "
+labels:
+  - hardware
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping expand Tappy's controller knowledge. Report only controls on the spare device being evaluated. Never post a raw device path, serial number, typed text, chronological key history, profile, mapping, username, or secret.
+
+        The optional schema-3 descriptor probe performs enumeration only; it does not register or monitor controller input. From a local checkout, run `dotnet run --project tools/Tappy.DeviceProbe/Tappy.DeviceProbe.csproj -c Release -- --json`, review its logical-controller inventory and `interfaceCount`, and include only the entry you believe belongs to the controller. Its fingerprint is one-way and is not proof of protocol behavior.
+
+        For a known Logitech G13, use the bug template instead. The physical G13 identity is `046D:C21C`, `FF00:0000`; `046D:C232` is a G HUB virtual keyboard and must not be reported as G13 hardware.
+  - type: input
+    id: model
+    attributes:
+      label: Brand and model printed on the controller
+      placeholder: Brand / model / version
+    validations:
+      required: true
+  - type: input
+    id: controls
+    attributes:
+      label: Number and type of physical controls
+      placeholder: 17-key USB numpad
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What Tappy detects
+      description: Describe missing, swapped, repeated, or simultaneous controller controls by printed label or Tappy control ID.
+    validations:
+      required: true
+  - type: textarea
+    id: descriptor
+    attributes:
+      label: Optional reviewed Device Probe entry
+      description: Include only sanitized JSON for this controller. Do not paste the full inventory if it contains unrelated devices.
+      render: json
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Evidence level
+      options:
+        - Descriptor-only enumeration
+        - Informal observation only
+        - Controller Passport captured locally
+        - Controller Passport and HIL run captured locally
+    validations:
+      required: true
+  - type: checkboxes
+    id: passthrough
+    attributes:
+      label: Pass-through confirmation
+      options:
+        - label: I understand Tappy does not suppress the controller's original Windows or vendor-software behavior.
+          required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I reviewed this issue and every attachment and removed private input, identifiers, paths, profiles, mappings, and secrets.
+          required: true

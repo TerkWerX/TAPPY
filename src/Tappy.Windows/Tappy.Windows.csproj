@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Tappy.Windows</RootNamespace>
+    <AssemblyName>Tappy.Windows</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Tappy.Core\Tappy.Core.csproj" />
+  </ItemGroup>
+</Project>

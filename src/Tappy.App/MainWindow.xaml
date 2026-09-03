@@ -1,0 +1,217 @@
+<Window x:Class="Tappy.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Tappy.App.ViewModels"
+        Title="Tappy — Put every key to work" Width="1120" Height="760"
+        MinWidth="760" MinHeight="540" WindowStartupLocation="CenterScreen"
+        Closing="MainWindow_OnClosing" StateChanged="MainWindow_OnStateChanged"
+        PreviewKeyDown="MainWindow_OnPreviewKeyDown" PreviewKeyUp="MainWindow_OnPreviewKeyUp"
+        AutomationProperties.Name="Tappy controller workspace">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style x:Key="PanelStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="13" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+    </Window.Resources>
+    <Grid Background="{DynamicResource WindowBrush}" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Background="#D9DEE4" CornerRadius="11" Padding="12,7" VerticalAlignment="Top">
+                <StackPanel Orientation="Horizontal">
+                    <UniformGrid Rows="2" Columns="2" Width="36" Height="36" Margin="0,0,10,0">
+                        <Border Background="#69B7FF" CornerRadius="4" Margin="2" />
+                        <Border Background="#66E3C4" CornerRadius="4" Margin="2" />
+                        <Border Background="#66E3C4" CornerRadius="4" Margin="2" />
+                        <Border Background="#F2C14E" CornerRadius="4" Margin="2" />
+                    </UniformGrid>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Tappy" Foreground="#1769AA" FontSize="27" FontWeight="SemiBold" />
+                        <TextBlock Text="by TerkWerX.com" Foreground="#263746" FontSize="10" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <Button Content="Full view" Click="FullView_OnClick" x:Name="FullViewButton"
+                        AutomationProperties.Name="Return to full view" Visibility="Collapsed" />
+                <Button Content="Compact" Click="Compact_OnClick" AutomationProperties.Name="Switch to compact view" />
+                <Button Content="Controller only" Click="ControllerOnly_OnClick" AutomationProperties.Name="Switch to controller-only view" />
+                <Button Content="To tray" Click="ToTray_OnClick" AutomationProperties.Name="Hide Tappy in notification area" />
+                <Button Content="Theme" Click="Theme_OnClick" AutomationProperties.Name="Toggle light or dark theme" />
+                <Button Content="About" Click="About_OnClick" />
+                <Button Content="Emergency stop" Click="EmergencyStop_OnClick"
+                        Foreground="White" Background="#B4233B" BorderBrush="{DynamicResource DangerBrush}"
+                        AutomationProperties.Name="Emergency stop and release all Tappy output" />
+            </WrapPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Background="#3B2F14" BorderBrush="{DynamicResource PressedBrush}"
+                BorderThickness="1" CornerRadius="11" Padding="13" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="PASS-THROUGH" Foreground="#FFE8A3" FontWeight="Bold" FontSize="15"
+                           VerticalAlignment="Center" Margin="0,0,14,0" />
+                <TextBlock Grid.Column="1" Text="Tappy can identify the selected device, but its original input may also reach other applications. No per-device blocking is active."
+                           Foreground="#FFF6DA" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" x:Name="SourceModeText" Text="{Binding EffectiveSourceLabel}"
+                           Foreground="#FFF6DA" FontWeight="SemiBold" Margin="16,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SetupColumn" Width="330" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel x:Name="SetupPanel" Grid.Column="0">
+                <Border Style="{StaticResource PanelStyle}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="1 · Choose a spare controller" FontSize="17" FontWeight="SemiBold" />
+                        <TextBlock Text="No device is selected automatically. Choose the intended numpad, keypad, or Logitech G13, then identify it with a physical press and release."
+                                   TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,11" />
+                        <ComboBox x:Name="DevicePicker" ItemsSource="{Binding Devices}"
+                                  SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                                  DisplayMemberPath="DisplayName" AutomationProperties.Name="Available supported controllers" />
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Content="Refresh" Click="RefreshDevices_OnClick" />
+                            <Button Content="Identify this device" Click="BeginIdentification_OnClick"
+                                    AutomationProperties.Name="Begin selected controller identification" />
+                        </WrapPanel>
+                        <TextBlock Text="{Binding IdentificationStatus}" TextWrapping="Wrap" Margin="0,2,0,8"
+                                   Foreground="{DynamicResource MutedTextBrush}" AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Text="While identification is armed, use the mouse to confirm; focused buttons ignore keyboard activation."
+                                   TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                        <Button Content="Confirm selected controller" Click="ConfirmController_OnClick"
+                                IsEnabled="{Binding CanConfirmController}"
+                                AutomationProperties.Name="Confirm the physically identified spare controller" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource PanelStyle}">
+                    <StackPanel>
+                        <TextBlock Text="2 · Map the selected control" FontSize="17" FontWeight="SemiBold" />
+                        <TextBlock Text="Press a confirmed controller key or click its tile. The starter mapping sends one unused function key."
+                                   TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,10" />
+                        <TextBlock Text="{Binding SelectedControlLabel, StringFormat=Selected: {0}}" FontWeight="SemiBold" />
+                        <ComboBox x:Name="OutputKeyPicker" ItemsSource="{Binding HarmlessOutputKeys}"
+                                  SelectedItem="{Binding SelectedOutputKey, Mode=TwoWay}" Margin="0,8,0,10"
+                                  AutomationProperties.Name="Harmless output key F13 through F24" />
+                        <CheckBox Content="Rehearsal Mode — recognize and illuminate; suppress all output"
+                                  IsChecked="{Binding IsRehearsal, Mode=TwoWay}" Margin="0,0,0,9"
+                                  AutomationProperties.Name="Rehearsal Mode" />
+                        <WrapPanel>
+                            <Button Content="Assign mapping" Click="AssignMapping_OnClick" />
+                            <Button Content="Save profile" Click="SaveProfile_OnClick" />
+                        </WrapPanel>
+                        <TextBlock Text="{Binding MappingStatus}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource MutedTextBrush}" AutomationProperties.LiveSetting="Polite" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <Border Grid.Column="2" Style="{StaticResource PanelStyle}" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid Margin="4,0,4,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Controller layout" FontSize="19" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding ActiveControllerLabel}" Foreground="{DynamicResource MutedTextBrush}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Text="Layer: " Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ActiveLayerName}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                  PanningMode="Both" Focusable="False" AutomationProperties.Name="Controller canvas">
+                        <ItemsControl ItemsSource="{Binding Controls}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel IsItemsHost="True" ItemWidth="112" ItemHeight="96" MaxWidth="620" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ControlTileViewModel}">
+                                    <Button Click="ControlTile_OnClick" Tag="{Binding}" Margin="5" Padding="5"
+                                            AutomationProperties.Name="{Binding AutomationName}"
+                                            AutomationProperties.HelpText="Pressing the physical control selects and illuminates this tile">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
+                                                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                                                <Setter Property="BorderThickness" Value="1" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                                        <Setter Property="BorderThickness" Value="3" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsIlluminated}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource PressedBrush}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource PressedTextBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center"
+                                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                            <TextBlock Text="{Binding Action}" TextWrapping="Wrap" TextAlignment="Center" FontSize="11"
+                                                       MaxWidth="94" Margin="0,5,0,0"
+                                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                            <TextBlock Text="{Binding StateText}" TextAlignment="Center" FontSize="10"
+                                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Margin="0,3,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <Border Grid.Row="2" Background="{DynamicResource RaisedBrush}" CornerRadius="8" Padding="9" Margin="4,10,4,0">
+                        <WrapPanel>
+                            <TextBlock Text="{Binding PressedSummary, StringFormat=Down: {0}}" Margin="0,0,18,0" />
+                            <TextBlock Text="{Binding EventSummary}" Foreground="{DynamicResource MutedTextBrush}" />
+                        </WrapPanel>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="3" Margin="2,10,2,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"
+                       AutomationProperties.LiveSetting="Polite" />
+            <TextBlock Grid.Column="1" Text="Local only · no telemetry" Foreground="{DynamicResource AccentBrush}" Margin="14,0,0,0" />
+        </Grid>
+    </Grid>
+</Window>

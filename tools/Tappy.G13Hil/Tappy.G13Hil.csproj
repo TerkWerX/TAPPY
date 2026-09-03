@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Tappy.G13Hil</RootNamespace>
+    <AssemblyName>Tappy.G13Hil</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tappy.Windows\Tappy.Windows.csproj" />
+  </ItemGroup>
+</Project>

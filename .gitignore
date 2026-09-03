@@ -1,0 +1,77 @@
+# Build and test output
+**/bin/
+**/obj/
+TestResults/
+artifacts/
+dist/
+staging/
+coverage/
+tmp/
+*.trx
+*.coverage
+*.coveragexml
+
+# IDE and local tooling
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.rsuser
+*.userosscache
+*.sln.docstates
+
+# Packages and caches
+packages/
+*.nupkg
+*.snupkg
+.nuget/
+
+# Local Tappy state, evidence, logs, and profiles
+TappyData/
+portable.mode
+*.tappy.json
+*.tappy-layer.json
+*.tappy-device.json
+*.tappy-passport.json
+*.tappy-hil.json
+*.tappy-doctor.json
+*.tappy-controller-pack.zip
+*.log
+SupportReports/
+Logs/
+Backups/
+Quarantine/
+
+# Signing material and secrets
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.secrets.json
+.env
+.env.*
+
+# Installer and release artifacts
+*.exe
+*.msi
+*.msix
+*.appx
+*.zip
+*.sha256
+release-manifest.json
+
+# Website/hosting workspaces never belong in this source tree
+upload-ready/
+website/
+host-sync/
+
+# Raw and separately managed controller artwork is protected reference material.
+# Preserve it on disk, but do not commit or package it until provenance is reviewed.
+PAD IMAGES/
+
+# OS noise
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tappy.App/Tappy.App.csproj" />
+    <Project Path="src/Tappy.Core/Tappy.Core.csproj" />
+    <Project Path="src/Tappy.Windows/Tappy.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tappy.App.Tests/Tappy.App.Tests.csproj" />
+    <Project Path="tests/Tappy.Core.Tests/Tappy.Core.Tests.csproj" />
+    <Project Path="tests/Tappy.G13Hil.Tests/Tappy.G13Hil.Tests.csproj" />
+    <Project Path="tests/Tappy.Windows.Tests/Tappy.Windows.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Tappy.DeviceProbe/Tappy.DeviceProbe.csproj" />
+    <Project Path="tools/Tappy.G13Hil/Tappy.G13Hil.csproj" />
+    <Project Path="tools/Tappy.PackSigner/Tappy.PackSigner.csproj" />
+  </Folder>
+</Solution>

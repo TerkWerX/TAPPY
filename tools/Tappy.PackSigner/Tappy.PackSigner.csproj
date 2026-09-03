@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Tappy.PackSigner</RootNamespace>
+    <AssemblyName>Tappy.PackSigner</AssemblyName>
+  </PropertyGroup>
+</Project>

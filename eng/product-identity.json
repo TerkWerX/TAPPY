@@ -1,0 +1,26 @@
+{
+  "product": "Tappy",
+  "version": "0.1.0",
+  "executable": "Tappy.exe",
+  "assemblyName": "Tappy",
+  "rootNamespace": "Tappy",
+  "company": "TerkWerX",
+  "appUserModelId": "TerkWerX.Tappy",
+  "mutex": "Local\\TerkWerX.Tappy.HandController.0_1",
+  "startupRegistryValue": "Tappy",
+  "localDataDirectory": "Tappy",
+  "portableDataDirectory": "TappyData",
+  "installerAppId": "{B42E5FBB-E4AB-458A-908E-838C8BD101BB}",
+  "emergencyHotkey": "Ctrl+Alt+Shift+F12",
+  "profileExtensions": [
+    ".tappy.json",
+    ".tappy-layer.json",
+    ".tappy-device.json",
+    ".tappy-passport.json",
+    ".tappy-hil.json",
+    ".tappy-doctor.json",
+    ".tappy-controller-pack.zip"
+  ],
+  "website": "https://www.terkwerx.com/tappy/",
+  "repository": "https://github.com/TerkWerX/TAPPY"
+}

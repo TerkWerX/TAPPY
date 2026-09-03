@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/TerkWerX/TAPPY/security/advisories/new
+    about: Do not disclose vulnerabilities, secrets, raw device paths, or captured input in a public issue.

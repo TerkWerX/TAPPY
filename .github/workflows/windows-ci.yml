@@ -1,0 +1,62 @@
+name: Windows CI and portable audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tappy-windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-portable-audit:
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the SDK recorded by global.json
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Build, test, publish, and audit portable payload
+        shell: pwsh
+        run: >-
+          ./tools/Build-Portable.ps1
+          -OutputDirectory "${{ github.workspace }}/artifacts/packages"
+
+      - name: Verify the build left tracked source unchanged
+        shell: pwsh
+        run: |
+          $trackedChanges = git status --porcelain --untracked-files=no
+          if ($trackedChanges) {
+            $trackedChanges
+            throw "The reproducible build modified tracked source files."
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tappy-test-results-${{ github.run_id }}
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # This workflow deliberately has no tag trigger, signing-secret access,
+      # installer compilation, deployment permission, or GitHub Release step.
+      # The unsigned ZIP and manifest are audited only on the ephemeral runner and
+      # are deliberately not uploaded or distributed.

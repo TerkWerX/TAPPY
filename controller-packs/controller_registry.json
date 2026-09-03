@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "product": "Tappy",
+  "registry_version": "0.1.0",
+  "rendering": {
+    "mode": "code",
+    "external_artwork": false,
+    "description": "Generate a neutral grid from the controls observed on the deliberately selected controller."
+  },
+  "controllers": [],
+  "fallback_layout": {
+    "id": "generic-observed-control-grid",
+    "name": "Observed controls",
+    "kind": "generated-grid",
+    "control_source": "observed-physical-controls",
+    "columns": "automatic",
+    "key_width_units": 1.0,
+    "key_height_units": 1.0,
+    "gap_units": 0.15,
+    "show_physical_identity": true
+  }
+}

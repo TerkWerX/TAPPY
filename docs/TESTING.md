@@ -1,0 +1,126 @@
+# Testing and evidence record
+
+This record separates deterministic software evidence from packaged-artifact and
+physical-hardware evidence. Passing automated tests does not certify a controller,
+prove 6KRO/NKRO behavior, or establish physical latency.
+
+## 2026-09-02 source-tree verification
+
+Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.303`; product projects
+target .NET 8. The verification was run in Release configuration.
+
+| Check | Result | Evidence boundary |
+|---|---:|---|
+| `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
+| `Tappy.Core.Tests` | 30 passed, 0 failed | Deterministic platform-neutral behavior |
+| `Tappy.Windows.Tests` | 90 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, provider contracts, output tagging, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
+| `Tappy.App.Tests` | 31 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, mapping/profile round-trip, Rehearsal Mode, lifecycle/fault cleanup, accessibility state, and unplug handling with fake providers/output |
+| `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
+| Current automated total | 174 passed, 0 failed | Core 30 + Windows 90 + App 31 + G13 HIL tool 23 |
+| `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 10 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
+| `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
+
+The automated slice covers explicit select/identify/release/confirm activation;
+scan-code plus E0/E1 identity; make, break, repeat, simultaneous and multi-session
+state; unselected and self-injected input rejection; reference-counted held output;
+frozen release context; disconnect, lifecycle, profile-swap, and emergency cleanup;
+recursion/depth/rate guards; immutable profile round-trip and isolation; raw-path
+redaction; the app's safe F13-F24 mapping path; identification-time WPF key handling;
+live automation names; ordered deferred visual transitions; a truthful quick-tap
+illumination pulse; bounded backlog compaction with final-state preservation;
+presentation-mode minimums; and high-contrast theme
+precedence. Added coverage proves authoritative keyboard ContainerId grouping and
+the dedicated G13 decoder/provider/App path, including exact identity, `C232`
+exclusion, all code-defined controls, simultaneous state, profile round-trip, and
+fail-safe cleanup. Those are code tests, not physical G13 control evidence.
+
+The build above validates the current source tree. Source, documentation, and CI are
+authorized for the public repository. Clean-checkout CI and every local package run
+must generate their own revision/payload manifest; tracked docs intentionally do not
+duplicate a commit ID that would become stale when the record itself is committed.
+
+## Local portable artifact checkpoint
+
+The last completed package checkpoint verified the allowlisted three-file payload
+and executed both the actual published `Tappy.exe` and a fresh copy extracted from
+the portable ZIP. Each run passed `controller-registry`, `profile-round-trip`,
+`rehearsal-no-output`, and `tappy-doctor`, with `injectedInputCount: 0`. Changes made
+after that checkpoint require a fresh run; the K15 grouping and G13 provider are
+awaiting that final rebuild.
+
+The generated manifest is authoritative for the exact source revision, payload
+paths/sizes/hashes, archive hash, toolchain, and unsigned status. A passing local
+readiness artifact is not an authorized software release.
+
+## Physical and manual evidence
+
+No Controller Passport, G13 HIL session, or operator-reviewed physical control run
+has been completed. In particular, the following remain unverified on hardware:
+
+- make/break illumination, OS repeat, rollover/ghosting, simultaneous-state truth,
+  Num Lock variants, reconnect identity, and identical-device selection;
+- original-key pass-through in a harmless target application;
+- normal F13-F24 output, self-injection behavior, unplug-while-held release, the
+  global emergency chord, and mouse/tray recovery;
+- Windows lock/unlock, suspend/resume, orderly shutdown, multi-monitor/DPI behavior,
+  theme/high-contrast accessibility, and input-to-output latency targets.
+
+The schema-3 descriptor-only `Tappy.DeviceProbe` completed with exit code 0. It
+reported six logical controllers: five keyboard groups and one supported-controller
+group. The attached, user-identified Freewolf K15 candidate is one authoritative
+ContainerId group at VID `1A2C`/PID `2D43`, with four Raw Input keyboard interfaces
+and distinct reported total-key capabilities of 56 and 264. The physical Logitech
+G13 is exactly one `046D:C21C`, `FF00:0000` ContainerId group with one interface and
+39 code-defined controls. `046D:C232` does not appear because it is the excluded G
+HUB virtual keyboard, not G13 identity.
+
+The probe registered no input, opened no reports, captured no control activity, and
+printed no raw paths or ContainerIds. These are Enumerated/code-supported facts only:
+they establish neither K15 key behavior nor G13 button/stick behavior, mappings,
+unplug recovery, image identity, Functional status, or Verified support. Follow
+[`HARDWARE_TEST_STATION.md`](HARDWARE_TEST_STATION.md) before promotion.
+
+`Tappy.G13Hil` now provides a finite, explicitly armed aggregate verifier for all 39
+code-defined controls, simultaneous groups, transition balance, and duplicate
+suppression. Its 23 deterministic tests pass, but no armed live run has completed;
+its existence does not advance the G13 beyond code-supported. See the
+[G13 support boundary](LOGITECH_G13.md).
+
+## Static identity and privacy audit
+
+A case-insensitive source-tree scan (excluding build output, artifacts, and the
+separately managed `PAD IMAGES` tree) found no Tippy executable/data/profile/
+installer identity, old installer GUID, old mutex, or old Tippy URL in Tappy runtime
+or packaging values. The canonical Tappy values agree across
+`eng/product-identity.json`, Windows constants, tests, and installer scaffolding.
+
+Occurrences of `Tippy` or `pedal` are intentional and limited to the kickoff/source
+specifications, the read-only reuse map and architecture provenance, coexistence or
+non-reuse warnings, the README sister-project acknowledgement, and negative identity
+assertions in tests. They are documentation/test context, not executable identity.
+No identity correction was required.
+
+The same audit found no telemetry or upload implementation. Normal diagnostics are
+aggregate-only; raw device paths are converted to sanitized fingerprints at the
+Windows boundary and are covered by redaction tests.
+
+Repository visibility is authorized, but no public software license has been
+selected or granted. The configured `/tappy/` website URL is an identity reservation,
+not a live-site claim; the endpoint returned 404 in the 2026-09-02 audit. Packaged
+release, signing, website publication, production hosting, and final branding remain
+separate owner decisions.
+
+An owner-authorized internal donor audit found no reusable G13 or SpacePilot
+implementation. No donor code, repository history, or logs were copied. The Tappy
+G13 path was independently implemented from the public sources recorded in
+[`LOGITECH_G13.md`](LOGITECH_G13.md) and project-owned design.
+
+## Next milestone
+
+Run the explicitly armed G13 verifier and retain a passing aggregate HIL record;
+then complete K15 Controller Passport/HIL input and pass-through checks. Re-run the
+portable audit and clean-checkout CI after the provider additions, and continue to
+repeat the dependency advisory query at release checkpoints. Keep generic
+code-rendered layouts: all processed controller images remain excluded pending
+source provenance, usage rights, exact-model/protocol evidence, processing records,
+and explicit human approval.

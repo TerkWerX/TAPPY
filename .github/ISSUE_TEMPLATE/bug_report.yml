@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a repeatable problem with Tappy
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Tappy. Tappy handles keyboard-class input and the Logitech G13 vendor-HID protocol, so privacy matters: do not post typed text, chronological control histories, raw HID reports, profiles or mappings, raw device paths, serial numbers, usernames, secrets, or unreviewed logs. Describe controls by their printed label or Tappy control ID.
+
+        Tappy currently uses device-aware pass-through. Original keyboard input or parallel vendor-software behavior may still occur; that alone is not a suppression bug. For G13 reports, the physical identity is `046D:C21C`, `FF00:0000`; `046D:C232` is a G HUB virtual keyboard, not the G13 device.
+  - type: input
+    id: version
+    attributes:
+      label: Tappy version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows edition and build
+      placeholder: Windows 11 24H2, OS build 26100.x
+    validations:
+      required: true
+  - type: input
+    id: controller
+    attributes:
+      label: Controller brand and model
+      description: Use only the public label printed on the device; omit serial numbers and device paths.
+      placeholder: Optional
+  - type: dropdown
+    id: output_mode
+    attributes:
+      label: Output mode
+      options:
+        - Rehearsal Mode
+        - Normal output
+        - Needs attention / output blocked
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Explain what you expected and what occurred instead without including captured typing.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Minimal steps to reproduce
+      placeholder: |
+        1. Connect the spare controller.
+        2. Select, identify, and confirm it in Tappy.
+        3. Press the controller button labeled ...
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Additional, privacy-reviewed details
+      description: Include theme, window mode, harmless mapping, aggregate diagnostics, or redacted screenshots only if useful.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I reviewed this issue and every attachment and removed private input, identifiers, paths, profiles, mappings, and secrets.
+          required: true
