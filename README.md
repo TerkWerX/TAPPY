@@ -17,9 +17,9 @@ keyboards plus a dedicated Logitech G13 vendor-HID provider. Both require delibe
 selection, press/release identification, neutral state, and explicit confirmation
 before input can reach mapping. The UI shows press/release/repeat and simultaneous
 state and maps one control to a harmless F13–F24 output in Rehearsal or normal mode.
-The Release solution build passes with zero warnings or errors; 256 current
+The Release solution build passes with zero warnings or errors; 260 current
 automated tests pass
-(Core 31, Windows 99, App 50, G13 HIL tool 23, Output Witness 53). Exact package and
+(Core 31, Windows 99, App 54, G13 HIL tool 23, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its

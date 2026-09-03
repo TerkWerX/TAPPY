@@ -9,6 +9,14 @@
         AutomationProperties.Name="Tappy controller workspace">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <DataTemplate x:Key="ControllerChoiceComboBoxItemTemplate">
+            <TextBlock Text="{Binding DisplayName}"
+                       Foreground="{DynamicResource ComboBoxTextBrush}" />
+        </DataTemplate>
+        <DataTemplate x:Key="OutputKeyComboBoxItemTemplate">
+            <TextBlock Text="{Binding}"
+                       Foreground="{DynamicResource ComboBoxTextBrush}" />
+        </DataTemplate>
         <Style x:Key="PanelStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
@@ -93,7 +101,8 @@
                                    Foreground="{DynamicResource MutedTextBrush}" />
                         <ComboBox x:Name="DevicePicker" ItemsSource="{Binding Devices}"
                                   SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
-                                  DisplayMemberPath="DisplayName" AutomationProperties.Name="Available supported controllers" />
+                                  ItemTemplate="{StaticResource ControllerChoiceComboBoxItemTemplate}"
+                                  AutomationProperties.Name="Available supported controllers" />
                         <WrapPanel Margin="0,10,0,0">
                             <Button Content="Refresh" Click="RefreshDevices_OnClick" />
                             <Button Content="Identify this device" Click="BeginIdentification_OnClick"
@@ -118,6 +127,7 @@
                         <TextBlock Text="{Binding SelectedControlLabel, StringFormat=Selected: {0}}" FontWeight="SemiBold" />
                         <ComboBox x:Name="OutputKeyPicker" ItemsSource="{Binding HarmlessOutputKeys}"
                                   SelectedItem="{Binding SelectedOutputKey, Mode=TwoWay}" Margin="0,8,0,10"
+                                  ItemTemplate="{StaticResource OutputKeyComboBoxItemTemplate}"
                                   AutomationProperties.Name="Harmless output key F13 through F24" />
                         <CheckBox Content="Rehearsal Mode — recognize and illuminate; suppress all output"
                                   IsChecked="{Binding IsRehearsal, Mode=TwoWay}" Margin="0,0,0,9"

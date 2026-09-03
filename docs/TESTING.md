@@ -14,10 +14,10 @@ target .NET 8. The verification was run in Release configuration.
 | `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
 | `Tappy.Core.Tests` | 31 passed, 0 failed | Deterministic platform-neutral behavior, including explicit cleanup-dispatch results |
 | `Tappy.Windows.Tests` | 99 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, capability-isolated registration faults, bounded message-host shutdown routing, provider contracts, pre-arm neutrality, output tagging, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
-| `Tappy.App.Tests` | 50 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, accessibility state, and unplug handling with fake providers/output |
+| `Tappy.App.Tests` | 54 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, accessible theme-aware ComboBox text, accessibility state, and unplug handling with fake providers/output |
 | `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
 | `Tappy.OutputWitness.Tests` | 53 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break and output state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
-| Current automated total | 256 passed, 0 failed | Core 31 + Windows 99 + App 50 + G13 HIL tool 23 + Output Witness 53 |
+| Current automated total | 260 passed, 0 failed | Core 31 + Windows 99 + App 54 + G13 HIL tool 23 + Output Witness 53 |
 | `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 12 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
@@ -44,6 +44,11 @@ aggregate-only evidence, exact selected-output cardinality, source repeat, and
 post-condition drains. They do not provide physical-device attribution or replace
 the attended operator record.
 
+The app suite also asserts that both standard theme palettes provide at least 4.5:1
+ComboBox text/background contrast, that High Contrast uses Windows system colors,
+and that both visible dropdowns override the global TextBlock foreground which made
+unselected device names unreadable during the first attended T01 attempt.
+
 The build above validates the current source tree. Source, documentation, and CI are
 authorized for the public repository. Clean-checkout CI and every local package run
 must generate their own revision/payload manifest; tracked docs intentionally do not
@@ -52,7 +57,7 @@ duplicate a commit ID that would become stale when the record itself is committe
 ## Local portable artifact checkpoint
 
 The current post-provider package checkpoint was built from clean committed source.
-It ran all 256 tests, recorded all twelve package locks, verified the allowlisted
+It ran all 260 tests, recorded all twelve package locks, verified the allowlisted
 three-file payload, and executed both the actual published `Tappy.exe` and a fresh
 copy extracted from the portable ZIP. Each readiness run passed
 `controller-registry`, `profile-round-trip`, `rehearsal-no-output`, and

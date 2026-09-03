@@ -11,6 +11,8 @@
     <SolidColorBrush x:Key="PressedTextBrush" Color="{DynamicResource {x:Static SystemColors.HighlightTextColorKey}}" />
     <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
     <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+    <SolidColorBrush x:Key="ComboBoxTextBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+    <SolidColorBrush x:Key="ComboBoxBackgroundBrush" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
     <Style TargetType="Window">
         <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
         <Setter Property="Background" Value="{DynamicResource WindowBrush}" />
@@ -31,8 +33,8 @@
         <Setter Property="MinHeight" Value="34" />
     </Style>
     <Style TargetType="ComboBox">
-        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-        <Setter Property="Background" Value="{DynamicResource WindowBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundBrush}" />
         <Setter Property="Padding" Value="7,5" />
         <Setter Property="MinHeight" Value="34" />
     </Style>

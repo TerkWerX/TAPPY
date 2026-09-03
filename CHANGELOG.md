@@ -52,14 +52,17 @@ Notable changes to Tappy are documented here.
 - Cleanup failure now preserves the unclean-session marker, global-hotkey conflicts
   survive later status updates, and a refused Normal-mode request snaps the UI back
   to the effective Rehearsal state.
-- Current deterministic results: Core 31, Windows 99, App 50, G13 HIL tool 23,
-  and Output Witness 53 tests pass (256 total) with a zero-warning, zero-error
+- Controller and output-key ComboBoxes now use explicit theme-aware item text instead
+  of inheriting light app text onto the native white dropdown surface. Dark/light
+  contrast and High Contrast system-color routing have deterministic regression tests.
+- Current deterministic results: Core 31, Windows 99, App 54, G13 HIL tool 23,
+  and Output Witness 53 tests pass (260 total) with a zero-warning, zero-error
   Release build.
 - A locked restore, formatting verification, and all-project dependency advisory
   query pass; NuGet reports no known vulnerable packages in the current twelve-project
   solution. This is an advisory checkpoint, not a complete security audit.
 - A clean committed-source portable audit passes the three-file payload allowlist,
-  all 256 tests, published and freshly extracted readiness smoke checks, twelve package
+  all 260 tests, published and freshly extracted readiness smoke checks, twelve package
   lock records, and zero injected input. The artifact remains an unsigned local
   checkpoint, not a public release.
 
