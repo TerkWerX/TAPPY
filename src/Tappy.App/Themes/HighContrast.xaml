@@ -13,6 +13,9 @@
     <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
     <SolidColorBrush x:Key="ComboBoxTextBrush" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
     <SolidColorBrush x:Key="ComboBoxBackgroundBrush" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+    <SolidColorBrush x:Key="ButtonDisabledTextBrush" Color="{DynamicResource {x:Static SystemColors.GrayTextColorKey}}" />
+    <SolidColorBrush x:Key="ButtonDisabledBackgroundBrush" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+    <SolidColorBrush x:Key="ButtonDisabledBorderBrush" Color="{DynamicResource {x:Static SystemColors.GrayTextColorKey}}" />
     <Style TargetType="Window">
         <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
         <Setter Property="Background" Value="{DynamicResource WindowBrush}" />
@@ -23,14 +26,6 @@
     </Style>
     <Style TargetType="Label">
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    </Style>
-    <Style TargetType="Button">
-        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-        <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-        <Setter Property="Padding" Value="13,7" />
-        <Setter Property="Margin" Value="0,0,8,8" />
-        <Setter Property="MinHeight" Value="34" />
     </Style>
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />

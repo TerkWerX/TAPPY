@@ -5,8 +5,8 @@ Status values are `Implemented`, `First-slice`, `Code-supported`, `Planned`,
 provenance, not a runtime dependency; Tappy does not reference the Tippy working
 tree.
 
-Evidence snapshot: the Release solution build has zero warnings/errors and all 260
-current automated tests pass (Core 31, Windows 99, App 54, G13 HIL tool 23,
+Evidence snapshot: the Release solution build has zero warnings/errors and all 261
+current automated tests pass (Core 31, Windows 99, App 55, G13 HIL tool 23,
 Output Witness 53). The
 current clean-source portable checkpoint includes the K15/G13 provider additions
 and passes both published/extracted readiness audits. Exact evidence boundaries are

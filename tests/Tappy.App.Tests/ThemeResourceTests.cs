@@ -9,12 +9,14 @@ public sealed class ThemeResourceTests
         "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Theory]
-    [InlineData("Dark.xaml", "#101318", "#F3F7FA")]
-    [InlineData("Light.xaml", "#17202A", "#FFFFFF")]
-    public void Standard_themes_define_readable_combo_box_text(
+    [InlineData("Dark.xaml", "#101318", "#F3F7FA", "#A8B3BE", "#2A313B")]
+    [InlineData("Light.xaml", "#17202A", "#FFFFFF", "#56616B", "#E5EAEE")]
+    public void Standard_themes_define_readable_combo_box_and_disabled_button_text(
         string themeFile,
         string expectedForeground,
-        string expectedBackground)
+        string expectedBackground,
+        string expectedDisabledForeground,
+        string expectedDisabledBackground)
     {
         var document = XDocument.Load(SourcePath("src", "Tappy.App", "Themes", themeFile));
 
@@ -26,6 +28,14 @@ public sealed class ThemeResourceTests
         Assert.True(
             ContrastRatio(foreground, background) >= 4.5,
             $"{themeFile} ComboBox text contrast must meet WCAG AA normal-text contrast.");
+
+        var disabledForeground = ResourceValue(document, "Color", "ButtonDisabledTextColor");
+        var disabledBackground = ResourceValue(document, "Color", "ButtonDisabledBackgroundColor");
+        Assert.Equal(expectedDisabledForeground, disabledForeground);
+        Assert.Equal(expectedDisabledBackground, disabledBackground);
+        Assert.True(
+            ContrastRatio(disabledForeground, disabledBackground) >= 4.5,
+            $"{themeFile} disabled button labels must remain plainly readable.");
         AssertComboBoxStyleUsesDedicatedBrushes(document);
     }
 
@@ -43,11 +53,51 @@ public sealed class ThemeResourceTests
             "SystemColors.WindowColorKey",
             ResourceValue(document, "SolidColorBrush", "ComboBoxBackgroundBrush"),
             StringComparison.Ordinal);
+        Assert.Contains(
+            "SystemColors.GrayTextColorKey",
+            ResourceValue(document, "SolidColorBrush", "ButtonDisabledTextBrush"),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SystemColors.ControlColorKey",
+            ResourceValue(document, "SolidColorBrush", "ButtonDisabledBackgroundBrush"),
+            StringComparison.Ordinal);
         AssertComboBoxStyleUsesDedicatedBrushes(document);
     }
 
     [Fact]
-    public void Main_window_combo_boxes_override_global_text_block_foreground()
+    public void Shared_button_template_explicitly_styles_disabled_state()
+    {
+        var document = XDocument.Load(SourcePath("src", "Tappy.App", "App.xaml"));
+        var buttonTemplate = document
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "ControlTemplate" &&
+                element.Attribute("TargetType")?.Value == "{x:Type Button}");
+        var disabledTrigger = buttonTemplate
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Trigger" &&
+                element.Attribute("Property")?.Value == "IsEnabled" &&
+                element.Attribute("Value")?.Value == "False");
+        var setters = disabledTrigger.Elements()
+            .Where(element => element.Name.LocalName == "Setter")
+            .ToArray();
+
+        Assert.Contains(setters, setter =>
+            setter.Attribute("Property")?.Value == "Foreground" &&
+            setter.Attribute("Value")?.Value == "{DynamicResource ButtonDisabledTextBrush}");
+        Assert.Contains(setters, setter =>
+            setter.Attribute("TargetName")?.Value == "ButtonBorder" &&
+            setter.Attribute("Property")?.Value == "Background" &&
+            setter.Attribute("Value")?.Value == "{DynamicResource ButtonDisabledBackgroundBrush}");
+        Assert.Contains(setters, setter =>
+            setter.Attribute("TargetName")?.Value == "ButtonBorder" &&
+            setter.Attribute("Property")?.Value == "BorderBrush" &&
+            setter.Attribute("Value")?.Value == "{DynamicResource ButtonDisabledBorderBrush}");
+    }
+
+    [Fact]
+    public void Main_window_dropdowns_and_control_labels_are_readable()
     {
         var document = XDocument.Load(SourcePath("src", "Tappy.App", "MainWindow.xaml"));
         var devicePicker = NamedElement(document, "ComboBox", "DevicePicker");
@@ -63,6 +113,34 @@ public sealed class ThemeResourceTests
 
         AssertReadableTemplate(document, "ControllerChoiceComboBoxItemTemplate", "{Binding DisplayName}");
         AssertReadableTemplate(document, "OutputKeyComboBoxItemTemplate", "{Binding}");
+
+        var tilePanel = document
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "WrapPanel" &&
+                element.Attribute("IsItemsHost")?.Value == "True");
+        Assert.Equal("144", tilePanel.Attribute("ItemWidth")?.Value);
+        Assert.Equal("116", tilePanel.Attribute("ItemHeight")?.Value);
+        Assert.Equal("760", tilePanel.Attribute("MaxWidth")?.Value);
+
+        var tileLabel = document
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "TextBlock" &&
+                element.Attribute("Text")?.Value == "{Binding Label}");
+        Assert.Equal("13", tileLabel.Attribute("FontSize")?.Value);
+        Assert.Equal("Wrap", tileLabel.Attribute("TextWrapping")?.Value);
+        Assert.Equal("None", tileLabel.Attribute("TextTrimming")?.Value);
+        Assert.Equal("Center", tileLabel.Attribute("TextAlignment")?.Value);
+
+        var rehearsalLabel = document
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "TextBlock" &&
+                element.Attribute("Text")?.Value?.StartsWith(
+                    "Rehearsal Mode —",
+                    StringComparison.Ordinal) == true);
+        Assert.Equal("Wrap", rehearsalLabel.Attribute("TextWrapping")?.Value);
     }
 
     private static void AssertComboBoxStyleUsesDedicatedBrushes(XDocument document)

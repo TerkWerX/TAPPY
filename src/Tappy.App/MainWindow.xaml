@@ -129,9 +129,11 @@
                                   SelectedItem="{Binding SelectedOutputKey, Mode=TwoWay}" Margin="0,8,0,10"
                                   ItemTemplate="{StaticResource OutputKeyComboBoxItemTemplate}"
                                   AutomationProperties.Name="Harmless output key F13 through F24" />
-                        <CheckBox Content="Rehearsal Mode — recognize and illuminate; suppress all output"
-                                  IsChecked="{Binding IsRehearsal, Mode=TwoWay}" Margin="0,0,0,9"
-                                  AutomationProperties.Name="Rehearsal Mode" />
+                        <CheckBox IsChecked="{Binding IsRehearsal, Mode=TwoWay}" Margin="0,0,0,9"
+                                  AutomationProperties.Name="Rehearsal Mode">
+                            <TextBlock Text="Rehearsal Mode — recognize and illuminate; suppress all output"
+                                       TextWrapping="Wrap" />
+                        </CheckBox>
                         <WrapPanel>
                             <Button Content="Assign mapping" Click="AssignMapping_OnClick" />
                             <Button Content="Save profile" Click="SaveProfile_OnClick" />
@@ -168,7 +170,7 @@
                         <ItemsControl ItemsSource="{Binding Controls}" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <WrapPanel IsItemsHost="True" ItemWidth="112" ItemHeight="96" MaxWidth="620" />
+                                    <WrapPanel IsItemsHost="True" ItemWidth="144" ItemHeight="116" MaxWidth="760" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
@@ -194,7 +196,9 @@
                                             </Style>
                                         </Button.Style>
                                         <StackPanel>
-                                            <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center"
+                                            <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="13"
+                                                       TextWrapping="Wrap" TextTrimming="None" TextAlignment="Center"
+                                                       LineHeight="15" MaxWidth="122" HorizontalAlignment="Center"
                                                        Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                                             <TextBlock Text="{Binding Action}" TextWrapping="Wrap" TextAlignment="Center" FontSize="11"
                                                        MaxWidth="94" Margin="0,5,0,0"

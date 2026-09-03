@@ -12,6 +12,9 @@
     <Color x:Key="BorderColor">#9AA9B5</Color>
     <Color x:Key="ComboBoxTextColor">#17202A</Color>
     <Color x:Key="ComboBoxBackgroundColor">#FFFFFF</Color>
+    <Color x:Key="ButtonDisabledTextColor">#56616B</Color>
+    <Color x:Key="ButtonDisabledBackgroundColor">#E5EAEE</Color>
+    <Color x:Key="ButtonDisabledBorderColor">#9AA6B0</Color>
     <SolidColorBrush x:Key="WindowBrush" Color="{StaticResource WindowColor}" />
     <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
     <SolidColorBrush x:Key="RaisedBrush" Color="{StaticResource RaisedColor}" />
@@ -25,6 +28,9 @@
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
     <SolidColorBrush x:Key="ComboBoxTextBrush" Color="{StaticResource ComboBoxTextColor}" />
     <SolidColorBrush x:Key="ComboBoxBackgroundBrush" Color="{StaticResource ComboBoxBackgroundColor}" />
+    <SolidColorBrush x:Key="ButtonDisabledTextBrush" Color="{StaticResource ButtonDisabledTextColor}" />
+    <SolidColorBrush x:Key="ButtonDisabledBackgroundBrush" Color="{StaticResource ButtonDisabledBackgroundColor}" />
+    <SolidColorBrush x:Key="ButtonDisabledBorderBrush" Color="{StaticResource ButtonDisabledBorderColor}" />
     <Style TargetType="Window">
         <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
         <Setter Property="Background" Value="{DynamicResource WindowBrush}" />
@@ -35,14 +41,6 @@
     </Style>
     <Style TargetType="Label">
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    </Style>
-    <Style TargetType="Button">
-        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-        <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-        <Setter Property="Padding" Value="13,7" />
-        <Setter Property="Margin" Value="0,0,8,8" />
-        <Setter Property="MinHeight" Value="34" />
     </Style>
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />

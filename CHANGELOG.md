@@ -55,14 +55,17 @@ Notable changes to Tappy are documented here.
 - Controller and output-key ComboBoxes now use explicit theme-aware item text instead
   of inheriting light app text onto the native white dropdown surface. Dark/light
   contrast and High Contrast system-color routing have deterministic regression tests.
-- Current deterministic results: Core 31, Windows 99, App 54, G13 HIL tool 23,
-  and Output Witness 53 tests pass (260 total) with a zero-warning, zero-error
+- A shared button template keeps disabled actions visibly labeled instead of
+  rendering a blank white bar. Controller tiles are wider/taller with smaller,
+  wrapped labels, and the safety-critical Rehearsal label now wraps instead of clipping.
+- Current deterministic results: Core 31, Windows 99, App 55, G13 HIL tool 23,
+  and Output Witness 53 tests pass (261 total) with a zero-warning, zero-error
   Release build.
 - A locked restore, formatting verification, and all-project dependency advisory
   query pass; NuGet reports no known vulnerable packages in the current twelve-project
   solution. This is an advisory checkpoint, not a complete security audit.
 - A clean committed-source portable audit passes the three-file payload allowlist,
-  all 260 tests, published and freshly extracted readiness smoke checks, twelve package
+  all 261 tests, published and freshly extracted readiness smoke checks, twelve package
   lock records, and zero injected input. The artifact remains an unsigned local
   checkpoint, not a public release.
 
