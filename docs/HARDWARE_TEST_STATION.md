@@ -5,6 +5,12 @@ marked physical only when the operator explicitly starts a session and events ar
 from a real selected Raw Input handle. Descriptor enumeration and deterministic
 tests are not physical control evidence.
 
+The attended [`FIRST_MILESTONE_OPERATOR_RUN.md`](FIRST_MILESTONE_OPERATOR_RUN.md)
+defines the narrow one-Targus completion witness, exact Output Witness commands, and
+evidence fields. The wider Passport/HIL gates below apply to compatibility promotion
+and must not be represented as already completed or silently substituted for that
+finite milestone run.
+
 ## Controller Passport gate
 
 For every control in the reviewed layout, capture at least two physical make/break

@@ -193,6 +193,75 @@ public sealed class LogitechG13InputProviderTests
     }
 
     [Fact]
+    public async Task Capability_failure_removes_G13_choices_without_faulting_other_host_consumers()
+    {
+        var host = new FakeRawInputMessageHost();
+        await using var provider = CreateProvider(host);
+        var availabilityChanges = 0;
+        var fatalFaults = 0;
+        List<ControlSignal> signals = [];
+        provider.AvailabilityChanged += (_, _) => availabilityChanges++;
+        provider.Faulted += (_, _) => fatalFaults++;
+        provider.SignalReceived += signals.Add;
+        ConfirmNeutral(provider, host);
+        host.Emit(Frame(G13.SessionHandle, 1));
+
+        host.EmitFault(new RawInputCapabilityException(
+            RawInputCapability.LogitechG13,
+            "G13 registration unavailable."));
+
+        Assert.False(provider.IsAvailable);
+        Assert.Contains("keyboard controllers remain available", provider.AvailabilityStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, availabilityChanges);
+        Assert.Equal(0, fatalFaults);
+        Assert.Empty(provider.EnumerateControllers());
+        Assert.Empty(provider.ConnectedControllers);
+        Assert.Null(provider.CaptureTarget);
+        Assert.False(provider.SetCaptureTarget(G13.SessionHandle));
+        Assert.Equal([ControlSignalKind.Press, ControlSignalKind.Release],
+            signals.Select(signal => signal.Kind));
+    }
+
+    [Fact]
+    public async Task Selected_membership_change_releases_state_and_requires_reconfirmation()
+    {
+        var logical = G13 with
+        {
+            SessionHandle = new nint(900),
+            SessionId = "g13-container-session",
+            PersistentId = "raw-hid-g13:container",
+            MemberSessionHandles = [new nint(901), new nint(902)],
+            Grouping = PhysicalDeviceGrouping.WindowsContainerId,
+        };
+        var remaining = logical with { MemberSessionHandles = [new nint(902)] };
+        var host = new FakeRawInputMessageHost();
+        var enumerator = new FakeLogitechG13DeviceEnumerator(logical);
+        await using var provider = new LogitechG13InputProvider(enumerator, host);
+        var changes = new List<LogitechG13DeviceChangedEventArgs>();
+        List<ControlSignal> mapped = [];
+        provider.DeviceChanged += (_, change) => changes.Add(change);
+        provider.SignalReceived += mapped.Add;
+        _ = provider.EnumerateControllers();
+        Assert.True(provider.SetCaptureTarget(logical.SessionHandle));
+        host.Emit(Frame(new nint(901), 0));
+        Assert.True(provider.SetConfirmedPersistentId(logical.PersistentId));
+        host.Emit(Frame(new nint(901), 1));
+        enumerator.SetDescriptors(remaining);
+
+        host.EmitDeviceChange(new nint(901), RawInputDeviceChangeKind.Removal);
+        host.Emit(Frame(new nint(902), 1UL << 1));
+
+        var change = Assert.Single(changes);
+        Assert.Equal(RawInputDeviceChangeKind.MembershipChanged, change.Kind);
+        Assert.True(change.WasCaptureTarget);
+        Assert.Equal(logical.SessionHandle, provider.CaptureTarget);
+        Assert.False(provider.IsCaptureConfirmed);
+        Assert.Equal([ControlSignalKind.Press, ControlSignalKind.Release],
+            mapped.Select(signal => signal.Kind));
+    }
+
+    [Fact]
     public async Task RemovalPublishesAllHeldReleasesAndSanitizedDeviceChange()
     {
         var host = new FakeRawInputMessageHost();

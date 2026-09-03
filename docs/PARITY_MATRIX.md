@@ -5,12 +5,16 @@ Status values are `Implemented`, `First-slice`, `Code-supported`, `Planned`,
 provenance, not a runtime dependency; Tappy does not reference the Tippy working
 tree.
 
-Evidence snapshot: the Release solution build has zero warnings/errors and all 184
-current automated tests pass (Core 31, Windows 92, App 38, G13 HIL tool 23). The
+Evidence snapshot: the Release solution build has zero warnings/errors and all 256
+current automated tests pass (Core 31, Windows 99, App 50, G13 HIL tool 23,
+Output Witness 53). The
 current clean-source portable checkpoint includes the K15/G13 provider additions
 and passes both published/extracted readiness audits. Exact evidence boundaries are
 in [`TESTING.md`](TESTING.md). All
 physical/manual control checks remain pending.
+The finite attended run and its narrow-versus-promotion boundary are defined in
+[`FIRST_MILESTONE_OPERATOR_RUN.md`](FIRST_MILESTONE_OPERATOR_RUN.md); publishing the
+procedure does not advance any hardware tier.
 
 | Capability | Status | Source / Tappy adaptation | Automated evidence | Remaining evidence or work |
 |---|---|---|---|---|
@@ -44,7 +48,7 @@ physical/manual control checks remain pending.
 | Immutable snapshots/migrations | First-slice | Schema v1 normalization and atomic replace | Round-trip/corrupt isolation tests | Version migrations beyond v1 |
 | Live diagnostics/overlay | First-slice | Aggregate selected-device state with ordered bounded visual delivery | Redaction/state, quick-tap pulse, FIFO, and backlog-compaction tests | Overlay and bounded armed samples |
 | Tappy Doctor | First-slice | Headless readiness runner implemented | Current clean post-provider published-directory and fresh-ZIP runs passed all four checks with zero injected inputs | Full interactive Doctor |
-| Controller Passport/HIL | Hardware evidence required | General station plan plus finite, explicitly armed G13 input verifier | 23 verifier state-machine/refusal/evidence tests; no physical capture | Armed G13 input-functional record, full G13/K15 Passport and output/pass-through/latency HIL |
+| Controller Passport/HIL | Hardware evidence required | General station plan, finite G13 input verifier, and focused-console output witness | 23 G13-verifier plus 53 output-witness state-machine/refusal/evidence tests; no physical capture | Attended Targus milestone record, armed G13 input-functional record, and full controller Passport/output/pass-through/latency HIL |
 | Signed data-only controller packs | Planned | New extension/schema/trust store | Fixture only | Auth/sign/install/catalog implementation |
 | Raw keyboard provider | First-slice | Scan/E0/E1/device identity, dedicated message thread, and ContainerId grouping | Normalizer/provider contracts plus authoritative K15 four-interface and Tartarus two-interface grouping | Physical K15/Targus/Tartarus make-break, rollover, pass-through, reconnect, and cleanup |
 | Logitech G13 vendor-HID provider | Code-supported | Exact `046D:C21C`, `FF00:0000` provider; `C232` excluded; fixed 39-control model and stable tile grid | Decoder/provider/App tests plus 23 finite-verifier tests | No live button/stick capture yet; complete armed input run and broader Passport/HIL |

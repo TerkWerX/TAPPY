@@ -445,8 +445,18 @@ public sealed class RawInputKeyboardProvider : IInputDeviceProvider, IWindowsLif
         LifecycleChanged?.Invoke(this, eventArgs);
     }
 
-    private void OnHostFaulted(object? sender, Exception exception) =>
+    private void OnHostFaulted(object? sender, Exception exception)
+    {
+        if (exception is RawInputCapabilityException
+            {
+                Capability: RawInputCapability.LogitechG13,
+            })
+        {
+            return;
+        }
+
         Faulted?.Invoke(this, exception);
+    }
 
     private bool CaptureIsConfirmedLocked() =>
         _captureTarget is { } target &&

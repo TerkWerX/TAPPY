@@ -17,10 +17,12 @@ keyboards plus a dedicated Logitech G13 vendor-HID provider. Both require delibe
 selection, press/release identification, neutral state, and explicit confirmation
 before input can reach mapping. The UI shows press/release/repeat and simultaneous
 state and maps one control to a harmless F13–F24 output in Rehearsal or normal mode.
-The Release solution build passes with zero warnings or errors; 184 current
+The Release solution build passes with zero warnings or errors; 256 current
 automated tests pass
-(Core 31, Windows 92, App 38, G13 HIL tool 23). Exact package and physical evidence
-boundaries are in [testing](docs/TESTING.md).
+(Core 31, Windows 99, App 50, G13 HIL tool 23, Output Witness 53). Exact package and
+physical evidence boundaries are in [testing](docs/TESTING.md). The attended
+[first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
+finite Targus witness and keeps broader K15, Tartarus, and G13 promotion separate.
 
 Descriptor-only evidence now shows the attached K15 as one four-interface
 `1A2C:2D43` keyboard group, the user-identified Targus numberpad candidate as one
@@ -102,8 +104,8 @@ artifact. The script does not publish a release, push source, or change a websit
 src/Tappy.Core/          Platform-neutral input, profiles, layers, safety, layouts
 src/Tappy.Windows/       Raw Input keyboard/G13 providers, SendInput, storage, lifecycle
 src/Tappy.App/           WPF interface and composition root
-tests/                   Deterministic core, Windows, app, and G13-verifier tests
-tools/                   Device probe, finite G13 verifier, pack signer, portable audit
+tests/                   Deterministic core, Windows, app, and finite-witness tests
+tools/                   Device probe, focused output/G13 witnesses, pack signer, portable audit
 controller-packs/        Data-only layout registry and trust metadata
 docs/                    Architecture, decisions, security, evidence, release notes
 installer/               Unique per-user Inno Setup definition

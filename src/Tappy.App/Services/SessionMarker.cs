@@ -32,15 +32,22 @@ public sealed class SessionMarker
         return previous;
     }
 
-    public void Complete()
+    public bool TryComplete(bool outputStateConfirmedSafe)
     {
+        if (!outputStateConfirmedSafe)
+        {
+            return false;
+        }
+
         try
         {
             File.Delete(_path);
+            return true;
         }
         catch
         {
             // Recovery is conservative: an undeletable marker prompts on next launch.
+            return false;
         }
     }
 }

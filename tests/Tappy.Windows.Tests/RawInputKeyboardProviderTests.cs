@@ -360,6 +360,23 @@ public sealed class RawInputKeyboardProviderTests
             input => Assert.Equal(ControlSignalKind.Release, input.Signal.Kind));
     }
 
+    [Fact]
+    public async Task Optional_G13_capability_failure_does_not_fault_keyboard_provider()
+    {
+        var host = new FakeRawInputMessageHost();
+        await using var provider = CreateProvider(host);
+        var faults = new List<Exception>();
+        provider.Faulted += (_, exception) => faults.Add(exception);
+
+        host.EmitFault(new RawInputCapabilityException(
+            RawInputCapability.LogitechG13,
+            "G13 registration unavailable."));
+        var fatal = new InvalidOperationException("Shared host failed.");
+        host.EmitFault(fatal);
+
+        Assert.Equal([fatal], faults);
+    }
+
     private static RawInputKeyboardProvider CreateProvider(FakeRawInputMessageHost host) =>
         new(
             new FakeRawInputDeviceEnumerator(First, Second),

@@ -43,12 +43,13 @@ public partial class MainWindow : Window
 
     public void PrepareForSystemShutdown()
     {
-        _viewModel.EmergencyStop("Windows session ending");
+        var cleanup = _viewModel.EmergencyStop("Windows session ending");
         try
         {
             _viewModel.SaveProfileAsync().GetAwaiter().GetResult();
             _placement.Save(this);
-            _sessionMarker.Complete();
+            _sessionMarker.TryComplete(
+                cleanup.Succeeded && _viewModel.IsOutputStateConfirmedSafe);
         }
         catch
         {
@@ -67,7 +68,7 @@ public partial class MainWindow : Window
 
         try
         {
-            _viewModel.EmergencyStop("application exit");
+            var cleanup = _viewModel.EmergencyStop("application exit");
             try
             {
                 await _viewModel.SaveProfileAsync().ConfigureAwait(true);
@@ -79,7 +80,8 @@ public partial class MainWindow : Window
 
             await _viewModel.DisposeAsync().ConfigureAwait(true);
             _placement.Save(this);
-            _sessionMarker.Complete();
+            _sessionMarker.TryComplete(
+                cleanup.Succeeded && _viewModel.IsOutputStateConfirmedSafe);
         }
         finally
         {
@@ -102,7 +104,8 @@ public partial class MainWindow : Window
 
         if (!_hotkey.Register(this, () => _viewModel.EmergencyStop("Ctrl+Alt+Shift+F12"), out var error))
         {
-            _viewModel.ReportStatus(error ?? "The emergency hotkey could not be registered. Mouse and tray recovery remain available.");
+            _viewModel.ReportPersistentStatusWarning(
+                error ?? "The emergency hotkey could not be registered. Mouse and tray recovery remain available.");
         }
 
         try

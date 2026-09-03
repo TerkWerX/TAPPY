@@ -32,6 +32,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     private readonly IWindowsLifecycleSignalSource? _applicationLifecycleSource;
     private readonly AtomicProfileStore _profileStore;
     private readonly MappingEngine _engine;
+    private readonly Action? _beforeEngineProcess;
+    private readonly Action? _beforeDisposeGate;
     private readonly InputDiagnosticAggregate _diagnostics = new();
     private readonly List<RuntimeInputDevice> _devices = [];
     private readonly HashSet<ControlId> _observedControls = [];
@@ -43,6 +45,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     private bool _initialized;
     private bool _disposed;
     private bool _outputSafetyNeedsAttention;
+    private string? _optionalCapabilityWarning;
     private long _aggregateEventCount;
 
     public DeviceAwareControllerRuntime(
@@ -71,8 +74,17 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         RawInputKeyboardProvider provider,
         IKeyboardOutput keyboardOutput,
         AtomicProfileStore profileStore,
-        IWindowsLifecycleSignalSource? applicationLifecycleSource = null)
-        : this(provider, null, keyboardOutput, profileStore, applicationLifecycleSource)
+        IWindowsLifecycleSignalSource? applicationLifecycleSource = null,
+        Action? beforeEngineProcess = null,
+        Action? beforeDisposeGate = null)
+        : this(
+            provider,
+            null,
+            keyboardOutput,
+            profileStore,
+            applicationLifecycleSource,
+            beforeEngineProcess,
+            beforeDisposeGate)
     {
     }
 
@@ -81,11 +93,15 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         LogitechG13InputProvider? logitechG13Provider,
         IKeyboardOutput keyboardOutput,
         AtomicProfileStore profileStore,
-        IWindowsLifecycleSignalSource? applicationLifecycleSource = null)
+        IWindowsLifecycleSignalSource? applicationLifecycleSource = null,
+        Action? beforeEngineProcess = null,
+        Action? beforeDisposeGate = null)
     {
         _keyboardProvider = keyboardProvider ?? throw new ArgumentNullException(nameof(keyboardProvider));
         _logitechG13Provider = logitechG13Provider;
         _profileStore = profileStore ?? throw new ArgumentNullException(nameof(profileStore));
+        _beforeEngineProcess = beforeEngineProcess;
+        _beforeDisposeGate = beforeDisposeGate;
         _applicationLifecycleSource = ReferenceEquals(applicationLifecycleSource, keyboardProvider) ||
                                       ReferenceEquals(applicationLifecycleSource, logitechG13Provider)
             ? null
@@ -111,6 +127,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             _logitechG13Provider.IdentificationInputReceived += LogitechG13Provider_OnIdentificationInputReceived;
             _logitechG13Provider.InputReceived += LogitechG13Provider_OnInputReceived;
             _logitechG13Provider.DeviceChanged += LogitechG13Provider_OnDeviceChanged;
+            _logitechG13Provider.AvailabilityChanged += LogitechG13Provider_OnAvailabilityChanged;
             // Production providers share the keyboard provider's native host. It is
             // the sole lifecycle/fault authority so one Windows message cannot
             // trigger cleanup twice.
@@ -178,6 +195,31 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
     }
 
+    public bool CanConfirmController =>
+        _engine.Activation.State == ControllerActivationState.AwaitingConfirmation;
+
+    public bool IsIdentificationCaptureActive
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _candidate is not null;
+            }
+        }
+    }
+
+    public bool IsOutputStateConfirmedSafe
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return !_outputSafetyNeedsAttention;
+            }
+        }
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -215,6 +257,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         if (_logitechG13Provider is not null)
         {
             await _logitechG13Provider.StartAsync(cancellationToken).ConfigureAwait(false);
+            lock (_gate)
+            {
+                UpdateOptionalCapabilityWarningLocked();
+            }
         }
 
         RefreshDevices();
@@ -302,6 +348,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         RuntimeInputDevice? descriptor;
         RuntimeControlUpdate[] releasedUpdates;
         string? failure = null;
+        var outputSafetyFailure = false;
         lock (_gate)
         {
             if (_outputSafetyNeedsAttention)
@@ -325,6 +372,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
                         _engine.DisconnectController(new ControllerSessionId(_confirmed.SessionId))))
                 {
                     failure = "Windows rejected a Tappy-owned output release. Identification remains disarmed.";
+                    outputSafetyFailure = true;
                 }
             }
 
@@ -356,9 +404,19 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         PublishReleasedUpdates(releasedUpdates);
         if (failure is not null)
         {
-            RaiseState(
-                identificationStatus: failure,
-                status: "Needs attention: identification could not be armed.");
+            if (outputSafetyFailure)
+            {
+                RaiseOutputSafetyFailureState(
+                    identificationStatus: $"{failure} Restart Tappy before rearming.",
+                    activeControllerLabel: "No controller confirmed");
+            }
+            else
+            {
+                RaiseState(
+                    identificationStatus: failure,
+                    status: "Needs attention: identification could not be armed.");
+            }
+
             return RuntimeOperation.Failed(failure);
         }
 
@@ -568,13 +626,29 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
+        RuntimeControlUpdate[] releasedUpdates;
+        _beforeDisposeGate?.Invoke();
+        lock (_gate)
         {
-            return;
+            if (_disposed)
+            {
+                return;
+            }
+
+            // Setting disposed and clearing activation under the same gate used by
+            // input prechecks prevents an input that races disposal from arming a
+            // fresh output after this cleanup completes.
+            _disposed = true;
+            releasedUpdates = CaptureReleasedUpdatesLocked();
+            _confirmed = null;
+            _candidate = null;
+            _isRehearsal = true;
+            RecordCleanupResultLocked(_engine.ResetForLifecycleTransition());
+            _engine.Activation.Reset();
         }
 
-        _disposed = true;
-        _ = _engine.ResetForLifecycleTransition();
+        ClearCaptureTargets();
+        PublishReleasedUpdates(releasedUpdates);
         _keyboardProvider.IdentificationInputReceived -= KeyboardProvider_OnIdentificationInputReceived;
         _keyboardProvider.InputReceived -= KeyboardProvider_OnInputReceived;
         _keyboardProvider.DeviceChanged -= KeyboardProvider_OnDeviceChanged;
@@ -585,6 +659,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             _logitechG13Provider.IdentificationInputReceived -= LogitechG13Provider_OnIdentificationInputReceived;
             _logitechG13Provider.InputReceived -= LogitechG13Provider_OnInputReceived;
             _logitechG13Provider.DeviceChanged -= LogitechG13Provider_OnDeviceChanged;
+            _logitechG13Provider.AvailabilityChanged -= LogitechG13Provider_OnAvailabilityChanged;
         }
 
         if (_applicationLifecycleSource is not null)
@@ -607,17 +682,22 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
     private void ProcessIdentificationInput(string providerId, ControlSignal signal, string displayName)
     {
+        MappingResult result;
+        ControllerActivationState state;
         lock (_gate)
         {
-            if (_candidate?.ProviderId != providerId ||
+            if (_disposed ||
+                _candidate?.ProviderId != providerId ||
                 signal.ControllerSessionId != new ControllerSessionId(_candidate.SessionId))
             {
                 return;
             }
+
+            _beforeEngineProcess?.Invoke();
+            result = _engine.Process(signal);
+            state = _engine.Activation.State;
         }
 
-        var result = _engine.Process(signal);
-        var state = _engine.Activation.State;
         var status = state switch
         {
             ControllerActivationState.WaitingForNeutral => "Release every control on the selected device before identification begins.",
@@ -668,29 +748,23 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         bool isRepeat,
         ControlSignal signal)
     {
-        lock (_gate)
-        {
-            if (_confirmed is null ||
-                _confirmed.ProviderId != providerId ||
-                persistentDeviceId != _confirmed.PersistentId)
-            {
-                return;
-            }
-        }
-
-        var result = _engine.Process(signal);
-        var eventCount = Interlocked.Increment(ref _aggregateEventCount);
+        MappingResult result;
+        long eventCount;
         string action;
         int simultaneous;
         lock (_gate)
         {
-            if (_confirmed is null ||
+            if (_disposed ||
+                _confirmed is null ||
                 _confirmed.ProviderId != providerId ||
                 persistentDeviceId != _confirmed.PersistentId)
             {
                 return;
             }
 
+            _beforeEngineProcess?.Invoke();
+            result = _engine.Process(signal);
+            eventCount = Interlocked.Increment(ref _aggregateEventCount);
             var controller = FindEditableController(persistentDeviceId);
             action = controller is null ? "Unassigned" : BindingLabel(controller, controlId);
             if (controller is not null)
@@ -755,6 +829,28 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             eventArgs.Descriptor,
             eventArgs.WasCaptureTarget);
 
+    private void LogitechG13Provider_OnAvailabilityChanged(object? sender, EventArgs eventArgs)
+    {
+        lock (_gate)
+        {
+            UpdateOptionalCapabilityWarningLocked();
+            if (!_initialized || _disposed)
+            {
+                return;
+            }
+        }
+
+        RefreshDevices();
+        if (IsOutputStateConfirmedSafe)
+        {
+            RaiseState(status: _optionalCapabilityWarning);
+        }
+        else
+        {
+            RaiseOutputSafetyFailureState();
+        }
+    }
+
     private void ProcessDeviceChanged(
         string providerId,
         RawInputDeviceChangeKind kind,
@@ -764,7 +860,9 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         var selectionWasRemoved = false;
         var outputReleaseSucceeded = true;
         RuntimeControlUpdate[] releasedUpdates = [];
-        if (kind == RawInputDeviceChangeKind.Removal)
+        var selectedMembershipChanged =
+            kind == RawInputDeviceChangeKind.MembershipChanged && wasCaptureTarget;
+        if (kind == RawInputDeviceChangeKind.Removal || selectedMembershipChanged)
         {
             ControllerSessionId? sessionToDisconnect = null;
             lock (_gate)
@@ -834,10 +932,15 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         {
             if (outputReleaseSucceeded)
             {
+                var changeDescription = selectedMembershipChanged
+                    ? "A selected controller interface changed. Its Tappy-owned outputs were released. Select and identify it again."
+                    : "The selected controller was removed. Its Tappy-owned outputs were released. Select and identify it again after reconnect.";
                 RaiseState(
-                    identificationStatus: "The selected controller was removed. Its Tappy-owned outputs were released. Select and identify it again after reconnect.",
+                    identificationStatus: changeDescription,
                     mappingStatus: "Rehearsal Mode was restored; mappings are disarmed.",
-                    status: "Needs attention: selected controller disconnected; fail-open pass-through remains.",
+                    status: selectedMembershipChanged
+                        ? "Needs attention: selected controller membership changed; re-identification is required and fail-open pass-through remains."
+                        : "Needs attention: selected controller disconnected; fail-open pass-through remains.",
                     activeControllerLabel: "No controller confirmed");
             }
             else
@@ -1009,11 +1112,20 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         RuntimeInputDevice? confirmed;
         ControllerProfile? controller;
         bool identificationCaptureActive;
+        string? optionalCapabilityWarning;
         lock (_gate)
         {
             confirmed = _confirmed;
             controller = confirmed is null ? null : FindEditableController(confirmed.PersistentId);
             identificationCaptureActive = _candidate is not null;
+            optionalCapabilityWarning = _optionalCapabilityWarning;
+        }
+
+        var effectiveStatus = status ?? (confirmed is null ? "Nothing is armed." : "Controller ready.");
+        if (!string.IsNullOrWhiteSpace(optionalCapabilityWarning) &&
+            !effectiveStatus.Contains(optionalCapabilityWarning, StringComparison.Ordinal))
+        {
+            effectiveStatus = $"{effectiveStatus} {optionalCapabilityWarning}";
         }
 
         StateChanged?.Invoke(this, new RuntimeState(
@@ -1023,7 +1135,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             activeControllerLabel ?? confirmed?.DisplayName ?? "No controller confirmed",
             activeLayerName ?? controller?.Layers.FirstOrDefault(item => item.Id == controller.ActiveLayerId)?.Name ?? "Layer 1",
             mappingStatus ?? (IsRehearsal ? "Rehearsal Mode suppresses output." : "Normal output is enabled for confirmed mappings."),
-            status ?? (confirmed is null ? "Nothing is armed." : "Controller ready."),
+            effectiveStatus,
             sourceLabel ?? (controller is null ? "Effective: Pass-through" : SourceLabel(controller)),
             IsIdentificationCaptureActive: identificationCaptureActive));
     }
@@ -1111,13 +1223,20 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         var devices = _keyboardProvider.EnumerateKeyboards()
             .Select(descriptor => new RuntimeInputDevice(KeyboardProviderId, descriptor))
             .ToList();
-        if (_logitechG13Provider is not null)
+        if (_logitechG13Provider is { IsAvailable: true })
         {
             devices.AddRange(_logitechG13Provider.EnumerateControllers()
                 .Select(descriptor => new RuntimeInputDevice(LogitechG13ProviderId, descriptor)));
         }
 
         return devices;
+    }
+
+    private void UpdateOptionalCapabilityWarningLocked()
+    {
+        _optionalCapabilityWarning = _logitechG13Provider is { IsAvailable: false }
+            ? $"Needs attention: {_logitechG13Provider.AvailabilityStatus}"
+            : null;
     }
 
     private void ClearCaptureTargets()

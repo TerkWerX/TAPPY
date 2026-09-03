@@ -504,6 +504,7 @@ public sealed class DeviceAwareControllerRuntimeTests
     [InlineData("lifecycle")]
     [InlineData("unplug")]
     [InlineData("refresh")]
+    [InlineData("identify")]
     public async Task Rejected_cleanup_release_is_reported_and_prevents_rearming(string cleanupPath)
     {
         var root = NewTemporaryDirectory();
@@ -548,6 +549,10 @@ public sealed class DeviceAwareControllerRuntimeTests
                     enumerator.Remove((nint)81);
                     runtime.RefreshDevices();
                     break;
+                case "identify":
+                    var identify = runtime.BeginIdentification(runtime.Devices.Single());
+                    Assert.False(identify.Succeeded);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unknown cleanup path: {cleanupPath}");
             }
@@ -575,6 +580,204 @@ public sealed class DeviceAwareControllerRuntimeTests
         }
         finally
         {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_records_rejected_cleanup_once_and_exposes_unsafe_output_state()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)82, @"\\?\HID#VID_1000&PID_2000#DISPOSE_REJECTION");
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
+            var output = new RejectingReleaseOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider, output, new AtomicProfileStore(root));
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirm(runtime, host, descriptor.SessionHandle, 0x4F, 0x61);
+            var controlId = Tappy.Core.Input.ControlId.FromRawInputKeyboard(0x4F).Value;
+            Assert.True(runtime.AssignMapping(controlId, "F24").Succeeded);
+            runtime.IsRehearsal = false;
+            host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Make));
+            output.RejectKeyUp = true;
+
+            await runtime.DisposeAsync();
+            await runtime.DisposeAsync();
+
+            Assert.Equal(1, output.KeyUpAttempts);
+            Assert.False(runtime.IsOutputStateConfirmedSafe);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_disarms_before_cleanup_can_reenter_input()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)83, @"\\?\HID#VID_1000&PID_2000#DISPOSE_REENTRY");
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
+            var output = new ReentrantReleaseOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider, output, new AtomicProfileStore(root));
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirm(runtime, host, descriptor.SessionHandle, 0x4F, 0x61);
+            var controlId = Tappy.Core.Input.ControlId.FromRawInputKeyboard(0x4F).Value;
+            Assert.True(runtime.AssignMapping(controlId, "F24").Succeeded);
+            runtime.IsRehearsal = false;
+            host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Make));
+            output.DuringKeyUp = () =>
+            {
+                host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Break));
+                host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Make));
+            };
+
+            await runtime.DisposeAsync();
+
+            Assert.Equal(1, output.KeyDownAttempts);
+            Assert.Equal(1, output.KeyUpAttempts);
+            Assert.True(runtime.IsOutputStateConfirmedSafe);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_waits_for_mapped_input_critical_section_then_releases_its_output()
+    {
+        var root = NewTemporaryDirectory();
+        using var callbackInsideGate = new ManualResetEventSlim();
+        using var allowCallback = new ManualResetEventSlim();
+        using var disposeStarted = new ManualResetEventSlim();
+        var barrierArmed = 0;
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)84, @"\\?\HID#VID_1000&PID_2000#DISPOSE_BARRIER");
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
+            var output = new RecordingOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider,
+                output,
+                new AtomicProfileStore(root),
+                beforeEngineProcess: () =>
+                {
+                    if (Volatile.Read(ref barrierArmed) == 0)
+                    {
+                        return;
+                    }
+
+                    callbackInsideGate.Set();
+                    allowCallback.Wait();
+                },
+                beforeDisposeGate: disposeStarted.Set);
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirm(runtime, host, descriptor.SessionHandle, 0x4F, 0x61);
+            var controlId = Tappy.Core.Input.ControlId.FromRawInputKeyboard(0x4F).Value;
+            Assert.True(runtime.AssignMapping(controlId, "F24").Succeeded);
+            runtime.IsRehearsal = false;
+            Volatile.Write(ref barrierArmed, 1);
+
+            var inputTask = Task.Run(() =>
+                host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Make)));
+            Assert.True(callbackInsideGate.Wait(TimeSpan.FromSeconds(5)));
+            var disposeTask = Task.Run(async () => await runtime.DisposeAsync());
+            Assert.True(disposeStarted.Wait(TimeSpan.FromSeconds(5)));
+            Assert.False(disposeTask.IsCompleted);
+
+            allowCallback.Set();
+            await Task.WhenAll(inputTask, disposeTask);
+
+            Assert.Single(output.Down);
+            Assert.Single(output.Up);
+            Assert.True(runtime.IsOutputStateConfirmedSafe);
+        }
+        finally
+        {
+            allowCallback.Set();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_waits_for_identification_input_critical_section_then_resets_activation()
+    {
+        var root = NewTemporaryDirectory();
+        using var callbackInsideGate = new ManualResetEventSlim();
+        using var allowCallback = new ManualResetEventSlim();
+        using var disposeStarted = new ManualResetEventSlim();
+        var barrierArmed = 0;
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)85, @"\\?\HID#VID_1000&PID_2000#IDENTIFICATION_DISPOSE_BARRIER");
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider,
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                beforeEngineProcess: () =>
+                {
+                    if (Volatile.Read(ref barrierArmed) == 0)
+                    {
+                        return;
+                    }
+
+                    callbackInsideGate.Set();
+                    allowCallback.Wait();
+                },
+                beforeDisposeGate: disposeStarted.Set);
+
+            await runtime.InitializeAsync();
+            Assert.True(runtime.BeginIdentification(runtime.Devices.Single()).Succeeded);
+            Volatile.Write(ref barrierArmed, 1);
+
+            var inputTask = Task.Run(() =>
+                host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Make)));
+            Assert.True(callbackInsideGate.Wait(TimeSpan.FromSeconds(5)));
+            var disposeTask = Task.Run(async () => await runtime.DisposeAsync());
+            Assert.True(disposeStarted.Wait(TimeSpan.FromSeconds(5)));
+            Assert.False(disposeTask.IsCompleted);
+
+            allowCallback.Set();
+            await Task.WhenAll(inputTask, disposeTask);
+
+            Assert.False(runtime.CanConfirmController);
+            Assert.False(runtime.IsIdentificationCaptureActive);
+            Assert.True(runtime.IsOutputStateConfirmedSafe);
+        }
+        finally
+        {
+            allowCallback.Set();
             Directory.Delete(root, recursive: true);
         }
     }
@@ -686,6 +889,29 @@ public sealed class DeviceAwareControllerRuntimeTests
             if (RejectKeyUp)
             {
                 throw new InvalidOperationException("Simulated Windows output rejection.");
+            }
+        }
+    }
+
+    private sealed class ReentrantReleaseOutput : IKeyboardOutput
+    {
+        private bool _invoked;
+
+        public int KeyDownAttempts { get; private set; }
+
+        public int KeyUpAttempts { get; private set; }
+
+        public Action? DuringKeyUp { get; set; }
+
+        public void KeyDown(KeyboardOutputRequest request) => KeyDownAttempts++;
+
+        public void KeyUp(KeyboardOutputRequest request)
+        {
+            KeyUpAttempts++;
+            if (!_invoked)
+            {
+                _invoked = true;
+                DuringKeyUp?.Invoke();
             }
         }
     }

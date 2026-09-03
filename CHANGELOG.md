@@ -38,13 +38,25 @@ Notable changes to Tappy are documented here.
 - Cleanup dispatch results are now explicit. A rejected owned-output release latches
   a truthful Needs-attention state, forces Rehearsal Mode, and blocks re-arming until
   restart instead of claiming cleanup succeeded.
-- Current deterministic results: Core 31, Windows 92, App 38, and G13 HIL tool 23
-  tests pass (184 total) with a zero-warning, zero-error Release build.
+- A finite, explicitly armed focused-console Output Witness records aggregate-only
+  evidence for Rehearsal suppression, normal F13-F24 output, source pass-through,
+  and held-controller unplug cleanup without claiming device attribution.
+- An attended first-milestone operator runbook binds that witness to one deliberately
+  identified Targus numberpad while keeping K15, Tartarus, and G13 promotion separate.
+- Raw Input startup/shutdown is serialized and bounded, optional G13 registration
+  failure no longer poisons keyboard capture, G13 interface membership changes disarm
+  visibly, and disposal cannot race a stale input into new output.
+- Cleanup failure now preserves the unclean-session marker, global-hotkey conflicts
+  survive later status updates, and a refused Normal-mode request snaps the UI back
+  to the effective Rehearsal state.
+- Current deterministic results: Core 31, Windows 99, App 50, G13 HIL tool 23,
+  and Output Witness 53 tests pass (256 total) with a zero-warning, zero-error
+  Release build.
 - A locked restore, formatting verification, and all-project dependency advisory
-  query pass; NuGet reports no known vulnerable packages in the current ten-project
+  query pass; NuGet reports no known vulnerable packages in the current twelve-project
   solution. This is an advisory checkpoint, not a complete security audit.
 - A clean committed-source portable audit passes the three-file payload allowlist,
-  all 184 tests, published and freshly extracted readiness smoke checks, ten package
+  all 256 tests, published and freshly extracted readiness smoke checks, twelve package
   lock records, and zero injected input. The artifact remains an unsigned local
   checkpoint, not a public release.
 

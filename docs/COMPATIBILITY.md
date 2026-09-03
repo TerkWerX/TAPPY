@@ -66,10 +66,10 @@ sleeping wireless receivers, Windows lock/suspend, and latency targets require r
 hardware evidence before support claims.
 
 The current automated suites pass with a zero-warning Release build: Core 31,
-Windows 92, App 38, and G13 HIL tool 23 (184 total). Packaged-artifact checkpoint
-status is in [`TESTING.md`](TESTING.md). Every physical or manual check remains a
-separate gate.
-The current ten-project NuGet advisory query reports no known vulnerable packages;
+Windows 99, App 50, G13 HIL tool 23, and Output Witness 53 (256 total).
+Packaged-artifact checkpoint status is in [`TESTING.md`](TESTING.md). Every physical
+or manual check remains a separate gate.
+The current twelve-project NuGet advisory query reports no known vulnerable packages;
 that point-in-time result is not a complete security audit.
 
 ## Known Windows limits

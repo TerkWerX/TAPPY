@@ -22,6 +22,8 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
     private readonly Dictionary<LogitechG13Control, LogitechG13Input> _heldControls = new();
     private nint? _captureTarget;
     private string? _confirmedPersistentId;
+    private bool _isAvailable = true;
+    private string _availabilityStatus = "Logitech G13 Raw Input is available.";
     private bool _disposed;
 
     public LogitechG13InputProvider()
@@ -55,12 +57,36 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
 
     public event EventHandler<Exception>? Faulted;
 
+    public event EventHandler? AvailabilityChanged;
+
     public event Action<ControlSignal>? SignalReceived;
 
     public event Action? DevicesChanged;
 
     public static IReadOnlyList<LogitechG13ControlDefinition> SupportedControls =>
         LogitechG13ReportDecoder.Controls;
+
+    public bool IsAvailable
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _isAvailable;
+            }
+        }
+    }
+
+    public string AvailabilityStatus
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _availabilityStatus;
+            }
+        }
+    }
 
     public bool IsCaptureConfirmed
     {
@@ -136,6 +162,14 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
     public IReadOnlyList<SanitizedDeviceDescriptor> EnumerateControllers()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_gate)
+        {
+            if (!_isAvailable)
+            {
+                return [];
+            }
+        }
+
         var descriptors = _deviceEnumerator.EnumerateControllers()
             .Where(IsExpectedDescriptor)
             .ToArray();
@@ -170,6 +204,11 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
         SanitizedDeviceDescriptor? descriptor;
         lock (_gate)
         {
+            if (!_isAvailable)
+            {
+                return false;
+            }
+
             descriptor = _logicalDescriptors.GetValueOrDefault(deviceHandle.Value) ??
                 _descriptorByMember.GetValueOrDefault(deviceHandle.Value);
         }
@@ -183,6 +222,11 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
         List<PendingInput> releases;
         lock (_gate)
         {
+            if (!_isAvailable)
+            {
+                return false;
+            }
+
             releases = ReleaseAllLocked();
             AddDescriptorLocked(descriptor);
             _captureTarget = descriptor.SessionHandle;
@@ -255,7 +299,8 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
         lock (_gate)
         {
             var packet = eventArgs.Packet;
-            if (!_descriptorByMember.TryGetValue(packet.DeviceHandle, out var descriptor) ||
+            if (!_isAvailable ||
+                !_descriptorByMember.TryGetValue(packet.DeviceHandle, out var descriptor) ||
                 _captureTarget != descriptor.SessionHandle ||
                 !IsExpectedDescriptor(descriptor))
             {
@@ -302,6 +347,14 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
 
     private void OnNativeDeviceChanged(object? sender, NativeDeviceChangeEventArgs eventArgs)
     {
+        lock (_gate)
+        {
+            if (!_isAvailable)
+            {
+                return;
+            }
+        }
+
         SanitizedDeviceDescriptor? descriptor;
         bool wasCaptureTarget;
         RawInputDeviceChangeKind logicalChangeKind;
@@ -405,6 +458,15 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
 
     private void OnHostFaulted(object? sender, Exception exception)
     {
+        if (exception is RawInputCapabilityException
+            {
+                Capability: RawInputCapability.LogitechG13,
+            })
+        {
+            HandleCapabilityFailure();
+            return;
+        }
+
         List<PendingInput> releases;
         lock (_gate)
         {
@@ -415,6 +477,30 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
 
         Publish(releases);
         Faulted?.Invoke(this, exception);
+    }
+
+    private void HandleCapabilityFailure()
+    {
+        List<PendingInput> releases;
+        lock (_gate)
+        {
+            if (!_isAvailable)
+            {
+                return;
+            }
+
+            releases = ReleaseAllLocked();
+            _captureTarget = null;
+            _confirmedPersistentId = null;
+            _logicalDescriptors.Clear();
+            _descriptorByMember.Clear();
+            _isAvailable = false;
+            _availabilityStatus =
+                "Logitech G13 Raw Input is unavailable; keyboard controllers remain available.";
+        }
+
+        Publish(releases);
+        AvailabilityChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private LogitechG13Input CreateInput(

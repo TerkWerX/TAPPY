@@ -43,6 +43,9 @@ public interface IControllerRuntime : IAsyncDisposable
 
     IReadOnlyList<ControllerChoice> Devices { get; }
     bool IsRehearsal { get; set; }
+    bool CanConfirmController { get; }
+    bool IsIdentificationCaptureActive { get; }
+    bool IsOutputStateConfirmedSafe { get; }
 
     Task InitializeAsync(CancellationToken cancellationToken = default);
     void RefreshDevices();

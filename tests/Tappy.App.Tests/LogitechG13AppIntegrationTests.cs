@@ -54,6 +54,50 @@ public sealed class LogitechG13AppIntegrationTests
     }
 
     [Fact]
+    public async Task Optional_G13_registration_failure_keeps_keyboard_runtime_healthy_and_hides_inert_G13_choice()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var keyboard = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)211,
+                @"\\?\HID#VID_05A4&PID_9862#SPARE_NUMPAD");
+            var g13 = G13Descriptor((nint)311, "g13-session-unavailable", "g13-persistent-unavailable");
+            var host = new FakeDualMessageHost
+            {
+                StartFault = new RawInputCapabilityException(
+                    RawInputCapability.LogitechG13,
+                    "G13 registration unavailable.")
+            };
+            var keyboardProvider = new RawInputKeyboardProvider(
+                new FakeKeyboardEnumerator(keyboard),
+                host,
+                keyboardIsNeutral: static () => true);
+            var g13Provider = new LogitechG13InputProvider(new FakeG13Enumerator(g13), host);
+            await using var runtime = new DeviceAwareControllerRuntime(
+                keyboardProvider, g13Provider, new RecordingOutput(), new AtomicProfileStore(root));
+            RuntimeState? state = null;
+            runtime.StateChanged += (_, value) => state = value;
+
+            await runtime.InitializeAsync();
+
+            var choice = Assert.Single(runtime.Devices);
+            Assert.Equal("raw-input", choice.ProviderId);
+            Assert.False(g13Provider.IsAvailable);
+            Assert.True(runtime.IsOutputStateConfirmedSafe);
+            Assert.Contains("G13 Raw Input is unavailable", state?.Status ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Raw Input is unavailable. Nothing is armed", state?.IdentificationStatus ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.True(runtime.BeginIdentification(choice).Succeeded);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Confirmed_G13_projects_the_code_rendered_39_control_layout_and_simultaneous_state()
     {
         var root = NewTemporaryDirectory();
@@ -296,6 +340,66 @@ public sealed class LogitechG13AppIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task G13_membership_change_disarms_visibly_instead_of_leaving_silent_confirmed_runtime()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var logicalHandle = new nint(320);
+            var firstMember = new nint(321);
+            var remainingMember = new nint(322);
+            var initial = G13Descriptor(
+                logicalHandle,
+                "g13-session-membership",
+                "g13-persistent-membership",
+                firstMember,
+                remainingMember);
+            var remaining = initial with { MemberSessionHandles = [remainingMember] };
+            var host = new FakeDualMessageHost();
+            var enumerator = new FakeG13Enumerator(initial);
+            var g13Provider = new LogitechG13InputProvider(enumerator, host);
+            var output = new RecordingOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                new RawInputKeyboardProvider(
+                    new FakeKeyboardEnumerator(),
+                    host,
+                    keyboardIsNeutral: static () => true),
+                g13Provider,
+                output,
+                new AtomicProfileStore(root));
+            RuntimeState? state = null;
+            runtime.StateChanged += (_, value) => state = value;
+            await runtime.InitializeAsync();
+            IdentifyAndConfirmG13(runtime, host, firstMember);
+            var g1 = LogitechG13InputProvider.SupportedControls.Single(
+                item => item.Control == LogitechG13Control.G1);
+            Assert.True(runtime.AssignMapping(g1.ControlId.Value, "F13").Succeeded);
+            runtime.IsRehearsal = false;
+            host.EmitHid(G13Packet(firstMember, 1));
+            enumerator.SetDescriptors(remaining);
+
+            host.EmitDevice(firstMember, RawInputDeviceChangeKind.Removal);
+
+            Assert.Single(output.Down);
+            Assert.Single(output.Up);
+            Assert.True(runtime.IsRehearsal);
+            Assert.False(state?.IsConfirmed ?? true);
+            Assert.Contains("membership changed", state?.Status ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Null(g13Provider.CaptureTarget);
+            Assert.Single(runtime.Devices, item => item.ProviderId == "raw-hid-g13");
+
+            EmitG13Cycle(host, remainingMember, 0);
+            Assert.Single(output.Down);
+            Assert.Single(output.Up);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static DeviceAwareControllerRuntime CreateRuntime(
         string root,
         FakeDualMessageHost host,
@@ -340,7 +444,8 @@ public sealed class LogitechG13AppIntegrationTests
     private static SanitizedDeviceDescriptor G13Descriptor(
         nint handle,
         string sessionId,
-        string persistentId) =>
+        string persistentId,
+        params nint[] memberHandles) =>
         new(
             handle,
             sessionId,
@@ -354,7 +459,7 @@ public sealed class LogitechG13AppIntegrationTests
             "Logitech G13")
         {
             Grouping = PhysicalDeviceGrouping.WindowsContainerId,
-            MemberSessionHandles = [handle],
+            MemberSessionHandles = memberHandles.Length == 0 ? [handle] : memberHandles,
         };
 
     private static string NewTemporaryDirectory()
@@ -388,6 +493,15 @@ public sealed class LogitechG13AppIntegrationTests
             _devices.GetValueOrDefault(deviceHandle);
 
         public void Remove(nint deviceHandle) => _devices.Remove(deviceHandle);
+
+        public void SetDescriptors(params SanitizedDeviceDescriptor[] devices)
+        {
+            _devices.Clear();
+            foreach (var device in devices)
+            {
+                _devices.Add(device.SessionHandle, device);
+            }
+        }
     }
 
     private sealed class FakeDualMessageHost : IRawHidInputMessageHost
@@ -400,10 +514,19 @@ public sealed class LogitechG13AppIntegrationTests
 
         public bool IsRunning { get; private set; }
         public nint WindowHandle => (nint)900;
+        public Exception? StartFault { get; init; }
+
+        private bool _startFaultEmitted;
 
         public Task StartAsync(CancellationToken cancellationToken = default)
         {
             IsRunning = true;
+            if (!_startFaultEmitted && StartFault is not null)
+            {
+                _startFaultEmitted = true;
+                Faulted?.Invoke(this, StartFault);
+            }
+
             return Task.CompletedTask;
         }
 

@@ -16,6 +16,7 @@ internal static class RawInputNativeMethods
     internal const uint WmInput = 0x00FF;
     internal const uint WmInputDeviceChange = 0x00FE;
     internal const uint WmClose = 0x0010;
+    internal const uint WmQuit = 0x0012;
     internal const uint WmDestroy = 0x0002;
     internal const uint WmQueryEndSession = 0x0011;
     internal const uint WmEndSession = 0x0016;
@@ -202,11 +203,22 @@ internal static class RawInputNativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool PostMessage(nint window, uint message, nuint wParam, nint lParam);
 
+    [DllImport("user32.dll", EntryPoint = "PostThreadMessageW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool PostThreadMessage(
+        uint threadId,
+        uint message,
+        nuint wParam,
+        nint lParam);
+
     [DllImport("user32.dll")]
     internal static extern void PostQuitMessage(int exitCode);
 
     [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern nint GetModuleHandle(string? moduleName);
+
+    [DllImport("kernel32.dll")]
+    internal static extern uint GetCurrentThreadId();
 
     [DllImport("wtsapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

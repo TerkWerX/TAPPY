@@ -61,6 +61,72 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task Rehearsal_refusal_immediately_restores_effective_mode_and_never_claims_normal_output()
+    {
+        var runtime = new FakeRuntime { RefuseNormalMode = true };
+        var queuedUi = new Queue<Action>();
+        await using var viewModel = new MainViewModel(runtime, action => queuedUi.Enqueue(action));
+        await viewModel.InitializeAsync();
+
+        viewModel.IsRehearsal = false;
+
+        Assert.True(runtime.IsRehearsal);
+        Assert.True(viewModel.IsRehearsal);
+        Assert.Contains("refused", viewModel.MappingStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Normal output is armed", viewModel.MappingStatus, StringComparison.Ordinal);
+
+        Assert.Single(queuedUi);
+        queuedUi.Dequeue()();
+        Assert.Contains("could not confirm a safe output state", viewModel.MappingStatus,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Synchronous_rehearsal_refusal_preserves_runtime_failure_detail()
+    {
+        var runtime = new FakeRuntime { RefuseNormalMode = true };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+
+        viewModel.IsRehearsal = false;
+
+        Assert.True(viewModel.IsRehearsal);
+        Assert.Contains("could not confirm a safe output state", viewModel.MappingStatus,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Normal output is armed", viewModel.MappingStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Persistent_startup_warning_survives_initialization_and_queued_runtime_state()
+    {
+        const string warning =
+            "The emergency hotkey could not be registered. Mouse and tray recovery remain available.";
+        var runtime = new FakeRuntime
+        {
+            Available = [new ControllerChoice("session-1", "persistent-1", "Spare numpad", "PortBound")],
+            InitializeState = new RuntimeState(
+                false,
+                false,
+                "Choose and identify a controller.",
+                "No controller confirmed",
+                "Layer 1",
+                "Rehearsal Mode suppresses output.",
+                "Initialization completed.")
+        };
+        var queuedUi = new Queue<Action>();
+        await using var viewModel = new MainViewModel(runtime, action => queuedUi.Enqueue(action));
+        viewModel.ReportPersistentStatusWarning(warning);
+
+        await viewModel.InitializeAsync();
+
+        Assert.Contains(warning, viewModel.Status, StringComparison.Ordinal);
+        Assert.Single(queuedUi);
+        queuedUi.Dequeue()();
+        Assert.Contains("Initialization completed", viewModel.Status, StringComparison.Ordinal);
+        Assert.Contains(warning, viewModel.Status, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Physical_press_selects_and_illuminates_without_losing_simultaneous_state()
     {
         var runtime = new FakeRuntime();
@@ -259,6 +325,29 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task Failed_reidentification_immediately_reflects_the_runtime_capture_state()
+    {
+        var runtime = new FakeRuntime
+        {
+            Available = [new ControllerChoice("session-1", "persistent-1", "Spare numpad", "PortBound")]
+        };
+        var queuedUi = new Queue<Action>();
+        await using var viewModel = new MainViewModel(runtime, action => queuedUi.Enqueue(action));
+        await viewModel.InitializeAsync();
+        viewModel.SelectedDevice = viewModel.Devices[0];
+        viewModel.BeginIdentification();
+        Assert.True(viewModel.IsIdentificationCaptureActive);
+
+        runtime.BeginResult = RuntimeOperation.Failed("The device is no longer present.");
+        viewModel.BeginIdentification();
+
+        Assert.False(runtime.IsIdentificationCaptureActive);
+        Assert.False(viewModel.IsIdentificationCaptureActive);
+        Assert.False(viewModel.CanConfirmController);
+        Assert.Contains("no longer present", viewModel.IdentificationStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Emergency_stop_preserves_a_runtime_output_safety_failure_message()
     {
         var runtime = new FakeRuntime
@@ -268,8 +357,10 @@ public sealed class MainViewModelTests
         await using var viewModel = new MainViewModel(runtime, action => action());
         await viewModel.InitializeAsync();
 
-        viewModel.EmergencyStop("test");
+        var result = viewModel.EmergencyStop("test");
 
+        Assert.False(result.Succeeded);
+        Assert.False(viewModel.IsOutputStateConfirmedSafe);
         Assert.Equal(runtime.EmergencyResult.Message, viewModel.Status);
         Assert.True(viewModel.IsRehearsal);
         Assert.Equal("None", viewModel.PressedSummary);
@@ -338,20 +429,59 @@ public sealed class MainViewModelTests
 
     private sealed class FakeRuntime : IControllerRuntime
     {
+        private bool _isRehearsal;
+
         public event EventHandler? DevicesChanged;
         public event EventHandler<RuntimeControlUpdate>? ControlChanged;
         public event EventHandler<RuntimeState>? StateChanged;
 
         public IReadOnlyList<ControllerChoice> Available { get; init; } = [];
         public IReadOnlyList<ControllerChoice> Devices => Available;
-        public bool IsRehearsal { get; set; }
+        public bool IsRehearsal
+        {
+            get => _isRehearsal;
+            set
+            {
+                if (!value && RefuseNormalMode)
+                {
+                    _isRehearsal = true;
+                    StateChanged?.Invoke(this, new RuntimeState(
+                        false,
+                        false,
+                        "Choose and identify a controller.",
+                        "No controller confirmed",
+                        "Layer 1",
+                        "Tappy could not confirm a safe output state. Rehearsal Mode remains on.",
+                        "Needs attention: restart Tappy before rearming.",
+                        "Effective: Needs attention (fail-open)"));
+                    return;
+                }
+
+                _isRehearsal = value;
+            }
+        }
+
+        public bool CanConfirmController { get; private set; }
+        public bool IsIdentificationCaptureActive { get; private set; }
+        public bool IsOutputStateConfirmedSafe { get; private set; } = true;
+        public bool RefuseNormalMode { get; init; }
+        public RuntimeOperation BeginResult { get; set; } = RuntimeOperation.Ok("Press and release one control.");
+        public RuntimeState? InitializeState { get; init; }
         public int BeginCalls { get; private set; }
         public ControllerChoice? LastCandidate { get; private set; }
         public int AssignCalls { get; private set; }
         public (string Control, string Output) LastAssignment { get; private set; }
         public RuntimeOperation EmergencyResult { get; init; } = RuntimeOperation.Ok("Emergency stop completed.");
 
-        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task InitializeAsync(CancellationToken cancellationToken = default)
+        {
+            if (InitializeState is not null)
+            {
+                StateChanged?.Invoke(this, InitializeState);
+            }
+
+            return Task.CompletedTask;
+        }
 
         public void RefreshDevices() => DevicesChanged?.Invoke(this, EventArgs.Empty);
 
@@ -359,10 +489,17 @@ public sealed class MainViewModelTests
         {
             BeginCalls++;
             LastCandidate = device;
-            return RuntimeOperation.Ok("Press and release one control.");
+            IsIdentificationCaptureActive = BeginResult.Succeeded;
+            CanConfirmController = false;
+            return BeginResult;
         }
 
-        public RuntimeOperation ConfirmController() => RuntimeOperation.Ok("Controller confirmed.");
+        public RuntimeOperation ConfirmController()
+        {
+            IsIdentificationCaptureActive = false;
+            CanConfirmController = false;
+            return RuntimeOperation.Ok("Controller confirmed.");
+        }
 
         public RuntimeOperation AssignMapping(string controlId, string outputKey)
         {
@@ -374,7 +511,13 @@ public sealed class MainViewModelTests
         public Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(RuntimeOperation.Ok("Saved."));
 
-        public RuntimeOperation EmergencyStop(string reason) => EmergencyResult;
+        public RuntimeOperation EmergencyStop(string reason)
+        {
+            IsIdentificationCaptureActive = false;
+            CanConfirmController = false;
+            IsOutputStateConfirmedSafe &= EmergencyResult.Succeeded;
+            return EmergencyResult;
+        }
 
         public void EmitControl(RuntimeControlUpdate update) => ControlChanged?.Invoke(this, update);
 

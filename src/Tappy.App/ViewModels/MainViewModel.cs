@@ -23,6 +23,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private string _eventSummary = "No selected-device events retained";
     private string _status = "Tappy is not listening to a controller.";
     private string _effectiveSourceLabel = "Effective: Pass-through";
+    private string? _persistentStatusWarning;
     private bool _canConfirmController;
     private bool _isIdentificationCaptureActive;
     private bool _isRehearsal = true;
@@ -67,12 +68,31 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         get => _isRehearsal;
         set
         {
-            if (Set(ref _isRehearsal, value))
+            if (_isRehearsal == value && _runtime.IsRehearsal == value)
             {
-                _runtime.IsRehearsal = value;
-                MappingStatus = value
+                return;
+            }
+
+            var mappingStatusBeforeRequest = MappingStatus;
+            _runtime.IsRehearsal = value;
+            var effective = _runtime.IsRehearsal;
+            if (!Set(ref _isRehearsal, effective) && effective != value)
+            {
+                // The target control already changed before the two-way binding
+                // called this setter. Notify it to snap back to the effective mode.
+                Raise(nameof(IsRehearsal));
+            }
+
+            var immediateStatus = effective == value
+                ? effective
                     ? "Rehearsal Mode is on. Recognition continues; every output is suppressed."
-                    : "Normal output is armed only for the deliberately confirmed controller.";
+                    : "Normal output is armed only for the deliberately confirmed controller."
+                : effective
+                    ? "Normal output was refused. Rehearsal Mode remains on because Tappy needs attention; review the status and restart Tappy before rearming."
+                    : "Rehearsal Mode could not be enabled. Use Emergency stop and review Tappy's status before continuing.";
+            if (string.Equals(MappingStatus, mappingStatusBeforeRequest, StringComparison.Ordinal))
+            {
+                MappingStatus = immediateStatus;
             }
         }
     }
@@ -130,7 +150,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string Status
     {
         get => _status;
-        private set => Set(ref _status, value);
+        private set => Set(ref _status, IncludePersistentStatusWarning(value));
     }
 
     public string EffectiveSourceLabel
@@ -139,10 +159,14 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         private set => Set(ref _effectiveSourceLabel, value);
     }
 
+    public bool IsOutputStateConfirmedSafe => _runtime.IsOutputStateConfirmedSafe;
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         _runtime.IsRehearsal = true;
         await _runtime.InitializeAsync(cancellationToken).ConfigureAwait(true);
+        SynchronizeRuntimeModes();
+        SynchronizeRuntimeActivation();
         ReplaceDevices();
     }
 
@@ -162,10 +186,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
         var result = _runtime.BeginIdentification(SelectedDevice);
         IdentificationStatus = result.Message;
-        CanConfirmController = false;
+        SynchronizeRuntimeModes();
+        SynchronizeRuntimeActivation();
         if (result.Succeeded)
         {
-            IsIdentificationCaptureActive = true;
             ClearControls();
         }
     }
@@ -175,13 +199,12 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         ClearControls();
         var result = _runtime.ConfirmController();
         IdentificationStatus = result.Message;
+        SynchronizeRuntimeModes();
+        SynchronizeRuntimeActivation();
         if (!result.Succeeded)
         {
             return;
         }
-
-        CanConfirmController = false;
-        IsIdentificationCaptureActive = false;
     }
 
     public void SelectControl(ControlTileViewModel tile)
@@ -219,11 +242,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         MappingStatus = result.Message;
     }
 
-    public void EmergencyStop(string reason)
+    public RuntimeOperation EmergencyStop(string reason)
     {
         var result = _runtime.EmergencyStop(reason);
         SynchronizeRuntimeModes();
-        IsIdentificationCaptureActive = false;
+        SynchronizeRuntimeActivation();
         Status = result.Message;
         _pendingVisuals.Clear();
         _illuminationStates.Clear();
@@ -234,11 +257,23 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         PressedSummary = "None";
+        return result;
     }
 
     public void ReportStatus(string message)
     {
         Status = string.IsNullOrWhiteSpace(message) ? "Tappy is ready." : message.Trim();
+    }
+
+    public void ReportPersistentStatusWarning(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        _persistentStatusWarning = message.Trim();
+        Status = _status;
     }
 
     private void Runtime_OnDevicesChanged(object? sender, EventArgs e) => _onUi(ReplaceDevices);
@@ -405,6 +440,21 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             _isRehearsal = rehearsal;
             Raise(nameof(IsRehearsal));
         }
+    }
+
+    private void SynchronizeRuntimeActivation()
+    {
+        CanConfirmController = _runtime.CanConfirmController;
+        IsIdentificationCaptureActive = _runtime.IsIdentificationCaptureActive;
+    }
+
+    private string IncludePersistentStatusWarning(string message)
+    {
+        var status = string.IsNullOrWhiteSpace(message) ? "Tappy is ready." : message.Trim();
+        return string.IsNullOrWhiteSpace(_persistentStatusWarning) ||
+               status.Contains(_persistentStatusWarning, StringComparison.Ordinal)
+            ? status
+            : $"{status} {_persistentStatusWarning}";
     }
 
     private void ClearControls()

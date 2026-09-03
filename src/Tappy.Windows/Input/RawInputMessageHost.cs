@@ -12,12 +12,16 @@ namespace Tappy.Windows.Input;
 public sealed class RawInputMessageHost : IRawHidInputMessageHost
 {
     internal const uint MaximumRawInputByteCount = 4 * 1024;
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly RawInputNativeMethods.WindowProcedure _windowProcedure;
     private Thread? _thread;
     private TaskCompletionSource? _ready;
+    private TaskCompletionSource? _stopped;
     private nint _windowHandle;
+    private uint _nativeThreadId;
     private string? _windowClassName;
     private bool _disposed;
 
@@ -60,59 +64,152 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        Task readyTask;
-        lock (_gate)
+        await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_thread is { IsAlive: true })
+            Task readyTask;
+            lock (_gate)
             {
-                readyTask = _ready?.Task ?? Task.CompletedTask;
-            }
-            else
-            {
-                _ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                _thread = new Thread(MessageThreadMain)
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                if (_thread is { IsAlive: true })
                 {
-                    IsBackground = true,
-                    Name = "Tappy Raw Input Message Thread",
-                };
-                readyTask = _ready.Task;
-                _thread.Start();
+                    readyTask = _ready?.Task ?? Task.CompletedTask;
+                }
+                else
+                {
+                    var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _ready = ready;
+                    _stopped = stopped;
+                    _thread = new Thread(() => MessageThreadMain(ready, stopped))
+                    {
+                        IsBackground = true,
+                        Name = "Tappy Raw Input Message Thread",
+                    };
+                    readyTask = ready.Task;
+                    _thread.Start();
+                }
             }
-        }
 
-        await readyTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await readyTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        Thread? thread;
-        nint window;
-        lock (_gate)
+        await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            thread = _thread;
-            window = _windowHandle;
-        }
-
-        if (thread is null || !thread.IsAlive)
-        {
-            return;
-        }
-
-        if (window != nint.Zero)
-        {
-            _ = RawInputNativeMethods.PostMessage(window, RawInputNativeMethods.WmClose, 0, nint.Zero);
-        }
-
-        await Task.Run(
-            () =>
+            Task? readyTask;
+            Task? stoppedTask;
+            lock (_gate)
             {
-                while (!thread.Join(millisecondsTimeout: 100))
+                if (_thread is not { IsAlive: true })
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    return;
                 }
-            },
-            cancellationToken).ConfigureAwait(false);
+
+                readyTask = _ready?.Task;
+                stoppedTask = _stopped?.Task;
+            }
+
+            if (readyTask is not null)
+            {
+                try
+                {
+                    await WaitForStopPhaseAsync(
+                        readyTask,
+                        "The Raw Input message thread did not finish starting before shutdown.",
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch when (readyTask.IsFaulted)
+                {
+                    if (stoppedTask is not null)
+                    {
+                        await WaitForStopPhaseAsync(
+                            stoppedTask,
+                            "The failed Raw Input message thread did not terminate.",
+                            cancellationToken).ConfigureAwait(false);
+                    }
+
+                    return;
+                }
+            }
+
+            nint window;
+            uint nativeThreadId;
+            lock (_gate)
+            {
+                window = _windowHandle;
+                nativeThreadId = _nativeThreadId;
+                stoppedTask = _stopped?.Task;
+            }
+
+            if (stoppedTask is null || stoppedTask.IsCompleted)
+            {
+                return;
+            }
+
+            if (!TryRequestMessageLoopStop(
+                    window,
+                    nativeThreadId,
+                    RawInputNativeMethods.PostMessage,
+                    RawInputNativeMethods.PostThreadMessage))
+            {
+                throw new Win32Exception(
+                    Marshal.GetLastWin32Error(),
+                    "Could not request the Tappy Raw Input message thread to stop.");
+            }
+
+            await WaitForStopPhaseAsync(
+                stoppedTask,
+                "The Raw Input message thread did not stop within five seconds.",
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    private static async Task WaitForStopPhaseAsync(
+        Task phase,
+        string timeoutMessage,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(StopTimeout);
+        try
+        {
+            await phase.WaitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(timeoutMessage);
+        }
+    }
+
+    internal static bool TryRequestMessageLoopStop(
+        nint window,
+        uint nativeThreadId,
+        Func<nint, uint, nuint, nint, bool> postWindowMessage,
+        Func<uint, uint, nuint, nint, bool> postThreadMessage)
+    {
+        ArgumentNullException.ThrowIfNull(postWindowMessage);
+        ArgumentNullException.ThrowIfNull(postThreadMessage);
+
+        if (window != nint.Zero &&
+            postWindowMessage(window, RawInputNativeMethods.WmClose, 0, nint.Zero))
+        {
+            return true;
+        }
+
+        return nativeThreadId != 0 &&
+            postThreadMessage(nativeThreadId, RawInputNativeMethods.WmQuit, 0, nint.Zero);
     }
 
     public async ValueTask DisposeAsync()
@@ -130,7 +227,7 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
         await StopAsync().ConfigureAwait(false);
     }
 
-    private void MessageThreadMain()
+    private void MessageThreadMain(TaskCompletionSource ready, TaskCompletionSource stopped)
     {
         nint instance = nint.Zero;
         ushort classAtom = 0;
@@ -139,6 +236,11 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
         nint powerNotificationRegistration = nint.Zero;
         try
         {
+            lock (_gate)
+            {
+                _nativeThreadId = RawInputNativeMethods.GetCurrentThreadId();
+            }
+
             instance = RawInputNativeMethods.GetModuleHandle(null);
             if (instance == nint.Zero)
             {
@@ -198,9 +300,10 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
             {
                 Faulted?.Invoke(
                     this,
-                    new Win32Exception(
-                        Marshal.GetLastWin32Error(),
-                        "Could not register Tappy for vendor HID Raw Input; keyboard capture remains available."));
+                    new RawInputCapabilityException(
+                        RawInputCapability.LogitechG13,
+                        "Could not register Tappy for vendor HID Raw Input; keyboard capture remains available.",
+                        new Win32Exception(Marshal.GetLastWin32Error())));
             }
 
             sessionNotificationsRegistered = RawInputNativeMethods.WTSRegisterSessionNotification(
@@ -228,7 +331,7 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
                 _windowClassName = className;
             }
 
-            _ready?.TrySetResult();
+            ready.TrySetResult();
 
             while (true)
             {
@@ -249,7 +352,7 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
         }
         catch (Exception exception)
         {
-            if (!(_ready?.TrySetException(exception) ?? false))
+            if (!ready.TrySetException(exception))
             {
                 Faulted?.Invoke(this, exception);
             }
@@ -275,6 +378,7 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
             lock (_gate)
             {
                 _windowHandle = nint.Zero;
+                _nativeThreadId = 0;
                 _thread = null;
                 className = _windowClassName;
                 _windowClassName = null;
@@ -284,6 +388,8 @@ public sealed class RawInputMessageHost : IRawHidInputMessageHost
             {
                 _ = RawInputNativeMethods.UnregisterClass(className, instance);
             }
+
+            stopped.TrySetResult();
         }
     }
 

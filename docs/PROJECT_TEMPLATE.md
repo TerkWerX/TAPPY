@@ -330,9 +330,11 @@ tests/
   Tappy.Windows.Tests/
   Tappy.App.Tests/
   Tappy.G13Hil.Tests/
+  Tappy.OutputWitness.Tests/
 tools/
   Tappy.DeviceProbe/      descriptor-only schema-3 controller inventory
   Tappy.G13Hil/           explicitly armed, finite aggregate G13 input verifier
+  Tappy.OutputWitness/    focused-console, aggregate-only output witness
   Tappy.PackSigner/       support-pack publisher tooling
 controller-packs/         schema, trust store, catalog fixtures
 docs/                     architecture, privacy, protocols, testing, releases

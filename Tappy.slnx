@@ -8,11 +8,13 @@
     <Project Path="tests/Tappy.App.Tests/Tappy.App.Tests.csproj" />
     <Project Path="tests/Tappy.Core.Tests/Tappy.Core.Tests.csproj" />
     <Project Path="tests/Tappy.G13Hil.Tests/Tappy.G13Hil.Tests.csproj" />
+    <Project Path="tests/Tappy.OutputWitness.Tests/Tappy.OutputWitness.Tests.csproj" />
     <Project Path="tests/Tappy.Windows.Tests/Tappy.Windows.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Tappy.DeviceProbe/Tappy.DeviceProbe.csproj" />
     <Project Path="tools/Tappy.G13Hil/Tappy.G13Hil.csproj" />
+    <Project Path="tools/Tappy.OutputWitness/Tappy.OutputWitness.csproj" />
     <Project Path="tools/Tappy.PackSigner/Tappy.PackSigner.csproj" />
   </Folder>
 </Solution>

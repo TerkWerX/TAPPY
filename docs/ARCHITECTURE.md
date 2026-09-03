@@ -100,6 +100,22 @@ suppression of the original key.
 The UI never mutates the live profile while it is being serialized: it publishes a
 new immutable snapshot to the engine and store.
 
+### Evidence tools
+
+Evidence executables stay outside the application runtime and require deliberate,
+finite operator action:
+
+- `Tappy.DeviceProbe` is descriptor-only and never arms input capture.
+- `Tappy.OutputWitness` observes only an explicitly focused console after three
+  acknowledgments. It records aggregate selected-key/output counts without
+  chronology, typed content, device identifiers, or source-device attribution.
+- `Tappy.G13Hil` is an explicitly armed, finite aggregate verifier scoped only to
+  the exact supported G13 vendor-HID collection.
+
+These tools provide bounded evidence; they do not promote a controller to verified
+status by themselves. The attended operator record remains authoritative for focus,
+physical source attribution, unplug/reconnect behavior, and the visible UI state.
+
 ## Physical and persistent identity
 
 Identity has four deliberately separate scopes:
