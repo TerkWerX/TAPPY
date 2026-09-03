@@ -17,9 +17,9 @@ keyboards plus a dedicated Logitech G13 vendor-HID provider. Both require delibe
 selection, press/release identification, neutral state, and explicit confirmation
 before input can reach mapping. The UI shows press/release/repeat and simultaneous
 state and maps one control to a harmless F13–F24 output in Rehearsal or normal mode.
-The Release solution build passes with zero warnings or errors; 174 current
+The Release solution build passes with zero warnings or errors; 184 current
 automated tests pass
-(Core 30, Windows 90, App 31, G13 HIL tool 23). Exact package and physical evidence
+(Core 31, Windows 92, App 38, G13 HIL tool 23). Exact package and physical evidence
 boundaries are in [testing](docs/TESTING.md).
 
 Descriptor-only evidence now shows the attached K15 as one four-interface
@@ -59,8 +59,10 @@ not claim exclusive per-device remapping.
   input path when Windows preserves that marker. Device-less injected input is also
   rejected, while core ancestry, depth, and rate guards bound feedback behavior.
 - Rehearsal Mode runs recognition and visual feedback without output.
-- Emergency stop releases every output Tappy owns. A mouse-accessible window command
-  and notification-area command remain available.
+- Emergency stop immediately attempts to release every output Tappy owns. If Windows
+  rejects a release, Tappy reports that it cannot confirm a safe output state, forces
+  Rehearsal Mode, and refuses re-arming until restart. Mouse-accessible window and
+  notification-area commands remain available.
 - SendInput is not firmware-level USB HID. Elevated, secure, exclusive-input, or
   anti-cheat-protected applications may reject it, and application/game rules win.
 

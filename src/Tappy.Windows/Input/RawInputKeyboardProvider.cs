@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Tappy.Core.Abstractions;
 using Tappy.Core.Input;
+using Tappy.Windows.Interop;
 using Tappy.Windows.Lifecycle;
 using Tappy.Windows.Output;
 
@@ -34,6 +35,7 @@ public sealed class RawInputKeyboardProvider : IInputDeviceProvider, IWindowsLif
     private readonly IRawInputDeviceEnumerator _deviceEnumerator;
     private readonly IRawInputMessageHost _messageHost;
     private readonly Func<long> _timestampProvider;
+    private readonly Func<bool> _keyboardIsNeutral;
     private readonly Dictionary<nint, SanitizedDeviceDescriptor> _logicalDescriptors = new();
     private readonly Dictionary<nint, SanitizedDeviceDescriptor> _descriptorByMember = new();
     private readonly Dictionary<PhysicalControlKey, HeldPhysicalControl> _heldControls = new();
@@ -49,11 +51,13 @@ public sealed class RawInputKeyboardProvider : IInputDeviceProvider, IWindowsLif
     public RawInputKeyboardProvider(
         IRawInputDeviceEnumerator deviceEnumerator,
         IRawInputMessageHost messageHost,
-        Func<long>? timestampProvider = null)
+        Func<long>? timestampProvider = null,
+        Func<bool>? keyboardIsNeutral = null)
     {
         _deviceEnumerator = deviceEnumerator ?? throw new ArgumentNullException(nameof(deviceEnumerator));
         _messageHost = messageHost ?? throw new ArgumentNullException(nameof(messageHost));
         _timestampProvider = timestampProvider ?? Stopwatch.GetTimestamp;
+        _keyboardIsNeutral = keyboardIsNeutral ?? RawInputNativeMethods.AreAllKeyboardKeysReleased;
         _messageHost.KeyboardPacketReceived += OnKeyboardPacketReceived;
         _messageHost.DeviceChanged += OnNativeDeviceChanged;
         _messageHost.LifecycleChanged += OnLifecycleChanged;
@@ -179,6 +183,18 @@ public sealed class RawInputKeyboardProvider : IInputDeviceProvider, IWindowsLif
 
         lock (_gate)
         {
+            // Raw Input only reports transitions; it cannot reveal a key that was
+            // already held before this controller was armed. Query Windows while
+            // input dispatch is excluded so a make cannot slip between the
+            // neutrality check and target assignment, then appear only as repeat.
+            if (!_keyboardIsNeutral())
+            {
+                _captureTarget = null;
+                _confirmedPersistentId = null;
+                _heldControls.Clear();
+                return false;
+            }
+
             AddDescriptorLocked(descriptor);
             _captureTarget = descriptor.SessionHandle;
             _confirmedPersistentId = null;

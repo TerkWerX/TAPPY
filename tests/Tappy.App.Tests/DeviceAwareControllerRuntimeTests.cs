@@ -19,7 +19,11 @@ public sealed class DeviceAwareControllerRuntimeTests
             var enumerator = new FakeEnumerator(descriptor);
             var host = new FakeMessageHost();
             long timestamp = 0;
-            var provider = new RawInputKeyboardProvider(enumerator, host, () => ++timestamp);
+            var provider = new RawInputKeyboardProvider(
+                enumerator,
+                host,
+                timestampProvider: () => ++timestamp,
+                keyboardIsNeutral: static () => true);
             var output = new RecordingOutput();
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, output, new AtomicProfileStore(root));
@@ -73,7 +77,11 @@ public sealed class DeviceAwareControllerRuntimeTests
             var enumerator = new FakeEnumerator(descriptor);
             var host = new FakeMessageHost();
             long timestamp = 10;
-            var provider = new RawInputKeyboardProvider(enumerator, host, () => ++timestamp);
+            var provider = new RawInputKeyboardProvider(
+                enumerator,
+                host,
+                timestampProvider: () => ++timestamp,
+                keyboardIsNeutral: static () => true);
             var output = new RecordingOutput();
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, output, new AtomicProfileStore(root));
@@ -113,7 +121,10 @@ public sealed class DeviceAwareControllerRuntimeTests
                 (nint)52, @"\\?\HID#VID_1000&PID_2000#NEUTRAL_GATE");
             var host = new FakeMessageHost();
             var output = new RecordingOutput();
-            var provider = new RawInputKeyboardProvider(new FakeEnumerator(descriptor), host);
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, output, new AtomicProfileStore(root));
             RuntimeState? latestState = null;
@@ -141,6 +152,40 @@ public sealed class DeviceAwareControllerRuntimeTests
     }
 
     [Fact]
+    public async Task Identification_refuses_to_arm_until_windows_reports_all_keyboard_controls_released()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)53, @"\\?\HID#VID_1000&PID_2000#PRE_ARM_NEUTRAL");
+            var host = new FakeMessageHost();
+            var keyboardIsNeutral = false;
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: () => keyboardIsNeutral);
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider, new RecordingOutput(), new AtomicProfileStore(root));
+
+            await runtime.InitializeAsync();
+
+            var rejected = runtime.BeginIdentification(runtime.Devices.Single());
+            Assert.False(rejected.Succeeded);
+            Assert.Contains("Release every keyboard", rejected.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Null(provider.CaptureTarget);
+
+            keyboardIsNeutral = true;
+            Assert.True(runtime.BeginIdentification(runtime.Devices.Single()).Succeeded);
+            Assert.Equal(descriptor.SessionHandle, provider.CaptureTarget);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Emergency_stop_releases_disarms_and_restores_rehearsal()
     {
         var root = NewTemporaryDirectory();
@@ -149,7 +194,10 @@ public sealed class DeviceAwareControllerRuntimeTests
             var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
                 (nint)61, @"\\?\HID#VID_1000&PID_2000#EMERGENCY");
             var host = new FakeMessageHost();
-            var provider = new RawInputKeyboardProvider(new FakeEnumerator(descriptor), host);
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
             var output = new RecordingOutput();
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, output, new AtomicProfileStore(root));
@@ -194,7 +242,10 @@ public sealed class DeviceAwareControllerRuntimeTests
             var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
                 (nint)62, @"\\?\HID#VID_1000&PID_2000#LOCK");
             var host = new FakeMessageHost();
-            var provider = new RawInputKeyboardProvider(new FakeEnumerator(descriptor), host);
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
             var output = new RecordingOutput();
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, output, new AtomicProfileStore(root));
@@ -232,7 +283,10 @@ public sealed class DeviceAwareControllerRuntimeTests
             var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
                 (nint)621, @"\\?\HID#VID_1000&PID_2000#APP_SHUTDOWN");
             var host = new FakeMessageHost();
-            var provider = new RawInputKeyboardProvider(new FakeEnumerator(descriptor), host);
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
             var output = new RecordingOutput();
             var applicationLifecycle = new ApplicationLifecycleSignalSource();
             await using var runtime = new DeviceAwareControllerRuntime(
@@ -270,7 +324,10 @@ public sealed class DeviceAwareControllerRuntimeTests
                 (nint)63, @"\\?\HID#VID_1000&PID_2000#MISSED_REMOVAL");
             var enumerator = new FakeEnumerator(descriptor);
             var host = new FakeMessageHost();
-            var provider = new RawInputKeyboardProvider(enumerator, host);
+            var provider = new RawInputKeyboardProvider(
+                enumerator,
+                host,
+                keyboardIsNeutral: static () => true);
             var output = new RecordingOutput();
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, output, new AtomicProfileStore(root));
@@ -309,7 +366,10 @@ public sealed class DeviceAwareControllerRuntimeTests
                 (nint)64, @"\\?\HID#VID_1000&PID_2000#CANDIDATE");
             var enumerator = new FakeEnumerator(descriptor);
             var host = new FakeMessageHost();
-            var provider = new RawInputKeyboardProvider(enumerator, host);
+            var provider = new RawInputKeyboardProvider(
+                enumerator,
+                host,
+                keyboardIsNeutral: static () => true);
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, new RecordingOutput(), new AtomicProfileStore(root));
             RuntimeState? latestState = null;
@@ -341,7 +401,10 @@ public sealed class DeviceAwareControllerRuntimeTests
         {
             var firstDescriptor = DeviceDescriptorSanitizer.CreateKeyboard((nint)71, path);
             var firstHost = new FakeMessageHost();
-            var firstProvider = new RawInputKeyboardProvider(new FakeEnumerator(firstDescriptor), firstHost);
+            var firstProvider = new RawInputKeyboardProvider(
+                new FakeEnumerator(firstDescriptor),
+                firstHost,
+                keyboardIsNeutral: static () => true);
             await using (var firstRuntime = new DeviceAwareControllerRuntime(
                              firstProvider, new RecordingOutput(), new AtomicProfileStore(root)))
             {
@@ -366,7 +429,10 @@ public sealed class DeviceAwareControllerRuntimeTests
             var secondDescriptor = DeviceDescriptorSanitizer.CreateKeyboard((nint)72, path);
             var secondHost = new FakeMessageHost();
             var secondOutput = new RecordingOutput();
-            var secondProvider = new RawInputKeyboardProvider(new FakeEnumerator(secondDescriptor), secondHost);
+            var secondProvider = new RawInputKeyboardProvider(
+                new FakeEnumerator(secondDescriptor),
+                secondHost,
+                keyboardIsNeutral: static () => true);
             await using var secondRuntime = new DeviceAwareControllerRuntime(
                 secondProvider, secondOutput, new AtomicProfileStore(root));
             var restoredControls = new List<RuntimeControlUpdate>();
@@ -402,7 +468,10 @@ public sealed class DeviceAwareControllerRuntimeTests
             var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
                 (nint)73, @"\\?\HID#VID_1000&PID_2000#SELF_MARKER");
             var host = new FakeMessageHost();
-            var provider = new RawInputKeyboardProvider(new FakeEnumerator(descriptor), host);
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
             var output = new RecordingOutput();
             await using var runtime = new DeviceAwareControllerRuntime(
                 provider, output, new AtomicProfileStore(root));
@@ -423,6 +492,86 @@ public sealed class DeviceAwareControllerRuntimeTests
             Assert.Empty(output.Down);
             Assert.Empty(output.Up);
             Assert.Empty(updates);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("emergency")]
+    [InlineData("lifecycle")]
+    [InlineData("unplug")]
+    [InlineData("refresh")]
+    public async Task Rejected_cleanup_release_is_reported_and_prevents_rearming(string cleanupPath)
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)81, @"\\?\HID#VID_1000&PID_2000#REJECTED_RELEASE");
+            var enumerator = new FakeEnumerator(descriptor);
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                enumerator,
+                host,
+                keyboardIsNeutral: static () => true);
+            var output = new RejectingReleaseOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider, output, new AtomicProfileStore(root));
+            RuntimeState? latestState = null;
+            runtime.StateChanged += (_, state) => latestState = state;
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirm(runtime, host, (nint)81, 0x4F, 0x61);
+            var controlId = Tappy.Core.Input.ControlId.FromRawInputKeyboard(0x4F).Value;
+            Assert.True(runtime.AssignMapping(controlId, "F24").Succeeded);
+            runtime.IsRehearsal = false;
+            host.Emit(Packet((nint)81, 0x4F, 0x61, RawKeyboardFlags.Make));
+            output.RejectKeyUp = true;
+
+            RuntimeOperation? emergencyResult = null;
+            switch (cleanupPath)
+            {
+                case "emergency":
+                    emergencyResult = runtime.EmergencyStop("test rejection");
+                    break;
+                case "lifecycle":
+                    host.EmitLifecycle(WindowsLifecycleSignal.SessionLocked);
+                    break;
+                case "unplug":
+                    enumerator.Remove((nint)81);
+                    host.EmitDevice((nint)81, RawInputDeviceChangeKind.Removal);
+                    break;
+                case "refresh":
+                    enumerator.Remove((nint)81);
+                    runtime.RefreshDevices();
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown cleanup path: {cleanupPath}");
+            }
+
+            Assert.Equal(1, output.KeyUpAttempts);
+            Assert.True(runtime.IsRehearsal);
+            Assert.False(latestState?.IsConfirmed ?? true);
+            Assert.Contains("cannot confirm", latestState?.Status ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("restart Tappy", latestState?.Status ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Effective: Needs attention (fail-open)", latestState?.EffectiveSourceLabel);
+            runtime.IsRehearsal = false;
+            Assert.True(runtime.IsRehearsal);
+            if (emergencyResult is not null)
+            {
+                Assert.False(emergencyResult.Succeeded);
+                Assert.Equal(latestState?.Status, emergencyResult.Message);
+            }
+
+            if (runtime.Devices.Count > 0)
+            {
+                var rearm = runtime.BeginIdentification(runtime.Devices[0]);
+                Assert.False(rearm.Succeeded);
+                Assert.Contains("Restart Tappy", rearm.Message, StringComparison.OrdinalIgnoreCase);
+            }
         }
         finally
         {
@@ -519,5 +668,25 @@ public sealed class DeviceAwareControllerRuntimeTests
 
         public void KeyDown(KeyboardOutputRequest request) => Down.Add(request);
         public void KeyUp(KeyboardOutputRequest request) => Up.Add(request);
+    }
+
+    private sealed class RejectingReleaseOutput : IKeyboardOutput
+    {
+        public bool RejectKeyUp { get; set; }
+
+        public int KeyUpAttempts { get; private set; }
+
+        public void KeyDown(KeyboardOutputRequest request)
+        {
+        }
+
+        public void KeyUp(KeyboardOutputRequest request)
+        {
+            KeyUpAttempts++;
+            if (RejectKeyUp)
+            {
+                throw new InvalidOperationException("Simulated Windows output rejection.");
+            }
+        }
     }
 }

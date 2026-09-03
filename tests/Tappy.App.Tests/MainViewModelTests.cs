@@ -259,6 +259,23 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task Emergency_stop_preserves_a_runtime_output_safety_failure_message()
+    {
+        var runtime = new FakeRuntime
+        {
+            EmergencyResult = RuntimeOperation.Failed("Needs attention: output release was rejected.")
+        };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+
+        viewModel.EmergencyStop("test");
+
+        Assert.Equal(runtime.EmergencyResult.Message, viewModel.Status);
+        Assert.True(viewModel.IsRehearsal);
+        Assert.Equal("None", viewModel.PressedSummary);
+    }
+
+    [Fact]
     public async Task Refresh_finishes_with_the_enumeration_result_instead_of_a_stale_busy_message()
     {
         var runtime = new FakeRuntime
@@ -309,6 +326,16 @@ public sealed class MainViewModelTests
         Assert.Equal("Themes/Light.xaml", ThemeService.SelectResourcePath(light: true, highContrast: false));
     }
 
+    [Fact]
+    public void Background_notification_is_truthful_for_armed_rehearsal_and_unconfirmed_states()
+    {
+        Assert.Contains("notification area", MainWindow.BackgroundNotificationMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Show Tappy", MainWindow.BackgroundNotificationMessage, StringComparison.Ordinal);
+        Assert.Contains("Emergency stop", MainWindow.BackgroundNotificationMessage, StringComparison.Ordinal);
+        Assert.Contains("Exit Tappy", MainWindow.BackgroundNotificationMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Mappings remain active", MainWindow.BackgroundNotificationMessage, StringComparison.Ordinal);
+    }
+
     private sealed class FakeRuntime : IControllerRuntime
     {
         public event EventHandler? DevicesChanged;
@@ -322,6 +349,7 @@ public sealed class MainViewModelTests
         public ControllerChoice? LastCandidate { get; private set; }
         public int AssignCalls { get; private set; }
         public (string Control, string Output) LastAssignment { get; private set; }
+        public RuntimeOperation EmergencyResult { get; init; } = RuntimeOperation.Ok("Emergency stop completed.");
 
         public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
@@ -346,9 +374,7 @@ public sealed class MainViewModelTests
         public Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(RuntimeOperation.Ok("Saved."));
 
-        public void EmergencyStop(string reason)
-        {
-        }
+        public RuntimeOperation EmergencyStop(string reason) => EmergencyResult;
 
         public void EmitControl(RuntimeControlUpdate update) => ControlChanged?.Invoke(this, update);
 

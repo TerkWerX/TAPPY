@@ -18,6 +18,7 @@ public static class ProductIdentity
     public const string InstallerAppId = "{B42E5FBB-E4AB-458A-908E-838C8BD101BB}";
     public const string WebsiteUrl = "https://www.terkwerx.com/tappy/";
     public const string RepositoryUrl = "https://github.com/TerkWerX/TAPPY";
+    public const string UpdateEndpointUrl = "https://api.github.com/repos/TerkWerX/TAPPY/releases/latest";
     public const string ProfileExtension = ".tappy.json";
     public const string LayerExtension = ".tappy-layer.json";
     public const string DeviceExtension = ".tappy-device.json";

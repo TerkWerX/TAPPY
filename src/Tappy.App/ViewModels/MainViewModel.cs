@@ -221,10 +221,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public void EmergencyStop(string reason)
     {
-        _runtime.EmergencyStop(reason);
+        var result = _runtime.EmergencyStop(reason);
         SynchronizeRuntimeModes();
         IsIdentificationCaptureActive = false;
-        Status = $"Emergency stop: {reason}. All Tappy-owned output was released; source remains pass-through.";
+        Status = result.Message;
         _pendingVisuals.Clear();
         _illuminationStates.Clear();
         foreach (var tile in Controls)

@@ -75,6 +75,10 @@ public sealed record MappingResult(
     public bool ProducedOutput => Disposition == MappingDisposition.Handled;
 }
 
+public readonly record struct OutputCleanupResult(
+    int ActivePressCount,
+    bool OutputReleaseSucceeded);
+
 public sealed class MappingEngine
 {
     private sealed record ActivePress(
@@ -127,12 +131,12 @@ public sealed class MappingEngine
         get { lock (_gate) return _rehearsalMode; }
     }
 
-    public void SetProfile(TappyProfileSnapshot profile)
+    public OutputCleanupResult SetProfile(TappyProfileSnapshot profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
         lock (_gate)
         {
-            ReleaseAllOwnedOutputs("profile-change");
+            var cleanup = ReleaseAllOwnedOutputs("profile-change");
             InputStates.Clear();
             _profile = profile;
             _connected.Clear();
@@ -142,6 +146,8 @@ public sealed class MappingEngine
                 _connected[controller.Identity.SessionId] = controller;
                 _activeLayers[controller.Identity.SessionId] = controller.ActiveLayerId;
             }
+
+            return cleanup;
         }
     }
 
@@ -181,17 +187,18 @@ public sealed class MappingEngine
         }
     }
 
-    public void SetRehearsalMode(bool enabled)
+    public OutputCleanupResult SetRehearsalMode(bool enabled)
     {
         lock (_gate)
         {
             if (_rehearsalMode == enabled)
             {
-                return;
+                return new OutputCleanupResult(0, true);
             }
 
-            ReleaseAllOwnedOutputs(enabled ? "enter-rehearsal" : "leave-rehearsal");
+            var cleanup = ReleaseAllOwnedOutputs(enabled ? "enter-rehearsal" : "leave-rehearsal");
             _rehearsalMode = enabled;
+            return cleanup;
         }
     }
 
@@ -265,7 +272,7 @@ public sealed class MappingEngine
         }
     }
 
-    public int DisconnectController(ControllerSessionId sessionId)
+    public OutputCleanupResult DisconnectController(ControllerSessionId sessionId)
     {
         lock (_gate)
         {
@@ -277,36 +284,33 @@ public sealed class MappingEngine
         }
     }
 
-    public int EmergencyStop()
+    public OutputCleanupResult EmergencyStop()
     {
         lock (_gate)
         {
-            var count = _activePresses.Count;
-            ReleaseAllOwnedOutputs("emergency-stop");
+            var cleanup = ReleaseAllOwnedOutputs("emergency-stop");
             InputStates.Clear();
-            return count;
+            return cleanup;
         }
     }
 
-    public int ReleaseAll()
+    public OutputCleanupResult ReleaseAll()
     {
         lock (_gate)
         {
-            var count = _activePresses.Count;
-            ReleaseAllOwnedOutputs("release-all");
+            var cleanup = ReleaseAllOwnedOutputs("release-all");
             InputStates.Clear();
-            return count;
+            return cleanup;
         }
     }
 
-    public int ResetForLifecycleTransition()
+    public OutputCleanupResult ResetForLifecycleTransition()
     {
         lock (_gate)
         {
-            var count = _activePresses.Count;
-            ReleaseAllOwnedOutputs("lifecycle-transition");
+            var cleanup = ReleaseAllOwnedOutputs("lifecycle-transition");
             InputStates.Clear();
-            return count;
+            return cleanup;
         }
     }
 
@@ -507,33 +511,37 @@ public sealed class MappingEngine
         }
     }
 
-    private int ReleaseControllerOutputs(ControllerSessionId sessionId, string reason)
+    private OutputCleanupResult ReleaseControllerOutputs(ControllerSessionId sessionId, string reason)
     {
         var active = _activePresses
             .Where(pair => pair.Key.SessionId == sessionId)
             .Select(pair => (pair.Key, pair.Value))
             .ToArray();
+        var releaseSucceeded = true;
         foreach (var (key, press) in active)
         {
             _activePresses.Remove(key);
-            TryDispatchDelta(press.OwnerId, _heldOutputs.ReleaseOwner(press.OwnerId), press.Ancestry);
-        }
-
-        if (active.Length == 0)
-        {
-            return 0;
+            releaseSucceeded &= TryDispatchDelta(
+                press.OwnerId,
+                _heldOutputs.ReleaseOwner(press.OwnerId),
+                press.Ancestry);
         }
 
         _ = reason;
-        return active.Length;
+        return new OutputCleanupResult(active.Length, releaseSucceeded);
     }
 
-    private void ReleaseAllOwnedOutputs(string reason)
+    private OutputCleanupResult ReleaseAllOwnedOutputs(string reason)
     {
+        var count = _activePresses.Count;
         _activePresses.Clear();
         var ancestry = new ExecutionAncestry($"cleanup:{reason}:{_clock.GetTimestamp()}:{++_executionSequence}");
-        TryDispatchDelta($"cleanup:{reason}", _heldOutputs.ReleaseAll(), ancestry);
+        var releaseSucceeded = TryDispatchDelta(
+            $"cleanup:{reason}",
+            _heldOutputs.ReleaseAll(),
+            ancestry);
         _rateGuard.Clear();
+        return new OutputCleanupResult(count, releaseSucceeded);
     }
 
     private KeyboardOutputRequest Request(

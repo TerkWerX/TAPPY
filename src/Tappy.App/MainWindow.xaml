@@ -88,6 +88,9 @@
                         <TextBlock Text="1 · Choose a spare controller" FontSize="17" FontWeight="SemiBold" />
                         <TextBlock Text="No device is selected automatically. Choose the intended numpad, keypad, or Logitech G13, then identify it with a physical press and release."
                                    TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,11" />
+                        <TextBlock Text="Before clicking Identify, release every keyboard/controller control and use the mouse. Tappy refuses keyboard capture unless Windows reports a neutral state."
+                                   TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
                         <ComboBox x:Name="DevicePicker" ItemsSource="{Binding Devices}"
                                   SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
                                   DisplayMemberPath="DisplayName" AutomationProperties.Name="Available supported controllers" />

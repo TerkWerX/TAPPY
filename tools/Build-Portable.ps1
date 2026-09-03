@@ -335,7 +335,9 @@ $identity = [IO.File]::ReadAllText($identityPath) | ConvertFrom-Json
 if ($identity.product -ne 'Tappy' -or $identity.executable -ne 'Tappy.exe' -or
     $identity.installerAppId -ne '{B42E5FBB-E4AB-458A-908E-838C8BD101BB}' -or
     $identity.mutex -ne 'Local\TerkWerX.Tappy.HandController.0_1' -or
-    $identity.appUserModelId -ne 'TerkWerX.Tappy' -or $identity.version -ne $Version) {
+    $identity.appUserModelId -ne 'TerkWerX.Tappy' -or
+    $identity.updateEndpoint -ne 'https://api.github.com/repos/TerkWerX/TAPPY/releases/latest' -or
+    $identity.version -ne $Version) {
     throw 'eng/product-identity.json does not match the frozen Tappy packaging identity/version.'
 }
 

@@ -142,11 +142,15 @@ public sealed class MappingEngineTests
         engine.Process(ControlSignal.Physical(firstIdentity.SessionId, control, ControlSignalKind.Press, 10));
         engine.Process(ControlSignal.Physical(secondIdentity.SessionId, control, ControlSignalKind.Press, 11));
 
-        Assert.Equal(1, engine.DisconnectController(firstIdentity.SessionId));
+        var firstCleanup = engine.DisconnectController(firstIdentity.SessionId);
+        Assert.Equal(1, firstCleanup.ActivePressCount);
+        Assert.True(firstCleanup.OutputReleaseSucceeded);
         Assert.Equal(["A"], output.UpKeys);
         Assert.True(engine.Activation.IsActive(secondIdentity.SessionId));
 
-        Assert.Equal(1, engine.DisconnectController(secondIdentity.SessionId));
+        var secondCleanup = engine.DisconnectController(secondIdentity.SessionId);
+        Assert.Equal(1, secondCleanup.ActivePressCount);
+        Assert.True(secondCleanup.OutputReleaseSucceeded);
         Assert.Equal(["A", "B", "CTRL"], output.UpKeys);
     }
 
@@ -160,14 +164,18 @@ public sealed class MappingEngineTests
         TestProfiles.Activate(engine, control);
 
         engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Press, 10));
-        Assert.Equal(1, engine.EmergencyStop());
+        var emergencyCleanup = engine.EmergencyStop();
+        Assert.Equal(1, emergencyCleanup.ActivePressCount);
+        Assert.True(emergencyCleanup.OutputReleaseSucceeded);
         Assert.Equal(["F24"], output.UpKeys);
         Assert.Empty(engine.InputStates.GetPressedControls(TestProfiles.Session()));
 
         var fresh = engine.Process(ControlSignal.Physical(
             TestProfiles.Session(), control, ControlSignalKind.Press, 20));
         Assert.Equal(MappingDisposition.Handled, fresh.Disposition);
-        Assert.Equal(1, engine.ResetForLifecycleTransition());
+        var lifecycleCleanup = engine.ResetForLifecycleTransition();
+        Assert.Equal(1, lifecycleCleanup.ActivePressCount);
+        Assert.True(lifecycleCleanup.OutputReleaseSucceeded);
         Assert.Equal(2, output.UpKeys.Count);
 
         var freshAfterLifecycle = engine.Process(ControlSignal.Physical(
@@ -189,7 +197,9 @@ public sealed class MappingEngineTests
 
         Assert.Equal(MappingDisposition.Handled,
             engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Press, 10)).Disposition);
-        Assert.Equal(1, engine.ReleaseAll());
+        var cleanup = engine.ReleaseAll();
+        Assert.Equal(1, cleanup.ActivePressCount);
+        Assert.True(cleanup.OutputReleaseSucceeded);
         Assert.Equal(["F24"], output.UpKeys);
 
         Assert.Equal(MappingDisposition.Handled,
@@ -197,6 +207,33 @@ public sealed class MappingEngineTests
         engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Release, 12));
 
         Assert.Equal(["F24", "F24"], output.UpKeys);
+    }
+
+    [Fact]
+    public void Cleanup_result_reports_a_rejected_owned_key_release()
+    {
+        var output = new RejectingReleaseOutput();
+        var control = ControlId.FromRawInputKeyboard(0x004F);
+        var identity = TestProfiles.Identity();
+        var controller = ControllerProfile.Create(identity, [control]);
+        controller.Layers[0].Bindings.Add(Binding(control, KeyboardActionDefinition.Hold("F24")));
+        var engine = new MappingEngine(output, new MappingEngineOptions
+        {
+            SelfInjectionMarker = TestProfiles.Marker
+        }, new FakeClock());
+        engine.SetProfile(new TappyProfile { Controllers = [controller] }.CreateSnapshot());
+        Activate(engine, identity.SessionId, control, 1);
+        Assert.Equal(
+            MappingDisposition.Handled,
+            engine.Process(ControlSignal.Physical(identity.SessionId, control, ControlSignalKind.Press, 10)).Disposition);
+        output.RejectKeyUp = true;
+
+        var cleanup = engine.EmergencyStop();
+
+        Assert.Equal(1, cleanup.ActivePressCount);
+        Assert.False(cleanup.OutputReleaseSucceeded);
+        Assert.Equal(1, output.KeyUpAttempts);
+        Assert.Empty(engine.InputStates.GetPressedControls(identity.SessionId));
     }
 
     [Fact]
@@ -340,5 +377,25 @@ public sealed class MappingEngineTests
         engine.Process(ControlSignal.Physical(sessionId, control, ControlSignalKind.Press, timestamp));
         engine.Process(ControlSignal.Physical(sessionId, control, ControlSignalKind.Release, timestamp + 1));
         engine.Activation.Confirm();
+    }
+
+    private sealed class RejectingReleaseOutput : Tappy.Core.Output.IKeyboardOutput
+    {
+        internal bool RejectKeyUp { get; set; }
+
+        internal int KeyUpAttempts { get; private set; }
+
+        public void KeyDown(Tappy.Core.Output.KeyboardOutputRequest request)
+        {
+        }
+
+        public void KeyUp(Tappy.Core.Output.KeyboardOutputRequest request)
+        {
+            KeyUpAttempts++;
+            if (RejectKeyUp)
+            {
+                throw new InvalidOperationException("Simulated Windows output rejection.");
+            }
+        }
     }
 }

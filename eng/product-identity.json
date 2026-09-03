@@ -22,5 +22,6 @@
     ".tappy-controller-pack.zip"
   ],
   "website": "https://www.terkwerx.com/tappy/",
-  "repository": "https://github.com/TerkWerX/TAPPY"
+  "repository": "https://github.com/TerkWerX/TAPPY",
+  "updateEndpoint": "https://api.github.com/repos/TerkWerX/TAPPY/releases/latest"
 }

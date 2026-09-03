@@ -33,6 +33,27 @@ internal static class RawInputNativeMethods
     internal const uint DeviceNotifyWindowHandle = 0;
     internal static readonly nint HwndMessage = new(-3);
 
+    internal static bool AreAllKeyboardKeysReleased()
+    {
+        for (var virtualKey = 0x03; virtualKey <= 0xFE; virtualKey++)
+        {
+            // Exclude the mouse-only keys (0x01, 0x02, and 0x04-0x06), the
+            // undefined 0x07 slot, and the dedicated gamepad range. VK_CANCEL
+            // (0x03) remains included because Ctrl+Break is keyboard input.
+            if (virtualKey is >= 0x04 and <= 0x07 or >= 0xC3 and <= 0xDA)
+            {
+                continue;
+            }
+
+            if ((GetAsyncKeyState(virtualKey) & 0x8000) != 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct RawInputDeviceList
     {
@@ -116,6 +137,9 @@ internal static class RawInputNativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern uint GetRawInputDeviceList(nint devices, ref uint deviceCount, uint structureSize);
+
+    [DllImport("user32.dll")]
+    internal static extern short GetAsyncKeyState(int virtualKey);
 
     [DllImport("user32.dll", EntryPoint = "GetRawInputDeviceInfoW", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern uint GetRawInputDeviceInfo(nint device, uint command, nint data, ref uint dataSize);

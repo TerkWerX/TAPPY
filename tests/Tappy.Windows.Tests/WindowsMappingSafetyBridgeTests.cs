@@ -15,7 +15,8 @@ public sealed class WindowsMappingSafetyBridgeTests
         var host = new FakeRawInputMessageHost();
         await using var provider = new RawInputKeyboardProvider(
             new FakeRawInputDeviceEnumerator(descriptor),
-            host);
+            host,
+            keyboardIsNeutral: static () => true);
         var target = new RecordingSafetyTarget();
         var applicationLifecycle = new ApplicationLifecycleSignalSource();
         using var bridge = new WindowsMappingSafetyBridge(provider, target, applicationLifecycle);

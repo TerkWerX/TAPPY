@@ -20,7 +20,10 @@ public sealed class LogitechG13AppIntegrationTests
                 @"\\?\HID#VID_046D&PID_C232#VIRTUAL_KEYBOARD");
             var g13 = G13Descriptor((nint)301, "g13-session-a", "g13-persistent-a");
             var host = new FakeDualMessageHost();
-            var keyboardProvider = new RawInputKeyboardProvider(new FakeKeyboardEnumerator(keyboard), host);
+            var keyboardProvider = new RawInputKeyboardProvider(
+                new FakeKeyboardEnumerator(keyboard),
+                host,
+                keyboardIsNeutral: static () => true);
             var g13Provider = new LogitechG13InputProvider(new FakeG13Enumerator(g13), host);
             await using var runtime = new DeviceAwareControllerRuntime(
                 keyboardProvider, g13Provider, new RecordingOutput(), new AtomicProfileStore(root));
@@ -260,7 +263,10 @@ public sealed class LogitechG13AppIntegrationTests
             var g13 = G13Descriptor((nint)307, "g13-session-unplug", "g13-persistent-unplug");
             var host = new FakeDualMessageHost();
             var enumerator = new FakeG13Enumerator(g13);
-            var keyboardProvider = new RawInputKeyboardProvider(new FakeKeyboardEnumerator(), host);
+            var keyboardProvider = new RawInputKeyboardProvider(
+                new FakeKeyboardEnumerator(),
+                host,
+                keyboardIsNeutral: static () => true);
             var g13Provider = new LogitechG13InputProvider(enumerator, host);
             var output = new RecordingOutput();
             await using var runtime = new DeviceAwareControllerRuntime(
@@ -298,7 +304,10 @@ public sealed class LogitechG13AppIntegrationTests
     {
         output = new RecordingOutput();
         return new DeviceAwareControllerRuntime(
-            new RawInputKeyboardProvider(new FakeKeyboardEnumerator(), host),
+            new RawInputKeyboardProvider(
+                new FakeKeyboardEnumerator(),
+                host,
+                keyboardIsNeutral: static () => true),
             new LogitechG13InputProvider(new FakeG13Enumerator(g13), host),
             output,
             new AtomicProfileStore(root));

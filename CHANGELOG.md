@@ -29,13 +29,18 @@ Notable changes to Tappy are documented here.
 - A bounded ordered visual-transition buffer plus a truthful, minimum-duration
   illumination pulse so a quick make/break cannot disappear before WPF renders;
   overflow compaction preserves final physical states without delaying input/output.
-- Current deterministic results: Core 30, Windows 90, App 31, and G13 HIL tool 23
-  tests pass (174 total) with a zero-warning, zero-error Release build.
+- A synchronized pre-arm keyboard-neutrality guard prevents a held key's autorepeat
+  from masquerading as the deliberate identification press.
+- Cleanup dispatch results are now explicit. A rejected owned-output release latches
+  a truthful Needs-attention state, forces Rehearsal Mode, and blocks re-arming until
+  restart instead of claiming cleanup succeeded.
+- Current deterministic results: Core 31, Windows 92, App 38, and G13 HIL tool 23
+  tests pass (184 total) with a zero-warning, zero-error Release build.
 - A locked restore, formatting verification, and all-project dependency advisory
   query pass; NuGet reports no known vulnerable packages in the current ten-project
   solution. This is an advisory checkpoint, not a complete security audit.
 - A clean committed-source portable audit passes the three-file payload allowlist,
-  all 174 tests, published and freshly extracted readiness smoke checks, ten package
+  all 184 tests, published and freshly extracted readiness smoke checks, ten package
   lock records, and zero injected input. The artifact remains an unsigned local
   checkpoint, not a public release.
 

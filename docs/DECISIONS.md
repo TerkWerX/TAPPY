@@ -96,7 +96,9 @@ until exact model, source/license, processing history, and approval are recorded
 `%LOCALAPPDATA%\Tappy`, AppUserModelID `TerkWerX.Tappy`, mutex
 `Local\TerkWerX.Tappy.HandController.0_1`, startup value `Tappy`, emergency hotkey
 `Ctrl+Alt+Shift+F12`, a newly generated installer AppId, Tappy extensions, and only
-Tappy endpoints. A code-rendered `T` tray glyph is a placeholder, not final artwork.
+Tappy endpoints. The reserved update endpoint is the Tappy-only GitHub
+`releases/latest` API URL; no update check is implemented or enabled in this
+milestone. A code-rendered `T` tray glyph is a placeholder, not final artwork.
 
 ## D-011 — Source publication is authorized; release decisions remain open
 

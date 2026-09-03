@@ -36,6 +36,56 @@ public sealed class RawInputKeyboardProviderTests
     }
 
     [Fact]
+    public async Task CaptureTargetRemainsDisarmedUntilTheKeyboardIsNeutral()
+    {
+        var host = new FakeRawInputMessageHost();
+        var keyboardIsNeutral = false;
+        await using var provider = new RawInputKeyboardProvider(
+            new FakeRawInputDeviceEnumerator(First, Second),
+            host,
+            timestampProvider: () => 12345,
+            keyboardIsNeutral: () => keyboardIsNeutral);
+        var identificationCount = 0;
+        provider.IdentificationInputReceived += (_, _) => identificationCount++;
+
+        Assert.False(provider.SetCaptureTarget(First.SessionHandle));
+        Assert.Null(provider.CaptureTarget);
+        Assert.False(provider.IsCaptureConfirmed);
+
+        host.Emit(Press(First.SessionHandle, makeCode: 0x1E, virtualKey: 0x41));
+        Assert.Equal(0, identificationCount);
+
+        keyboardIsNeutral = true;
+        Assert.True(provider.SetCaptureTarget(First.SessionHandle));
+        Assert.Equal(First.SessionHandle, provider.CaptureTarget);
+    }
+
+    [Fact]
+    public async Task FailedNeutralityCheckDisarmsAnExistingConfirmedCapture()
+    {
+        var host = new FakeRawInputMessageHost();
+        var keyboardIsNeutral = true;
+        await using var provider = new RawInputKeyboardProvider(
+            new FakeRawInputDeviceEnumerator(First, Second),
+            host,
+            timestampProvider: () => 12345,
+            keyboardIsNeutral: () => keyboardIsNeutral);
+        var mappedCount = 0;
+        provider.InputReceived += (_, _) => mappedCount++;
+
+        Assert.True(provider.SetCaptureTarget(First.SessionHandle));
+        Assert.True(provider.SetConfirmedPersistentId(First.PersistentId));
+
+        keyboardIsNeutral = false;
+        Assert.False(provider.SetCaptureTarget(Second.SessionHandle));
+        Assert.Null(provider.CaptureTarget);
+        Assert.False(provider.IsCaptureConfirmed);
+
+        host.Emit(Press(First.SessionHandle, makeCode: 0x1E, virtualKey: 0x41));
+        Assert.Equal(0, mappedCount);
+    }
+
+    [Fact]
     public async Task IdentificationIsTargetOnlyAndCannotReachNormalMapping()
     {
         var host = new FakeRawInputMessageHost();
@@ -156,8 +206,22 @@ public sealed class RawInputKeyboardProviderTests
         await using var provider = CreateProvider(host);
         KeyboardDeviceChangedEventArgs? removal = null;
         var mappedCount = 0;
-        provider.DeviceChanged += (_, args) => removal = args;
-        provider.InputReceived += (_, _) => mappedCount++;
+        var publicationOrder = new List<string>();
+        NormalizedKeyboardInput? syntheticRelease = null;
+        provider.DeviceChanged += (_, args) =>
+        {
+            removal = args;
+            publicationOrder.Add("device-removal");
+        };
+        provider.InputReceived += (_, args) =>
+        {
+            mappedCount++;
+            if (args.Input.Transition == KeyTransition.Release)
+            {
+                syntheticRelease = args.Input;
+                publicationOrder.Add("synthetic-release");
+            }
+        };
         Assert.True(provider.SetCaptureTarget(First.SessionHandle));
         Assert.True(provider.SetConfirmedPersistentId(First.PersistentId));
         host.Emit(Press(First.SessionHandle, 0x1E, 0x41));
@@ -172,6 +236,9 @@ public sealed class RawInputKeyboardProviderTests
         Assert.Null(provider.CaptureTarget);
         Assert.False(provider.IsCaptureConfirmed);
         Assert.Equal(2, mappedCount);
+        Assert.NotNull(syntheticRelease);
+        Assert.Equal(0u, syntheticRelease.NativeMessage);
+        Assert.Equal(["synthetic-release", "device-removal"], publicationOrder);
     }
 
     [Fact]
@@ -202,7 +269,8 @@ public sealed class RawInputKeyboardProviderTests
         await using var provider = new RawInputKeyboardProvider(
             new FakeRawInputDeviceEnumerator(Composite),
             host,
-            timestampProvider: () => 12345);
+            timestampProvider: () => 12345,
+            keyboardIsNeutral: static () => true);
         List<NormalizedKeyboardInput> mapped = [];
         provider.InputReceived += (_, args) => mapped.Add(args.Input);
         _ = provider.EnumerateKeyboards();
@@ -233,7 +301,8 @@ public sealed class RawInputKeyboardProviderTests
         await using var provider = new RawInputKeyboardProvider(
             new FakeRawInputDeviceEnumerator(Composite),
             host,
-            timestampProvider: () => 12345);
+            timestampProvider: () => 12345,
+            keyboardIsNeutral: static () => true);
         List<NormalizedKeyboardInput> mapped = [];
         provider.InputReceived += (_, args) => mapped.Add(args.Input);
         _ = provider.EnumerateKeyboards();
@@ -259,7 +328,11 @@ public sealed class RawInputKeyboardProviderTests
     {
         var host = new FakeRawInputMessageHost();
         var enumerator = new FakeRawInputDeviceEnumerator(Composite);
-        await using var provider = new RawInputKeyboardProvider(enumerator, host, timestampProvider: () => 12345);
+        await using var provider = new RawInputKeyboardProvider(
+            enumerator,
+            host,
+            timestampProvider: () => 12345,
+            keyboardIsNeutral: static () => true);
         List<KeyboardDeviceChangedEventArgs> changes = [];
         List<NormalizedKeyboardInput> mapped = [];
         provider.DeviceChanged += (_, args) => changes.Add(args);
@@ -288,7 +361,11 @@ public sealed class RawInputKeyboardProviderTests
     }
 
     private static RawInputKeyboardProvider CreateProvider(FakeRawInputMessageHost host) =>
-        new(new FakeRawInputDeviceEnumerator(First, Second), host, timestampProvider: () => 12345);
+        new(
+            new FakeRawInputDeviceEnumerator(First, Second),
+            host,
+            timestampProvider: () => 12345,
+            keyboardIsNeutral: static () => true);
 
     private static RawKeyboardPacket Press(nint handle, ushort makeCode, ushort virtualKey) =>
         new(handle, makeCode, RawKeyboardFlags.Make, 0, virtualKey, 0x0100, 0);

@@ -22,6 +22,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     private const string DefaultProfileId = "default";
     private const string KeyboardProviderId = "raw-input";
     private const string LogitechG13ProviderId = "raw-hid-g13";
+    private const string OutputSafetyFailureStatus =
+        "Needs attention: Windows rejected a Tappy output transition, so Tappy cannot confirm that every owned output is released. Mapping output is disarmed and source input remains fail-open pass-through; restart Tappy before rearming.";
+    private const string OutputSafetyFailureMappingStatus =
+        "Tappy could not confirm a safe output state. Rehearsal Mode remains on; verify the output state in a harmless target and restart Tappy before rearming.";
     private readonly object _gate = new();
     private readonly RawInputKeyboardProvider _keyboardProvider;
     private readonly LogitechG13InputProvider? _logitechG13Provider;
@@ -38,6 +42,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     private bool _isRehearsal = true;
     private bool _initialized;
     private bool _disposed;
+    private bool _outputSafetyNeedsAttention;
     private long _aggregateEventCount;
 
     public DeviceAwareControllerRuntime(
@@ -143,15 +148,33 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
         set
         {
+            bool needsAttention;
             lock (_gate)
             {
-                _isRehearsal = value;
-                _engine.SetRehearsalMode(value);
+                if (!value && _outputSafetyNeedsAttention)
+                {
+                    _isRehearsal = true;
+                    _ = _engine.SetRehearsalMode(true);
+                }
+                else
+                {
+                    _isRehearsal = value;
+                    RecordCleanupResultLocked(_engine.SetRehearsalMode(value));
+                }
+
+                needsAttention = _outputSafetyNeedsAttention;
             }
 
-            RaiseState(mappingStatus: value
-                ? "Rehearsal Mode is on. Recognition continues; output is suppressed."
-                : "Normal output is enabled for the confirmed controller only.");
+            if (needsAttention)
+            {
+                RaiseOutputSafetyFailureState();
+            }
+            else
+            {
+                RaiseState(mappingStatus: value
+                    ? "Rehearsal Mode is on. Recognition continues; output is suppressed."
+                    : "Normal output is enabled for the confirmed controller only.");
+            }
         }
     }
 
@@ -206,6 +229,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         RuntimeControlUpdate[] releasedUpdates = [];
         ControllerSessionId? disconnectedSession = null;
         var captureWasLost = false;
+        var outputReleaseSucceeded = true;
         lock (_gate)
         {
             if (_confirmed is not null &&
@@ -228,7 +252,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             if (captureWasLost)
             {
                 _isRehearsal = true;
-                _engine.SetRehearsalMode(true);
+                outputReleaseSucceeded = RecordCleanupResultLocked(
+                    _engine.SetRehearsalMode(true));
                 _engine.Activation.Reset();
             }
 
@@ -240,7 +265,11 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
         if (disconnectedSession is { } session)
         {
-            _engine.DisconnectController(session);
+            var cleanup = _engine.DisconnectController(session);
+            lock (_gate)
+            {
+                outputReleaseSucceeded = RecordCleanupResultLocked(cleanup) && !_outputSafetyNeedsAttention;
+            }
             ClearCaptureTargets();
         }
 
@@ -248,11 +277,20 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         DevicesChanged?.Invoke(this, EventArgs.Empty);
         if (captureWasLost)
         {
-            RaiseState(
-                identificationStatus: "The selected controller is no longer present. Select and identify it again after reconnect.",
-                mappingStatus: "Rehearsal Mode was restored and all Tappy-owned output was released.",
-                status: "Needs attention: selected controller disappeared; fail-open pass-through remains.",
-                activeControllerLabel: "No controller confirmed");
+            if (outputReleaseSucceeded)
+            {
+                RaiseState(
+                    identificationStatus: "The selected controller is no longer present. Select and identify it again after reconnect.",
+                    mappingStatus: "Rehearsal Mode was restored and all Tappy-owned output was released.",
+                    status: "Needs attention: selected controller disappeared; fail-open pass-through remains.",
+                    activeControllerLabel: "No controller confirmed");
+            }
+            else
+            {
+                RaiseOutputSafetyFailureState(
+                    identificationStatus: "The selected controller disappeared and Windows rejected an owned-output release. Restart Tappy before rearming.",
+                    activeControllerLabel: "No controller confirmed");
+            }
         }
     }
 
@@ -266,6 +304,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         string? failure = null;
         lock (_gate)
         {
+            if (_outputSafetyNeedsAttention)
+            {
+                return RuntimeOperation.Failed(
+                    "An earlier Tappy-owned output release was rejected. Restart Tappy before identifying and rearming a controller.");
+            }
+
             descriptor = _devices.FirstOrDefault(item =>
                 item.ProviderId == device.ProviderId &&
                 item.SessionId == device.SessionId);
@@ -277,7 +321,11 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             releasedUpdates = CaptureReleasedUpdatesLocked();
             if (_confirmed is not null)
             {
-                _engine.DisconnectController(new ControllerSessionId(_confirmed.SessionId));
+                if (!RecordCleanupResultLocked(
+                        _engine.DisconnectController(new ControllerSessionId(_confirmed.SessionId))))
+                {
+                    failure = "Windows rejected a Tappy-owned output release. Identification remains disarmed.";
+                }
             }
 
             _engine.Activation.Reset();
@@ -289,10 +337,15 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             _controlLabels.Clear();
             _aggregateEventCount = 0;
             ClearCaptureTargets();
-            if (!SetCaptureTarget(descriptor))
+            if (failure is not null)
             {
                 _candidate = null;
-                failure = "Windows could not prepare that Raw Input device. Nothing was armed.";
+            }
+            else if (!SetCaptureTarget(descriptor))
+            {
+                _candidate = null;
+                failure =
+                    "Nothing was armed. Release every keyboard and controller control, then try again with the mouse; refresh the device list if everything is already neutral.";
             }
             else
             {
@@ -325,6 +378,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         RuntimeControlUpdate[] restoredControls;
         lock (_gate)
         {
+            if (_outputSafetyNeedsAttention)
+            {
+                return RuntimeOperation.Failed(
+                    "An earlier Tappy-owned output release was rejected. Restart Tappy before confirming a controller.");
+            }
+
             if (_candidate is null ||
                 _engine.Activation.State != ControllerActivationState.AwaitingConfirmation ||
                 !IsCaptureTargetNeutral(_candidate))
@@ -376,7 +435,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
             _confirmed = descriptor;
             _candidate = null;
-            _engine.SetProfile(_editableProfile.CreateSnapshot());
+            RecordCleanupResultLocked(_engine.SetProfile(_editableProfile.CreateSnapshot()));
             _engine.ConnectController(identity);
             restoredControls = CreateControlUpdatesLocked(controller, isSnapshot: true);
         }
@@ -408,6 +467,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
         lock (_gate)
         {
+            if (_outputSafetyNeedsAttention)
+            {
+                return RuntimeOperation.Failed(
+                    "An earlier Tappy-owned output release was rejected. Rehearsal Mode remains on; restart Tappy before assigning or arming output.");
+            }
+
             if (_confirmed is null)
             {
                 return RuntimeOperation.Failed("Select, identify, release, and confirm a spare controller before assigning it.");
@@ -439,7 +504,13 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             binding.PressAction = KeyboardActionDefinition.Hold(outputKey);
             binding.ReleaseAction = new KeyboardActionDefinition();
             EnsureObservedLayout(controller, id);
-            _engine.SetProfile(_editableProfile.CreateSnapshot());
+            if (!RecordCleanupResultLocked(_engine.SetProfile(_editableProfile.CreateSnapshot())))
+            {
+                _isRehearsal = true;
+                _ = _engine.SetRehearsalMode(true);
+                return RuntimeOperation.Failed(
+                    "The mapping was updated, but Windows rejected a prior Tappy-owned output release. Rehearsal Mode remains on; restart Tappy before arming output.");
+            }
             _engine.ConnectController(controller.Identity);
         }
 
@@ -460,13 +531,15 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         return RuntimeOperation.Ok($"Profile saved atomically to {_profileStore.GetProfilePath(DefaultProfileId)}.");
     }
 
-    public void EmergencyStop(string reason)
+    public RuntimeOperation EmergencyStop(string reason)
     {
         RuntimeControlUpdate[] releasedUpdates;
+        bool releaseSucceeded;
         lock (_gate)
         {
             releasedUpdates = CaptureReleasedUpdatesLocked();
-            _engine.EmergencyStop();
+            releaseSucceeded = RecordCleanupResultLocked(_engine.EmergencyStop()) &&
+                               !_outputSafetyNeedsAttention;
             _engine.Activation.Reset();
             _isRehearsal = true;
             _engine.SetRehearsalMode(true);
@@ -476,11 +549,21 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
 
         PublishReleasedUpdates(releasedUpdates);
-        RaiseState(
-            identificationStatus: "Emergency stop disarmed the controller. Select, identify, release, and confirm it again.",
-            mappingStatus: "Rehearsal Mode was restored and all Tappy-owned output was released.",
-            status: $"Emergency stop: {reason}. Nothing is armed; source input remains pass-through.",
+        if (releaseSucceeded)
+        {
+            var message = $"Emergency stop: {reason}. Nothing is armed; all Tappy-owned output was released and source input remains pass-through.";
+            RaiseState(
+                identificationStatus: "Emergency stop disarmed the controller. Select, identify, release, and confirm it again.",
+                mappingStatus: "Rehearsal Mode was restored and all Tappy-owned output was released.",
+                status: message,
+                activeControllerLabel: "No controller confirmed");
+            return RuntimeOperation.Ok(message);
+        }
+
+        RaiseOutputSafetyFailureState(
+            identificationStatus: "Emergency stop disarmed the controller, but Windows rejected an owned-output release. Restart Tappy before rearming.",
             activeControllerLabel: "No controller confirmed");
+        return RuntimeOperation.Failed(OutputSafetyFailureStatus);
     }
 
     public async ValueTask DisposeAsync()
@@ -491,7 +574,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
 
         _disposed = true;
-        _engine.ResetForLifecycleTransition();
+        _ = _engine.ResetForLifecycleTransition();
         _keyboardProvider.IdentificationInputReceived -= KeyboardProvider_OnIdentificationInputReceived;
         _keyboardProvider.InputReceived -= KeyboardProvider_OnInputReceived;
         _keyboardProvider.DeviceChanged -= KeyboardProvider_OnDeviceChanged;
@@ -623,6 +706,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             }
 
             simultaneous = _engine.InputStates.GetPressedControls(controllerSessionId).Count;
+            if (result.Disposition == MappingDisposition.OutputFailed)
+            {
+                _outputSafetyNeedsAttention = true;
+                _isRehearsal = true;
+                _ = _engine.SetRehearsalMode(true);
+            }
         }
 
         ControlChanged?.Invoke(this, new RuntimeControlUpdate(
@@ -641,7 +730,14 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             MappingDisposition.DepthRejected or
             MappingDisposition.SourceNeedsAttention)
         {
-            RaiseState(mappingStatus: result.Message, status: $"Needs attention: {result.Message}");
+            if (result.Disposition == MappingDisposition.OutputFailed)
+            {
+                RaiseOutputSafetyFailureState();
+            }
+            else
+            {
+                RaiseState(mappingStatus: result.Message, status: $"Needs attention: {result.Message}");
+            }
         }
     }
 
@@ -666,6 +762,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         bool wasCaptureTarget)
     {
         var selectionWasRemoved = false;
+        var outputReleaseSucceeded = true;
         RuntimeControlUpdate[] releasedUpdates = [];
         if (kind == RawInputDeviceChangeKind.Removal)
         {
@@ -693,19 +790,28 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
                     _confirmed = null;
                     _candidate = null;
                     _isRehearsal = true;
-                    _engine.SetRehearsalMode(true);
+                    outputReleaseSucceeded = RecordCleanupResultLocked(
+                        _engine.SetRehearsalMode(true));
                     _engine.Activation.Reset();
                 }
             }
 
             if (changedDescriptor is { } descriptor)
             {
-                _engine.DisconnectController(new ControllerSessionId(descriptor.SessionId));
+                var cleanup = _engine.DisconnectController(new ControllerSessionId(descriptor.SessionId));
+                lock (_gate)
+                {
+                    outputReleaseSucceeded = RecordCleanupResultLocked(cleanup) && !_outputSafetyNeedsAttention;
+                }
                 _diagnostics.ObserveDisconnect(descriptor.PersistentId);
             }
             else if (sessionToDisconnect is { } selectedSession)
             {
-                _engine.DisconnectController(selectedSession);
+                var cleanup = _engine.DisconnectController(selectedSession);
+                lock (_gate)
+                {
+                    outputReleaseSucceeded = RecordCleanupResultLocked(cleanup) && !_outputSafetyNeedsAttention;
+                }
             }
 
             if (selectionWasRemoved)
@@ -726,11 +832,20 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
         if (selectionWasRemoved)
         {
-            RaiseState(
-                identificationStatus: "The selected controller was removed. Its Tappy-owned outputs were released. Select and identify it again after reconnect.",
-                mappingStatus: "Rehearsal Mode was restored; mappings are disarmed.",
-                status: "Needs attention: selected controller disconnected; fail-open pass-through remains.",
-                activeControllerLabel: "No controller confirmed");
+            if (outputReleaseSucceeded)
+            {
+                RaiseState(
+                    identificationStatus: "The selected controller was removed. Its Tappy-owned outputs were released. Select and identify it again after reconnect.",
+                    mappingStatus: "Rehearsal Mode was restored; mappings are disarmed.",
+                    status: "Needs attention: selected controller disconnected; fail-open pass-through remains.",
+                    activeControllerLabel: "No controller confirmed");
+            }
+            else
+            {
+                RaiseOutputSafetyFailureState(
+                    identificationStatus: "The selected controller was removed and Windows rejected an owned-output release. Restart Tappy before rearming.",
+                    activeControllerLabel: "No controller confirmed");
+            }
         }
     }
 
@@ -742,10 +857,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             WindowsLifecycleSignal.Shutdown)
         {
             RuntimeControlUpdate[] releasedUpdates;
+            bool releaseSucceeded;
             lock (_gate)
             {
                 releasedUpdates = CaptureReleasedUpdatesLocked();
-                _engine.ResetForLifecycleTransition();
+                releaseSucceeded = RecordCleanupResultLocked(_engine.ResetForLifecycleTransition()) &&
+                                   !_outputSafetyNeedsAttention;
                 _engine.Activation.Reset();
                 _isRehearsal = true;
                 _engine.SetRehearsalMode(true);
@@ -755,21 +872,32 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             }
 
             PublishReleasedUpdates(releasedUpdates);
-            RaiseState(
-                identificationStatus: "Windows changed session state. Re-identify the controller before using mappings again.",
-                mappingStatus: "Rehearsal Mode was restored and all Tappy-owned output was released.",
-                status: $"Nothing is armed after Windows lifecycle event: {eventArgs.Signal}.",
-                activeControllerLabel: "No controller confirmed");
+            if (releaseSucceeded)
+            {
+                RaiseState(
+                    identificationStatus: "Windows changed session state. Re-identify the controller before using mappings again.",
+                    mappingStatus: "Rehearsal Mode was restored and all Tappy-owned output was released.",
+                    status: $"Nothing is armed after Windows lifecycle event: {eventArgs.Signal}.",
+                    activeControllerLabel: "No controller confirmed");
+            }
+            else
+            {
+                RaiseOutputSafetyFailureState(
+                    identificationStatus: "Windows changed session state and rejected an owned-output release. Restart Tappy before rearming.",
+                    activeControllerLabel: "No controller confirmed");
+            }
         }
     }
 
     private void Provider_OnFaulted(object? sender, Exception exception)
     {
         RuntimeControlUpdate[] releasedUpdates;
+        bool releaseSucceeded;
         lock (_gate)
         {
             releasedUpdates = CaptureReleasedUpdatesLocked();
-            _engine.ResetForLifecycleTransition();
+            releaseSucceeded = RecordCleanupResultLocked(_engine.ResetForLifecycleTransition()) &&
+                               !_outputSafetyNeedsAttention;
             _engine.Activation.Reset();
             _isRehearsal = true;
             _engine.SetRehearsalMode(true);
@@ -779,12 +907,21 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
 
         PublishReleasedUpdates(releasedUpdates);
-        RaiseState(
-            identificationStatus: "Raw Input is unavailable. Nothing is armed; re-identification is required after recovery.",
-            mappingStatus: "The input backend failed; output is disabled, released, and Rehearsal Mode was restored.",
-            status: $"Needs attention: {PrivacyRedactor.SanitizeDiagnosticText(exception.Message)}",
-            activeControllerLabel: "No controller confirmed",
-            sourceLabel: "Effective: Needs attention (fail-open)");
+        if (releaseSucceeded)
+        {
+            RaiseState(
+                identificationStatus: "Raw Input is unavailable. Nothing is armed; re-identification is required after recovery.",
+                mappingStatus: "The input backend failed; output is disabled, released, and Rehearsal Mode was restored.",
+                status: $"Needs attention: {PrivacyRedactor.SanitizeDiagnosticText(exception.Message)}",
+                activeControllerLabel: "No controller confirmed",
+                sourceLabel: "Effective: Needs attention (fail-open)");
+        }
+        else
+        {
+            RaiseOutputSafetyFailureState(
+                identificationStatus: "Raw Input failed and Windows rejected an owned-output release. Restart Tappy before rearming.",
+                activeControllerLabel: "No controller confirmed");
+        }
     }
 
     private RuntimeControlUpdate[] CaptureReleasedUpdatesLocked()
@@ -840,6 +977,26 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             ControlChanged?.Invoke(this, update);
         }
     }
+
+    private bool RecordCleanupResultLocked(OutputCleanupResult result)
+    {
+        if (!result.OutputReleaseSucceeded)
+        {
+            _outputSafetyNeedsAttention = true;
+        }
+
+        return result.OutputReleaseSucceeded;
+    }
+
+    private void RaiseOutputSafetyFailureState(
+        string? identificationStatus = null,
+        string? activeControllerLabel = null) =>
+        RaiseState(
+            identificationStatus: identificationStatus,
+            mappingStatus: OutputSafetyFailureMappingStatus,
+            status: OutputSafetyFailureStatus,
+            activeControllerLabel: activeControllerLabel,
+            sourceLabel: "Effective: Needs attention (fail-open)");
 
     private void RaiseState(
         string? identificationStatus = null,

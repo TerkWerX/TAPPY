@@ -4,7 +4,7 @@ This record separates deterministic software evidence from packaged-artifact and
 physical-hardware evidence. Passing automated tests does not certify a controller,
 prove 6KRO/NKRO behavior, or establish physical latency.
 
-## 2026-09-02 source-tree verification
+## 2026-09-03 source-tree verification
 
 Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.303`; product projects
 target .NET 8. The verification was run in Release configuration.
@@ -12,18 +12,20 @@ target .NET 8. The verification was run in Release configuration.
 | Check | Result | Evidence boundary |
 |---|---:|---|
 | `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
-| `Tappy.Core.Tests` | 30 passed, 0 failed | Deterministic platform-neutral behavior |
-| `Tappy.Windows.Tests` | 90 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, provider contracts, output tagging, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
-| `Tappy.App.Tests` | 31 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, mapping/profile round-trip, Rehearsal Mode, lifecycle/fault cleanup, accessibility state, and unplug handling with fake providers/output |
+| `Tappy.Core.Tests` | 31 passed, 0 failed | Deterministic platform-neutral behavior, including explicit cleanup-dispatch results |
+| `Tappy.Windows.Tests` | 92 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, provider contracts, pre-arm neutrality, output tagging, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
+| `Tappy.App.Tests` | 38 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure handling, lifecycle/fault cleanup, accessibility state, and unplug handling with fake providers/output |
 | `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
-| Current automated total | 174 passed, 0 failed | Core 30 + Windows 90 + App 31 + G13 HIL tool 23 |
+| Current automated total | 184 passed, 0 failed | Core 31 + Windows 92 + App 38 + G13 HIL tool 23 |
 | `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 10 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
-The automated slice covers explicit select/identify/release/confirm activation;
+The automated slice covers explicit neutral-state gating plus
+select/identify/release/confirm activation;
 scan-code plus E0/E1 identity; make, break, repeat, simultaneous and multi-session
 state; unselected and self-injected input rejection; reference-counted held output;
 frozen release context; disconnect, lifecycle, profile-swap, and emergency cleanup;
+truthful latching and re-arm refusal when an owned-output release is rejected;
 recursion/depth/rate guards; immutable profile round-trip and isolation; raw-path
 redaction; the app's safe F13-F24 mapping path; identification-time WPF key handling;
 live automation names; ordered deferred visual transitions; a truthful quick-tap
@@ -42,7 +44,7 @@ duplicate a commit ID that would become stale when the record itself is committe
 ## Local portable artifact checkpoint
 
 The current post-provider package checkpoint was built from clean committed source.
-It ran all 174 tests, recorded all ten package locks, verified the allowlisted
+It ran all 184 tests, recorded all ten package locks, verified the allowlisted
 three-file payload, and executed both the actual published `Tappy.exe` and a fresh
 copy extracted from the portable ZIP. Each readiness run passed
 `controller-registry`, `profile-round-trip`, `rehearsal-no-output`, and

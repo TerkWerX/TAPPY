@@ -14,6 +14,9 @@ public sealed class ProductIdentityTests
         Assert.Equal("Tappy", ProductIdentity.LocalDataFolderName);
         Assert.Equal("TappyData", ProductIdentity.PortableDataFolderName);
         Assert.Equal("{B42E5FBB-E4AB-458A-908E-838C8BD101BB}", ProductIdentity.InstallerAppId);
+        Assert.Equal(
+            "https://api.github.com/repos/TerkWerX/TAPPY/releases/latest",
+            ProductIdentity.UpdateEndpointUrl);
         Assert.Equal(0x7Bu, ProductIdentity.EmergencyHotKeyVirtualKey);
         Assert.Equal(0x0007u, ProductIdentity.EmergencyHotKeyModifiers);
     }

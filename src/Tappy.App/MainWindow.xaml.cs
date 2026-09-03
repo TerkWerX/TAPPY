@@ -9,6 +9,9 @@ namespace Tappy.App;
 
 public partial class MainWindow : Window
 {
+    internal const string BackgroundNotificationMessage =
+        "Tappy is still running in the notification area. Use Show Tappy, Emergency stop, or Exit Tappy at any time.";
+
     private readonly MainViewModel _viewModel;
     private readonly WindowPlacementStore _placement;
     private readonly SessionMarker _sessionMarker;
@@ -141,7 +144,7 @@ public partial class MainWindow : Window
         Hide();
         _tray?.ShowBalloon(
             "Tappy is still running",
-            "Mappings remain active in Device-aware pass-through. Use the tray Emergency stop or Exit command at any time.");
+            BackgroundNotificationMessage);
     }
 
     private void MainWindow_OnStateChanged(object sender, EventArgs e)

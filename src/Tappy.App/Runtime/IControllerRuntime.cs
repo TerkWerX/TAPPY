@@ -50,5 +50,5 @@ public interface IControllerRuntime : IAsyncDisposable
     RuntimeOperation ConfirmController();
     RuntimeOperation AssignMapping(string controlId, string outputKey);
     Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default);
-    void EmergencyStop(string reason);
+    RuntimeOperation EmergencyStop(string reason);
 }
