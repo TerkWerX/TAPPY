@@ -23,6 +23,8 @@ Raw Input message-only window (dedicated native thread)
     -> mapping engine (frozen key-down execution context + safety guards)
        -> Rehearsal: record aggregate outcome only
        -> Normal: IKeyboardOutput -> tagged Windows SendInput
+       -> Normal: IControllerActionOutput -> cancellable action scheduler
+          -> keyboard/text/mouse | process/PowerShell | MIDI | OSC
     -> bounded ordered WPF visual drain (presentation work never blocks routing)
 ```
 
@@ -51,6 +53,9 @@ Contains immutable/snapshot-oriented models and deterministic engines:
 - `MappingEngine` accepts only the confirmed persistent controller, rejects
   self-injected/device-less signals, freezes binding/layer/source/release data at
   key-down, reference-counts held output, and applies depth/rate limits.
+- Controller bindings can also hold immutable press/release action sequences. The
+  engine schedules them without blocking the input thread and retains ownership for
+  held output until physical release or global cleanup.
 - Profile and controller layout schemas support arbitrary control counts and an
   arbitrary positive number of layers; three starter layers are a UI default only.
 - Platform interfaces include input provider, output, clock, profile store,
@@ -80,6 +85,11 @@ Contains immutable/snapshot-oriented models and deterministic engines:
   [G13 support boundary](LOGITECH_G13.md).
 - `SendInputKeyboardOutput` tags every `SendInput` record with a process-specific
   Tappy marker and balances every owned press with a release.
+- `WindowsControllerActionOutput` runs bounded sequences away from the Raw Input
+  thread. It emits marked Unicode and mouse input, safe process/PowerShell starts,
+  `winmm` MIDI short messages, and typed OSC/UDP packets. Its dispatch gate makes
+  cleanup wait behind an in-flight output and prevents a cancelled task from emitting
+  after emergency stop returns.
 - `AtomicProfileStore` snapshots before serialization, writes a temporary file in
   the destination directory, atomically replaces where supported, retains a
   last-known-good copy, and quarantines corrupt input.
@@ -91,6 +101,8 @@ The WPF shell explicitly composes the keyboard and G13 providers, displays sourc
 truth prominently, lets the user choose/identify/confirm one device, renders a
 data-driven key grid, drains visual transitions in order, provides
 mapping and Rehearsal controls, and preserves mouse-accessible emergency recovery.
+The assignment editor builds and reorders keyboard, text, delay, mouse, program,
+PowerShell, MIDI, and OSC steps without producing output while it is open.
 The visual buffer preserves press/release ordering, compacts only after a bounded
 backlog, and keeps physical `IsPressed` state separate from a minimum-duration
 illumination pulse so a quick tap is visible without delaying input or output.
@@ -142,9 +154,10 @@ Normal input is message/event driven. There is no keyboard polling loop and no
 foreground-application polling loop. Native parsing and the small core route do not
 enter the WPF dispatcher. Presentation transitions retain FIFO order behind one
 pending dispatcher operation and a bounded buffer; overflow compaction keeps the
-latest physical state plus a press pulse for each affected control. Macro work is
-cancellable and bounded by step, duration,
-nesting, repeat, and output-rate limits. If any future bounded queue overflows,
+latest physical state plus a press pulse for each affected control. Action-sequence
+work is cancellable, limited to 500 steps and 30 seconds per pass, and
+repeat-while-held is limited to 20 seconds. Mapping recursion remains bounded by
+nesting and keyboard output-rate limits. If any future bounded queue overflows,
 Tappy enters Needs attention, cancels output, and releases all owned state rather
 than dropping a release invisibly.
 

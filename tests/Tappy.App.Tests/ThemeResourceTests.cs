@@ -140,7 +140,7 @@ public sealed class ThemeResourceTests
             .Descendants()
             .Single(element =>
                 element.Name.LocalName == "Button" &&
-                element.Attribute("Content")?.Value == "Choose keyboard assignment…");
+                element.Attribute("Content")?.Value == "Build an assignment…");
         Assert.Equal("{Binding CanAssignSelectedControl}", assignmentButton.Attribute("IsEnabled")?.Value);
         Assert.Equal("OpenAssignmentEditor_OnClick", assignmentButton.Attribute("Click")?.Value);
 
@@ -183,7 +183,7 @@ public sealed class ThemeResourceTests
         var category = NamedElement(document, "ComboBox", "CategoryBox");
         Assert.Equal("{StaticResource AssignmentCategoryItemTemplate}", category.Attribute("ItemTemplate")?.Value);
         var behavior = NamedElement(document, "ComboBox", "TimingBox");
-        Assert.Equal(3, behavior.Elements().Count(element => element.Name.LocalName == "ComboBoxItem"));
+        Assert.Equal(4, behavior.Elements().Count(element => element.Name.LocalName == "ComboBoxItem"));
         Assert.All(
             behavior.Descendants().Where(element => element.Name.LocalName == "TextBlock"),
             text => Assert.Equal(
@@ -196,6 +196,16 @@ public sealed class ThemeResourceTests
         Assert.Equal("{StaticResource AssignmentListItemStyle}", list.Attribute("ItemContainerStyle")?.Value);
         Assert.Equal("True", list.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
         Assert.Equal("Recycling", list.Attribute("VirtualizingPanel.VirtualizationMode")?.Value);
+
+        var tabHeaders = document.Descendants()
+            .Where(element => element.Name.LocalName == "TabItem")
+            .Select(element => element.Attribute("Header")?.Value ?? string.Empty)
+            .ToArray();
+        Assert.Equal(
+            ["Keyboard", "Text + delay", "Mouse", "Program", "PowerShell", "MIDI", "OSC"],
+            tabHeaders);
+        Assert.NotNull(NamedElement(document, "ListBox", "SequenceList"));
+        Assert.NotNull(NamedElement(document, "Button", "AssignButton"));
     }
 
     private static void AssertComboBoxStyleUsesDedicatedBrushes(XDocument document)

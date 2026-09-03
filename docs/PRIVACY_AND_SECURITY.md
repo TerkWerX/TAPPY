@@ -52,8 +52,9 @@ contract, not hardware behavior.
 
 ## Output and recursion safety
 
-Every keyboard output is owned by an execution lease and injected with Tappy's
-nonzero marker. Matching/device-less input is rejected. Shared output keys use
+Every keyboard, text, mouse, and held MIDI output is owned by an execution lease;
+synthetic Windows input is injected with Tappy's nonzero marker.
+Matching/device-less input is rejected. Shared output keys use
 reference counts so one controller cannot release another controller's still-held
 modifier. Depth and output-rate limits contain cycles such as `A -> B`, `B -> A`.
 Emergency stop, unplug, source/backend failure, lock, suspend, profile swap, and an
@@ -66,11 +67,19 @@ secure-desktop, exclusive-input, remote-session, accessibility, or anti-cheat
 contexts. Tappy does not weaken AppLocker, WDAC, Constrained Language Mode, execution
 policy, or application/game rules.
 
+MIDI output is local through the Windows multimedia API. OSC is the only current
+network output: it sends a UDP packet solely to the host and port explicitly stored
+in that assignment, with no discovery, telemetry, response collection, or retry loop.
+Program launch uses the current user token. PowerShell permits only the built-in 5.1
+host or `pwsh`, and always uses `-NoLogo -NoProfile -NonInteractive -Command`; Tappy
+does not request elevation or add an execution-policy bypass.
+
 ## Imports and future active content
 
-Profiles, portable layers, and controller packs are parsed to an inert preview.
-Program launch, PowerShell, OSC/network destinations, and similar active steps stay
-disabled until reviewed. Future support packs accept declared bounded JSON/PNG/CSV
+The current editor creates active steps without executing them; Rehearsal Mode remains
+the review boundary, and no controller is armed without the normal identify/confirm
+flow. Future profile/package import must use an inert preview before active steps can
+be enabled. Future support packs accept declared bounded JSON/PNG/CSV
 data only, reject traversal/symlinks/duplicates/unknown types/oversize and archive
 bombs, verify per-file SHA-256, require a trusted publisher signature for catalog
 delivery, and reject downgrades. No pack may introduce executable code.

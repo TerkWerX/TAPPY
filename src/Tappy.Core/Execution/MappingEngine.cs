@@ -89,10 +89,12 @@ public sealed class MappingEngine
         SourceModeSnapshot SourceMode,
         ExecutionAncestry Ancestry,
         bool Rehearsal,
-        bool HeldOutputAcquired);
+        bool HeldOutputAcquired,
+        bool ActionOutputStarted);
 
     private readonly object _gate = new();
     private readonly IKeyboardOutput _keyboardOutput;
+    private readonly IControllerActionOutput _actionOutput;
     private readonly IMonotonicClock _clock;
     private readonly MappingEngineOptions _options;
     private readonly HeldOutputLedger _heldOutputs = new();
@@ -107,9 +109,11 @@ public sealed class MappingEngine
     public MappingEngine(
         IKeyboardOutput keyboardOutput,
         MappingEngineOptions options,
-        IMonotonicClock? clock = null)
+        IMonotonicClock? clock = null,
+        IControllerActionOutput? actionOutput = null)
     {
         _keyboardOutput = keyboardOutput ?? throw new ArgumentNullException(nameof(keyboardOutput));
+        _actionOutput = actionOutput ?? NullControllerActionOutput.Instance;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
         _clock = clock ?? new SystemMonotonicClock();
@@ -360,7 +364,7 @@ public sealed class MappingEngine
         var ownerId = $"press:{sessionId.Value}:{signal.ControlId.Value}:{++_executionSequence}";
         var activeKey = (sessionId, signal.ControlId);
         var press = new ActivePress(ownerId, controller, binding, layerId, controller.SourceMode,
-            outputAncestry, _rehearsalMode, false);
+            outputAncestry, _rehearsalMode, false, false);
         _activePresses[activeKey] = press;
 
         if (_rehearsalMode)
@@ -371,15 +375,27 @@ public sealed class MappingEngine
         }
 
         var disposition = ExecutePressAction(press, _clock.GetTimestamp(), out var heldAcquired);
-        if (heldAcquired)
+        var sequenceDisposition = ExecuteSequenceAction(
+            press.OwnerId,
+            sessionId.Value,
+            press.Binding.PressSequence,
+            press.Ancestry);
+        var sequenceStarted = sequenceDisposition == MappingDisposition.Handled &&
+                              press.Binding.PressSequence.Mode != ControllerActionSequenceMode.RunOnce;
+        disposition = Combine(disposition, sequenceDisposition);
+        if (heldAcquired || sequenceStarted)
         {
-            _activePresses[activeKey] = press with { HeldOutputAcquired = true };
+            _activePresses[activeKey] = press with
+            {
+                HeldOutputAcquired = heldAcquired,
+                ActionOutputStarted = sequenceStarted
+            };
         }
 
         return new MappingResult(disposition,
             disposition == MappingDisposition.Handled ? "The frozen press binding was dispatched." :
             disposition == MappingDisposition.RateLimited ? "The output rate limit suppressed the binding." :
-            disposition == MappingDisposition.OutputFailed ? "The keyboard output backend rejected the binding." :
+            disposition == MappingDisposition.OutputFailed ? "An output backend rejected the binding." :
             "The binding was tracked without output.",
             layerId, controller.SourceMode.Effective, outputAncestry);
     }
@@ -394,6 +410,12 @@ public sealed class MappingEngine
 
         var outputFailed = false;
         var heldReleaseDispatched = false;
+        if (press.ActionOutputStarted)
+        {
+            heldReleaseDispatched = true;
+            outputFailed = !TryReleaseActionOwner(press.OwnerId);
+        }
+
         if (press.HeldOutputAcquired)
         {
             var heldRelease = _heldOutputs.ReleaseOwner(press.OwnerId);
@@ -408,8 +430,18 @@ public sealed class MappingEngine
                 press.LayerId, press.SourceMode.Effective, press.Ancestry);
         }
 
-        var releaseDisposition = ExecuteTapAction(
-            $"{press.OwnerId}:release", press.Binding.ReleaseAction, _clock.GetTimestamp(), press.Ancestry);
+        var releaseDisposition = MappingDisposition.OutputFailed;
+        if (!outputFailed)
+        {
+            releaseDisposition = ExecuteTapAction(
+                $"{press.OwnerId}:release", press.Binding.ReleaseAction, _clock.GetTimestamp(), press.Ancestry);
+            releaseDisposition = Combine(releaseDisposition, ExecuteSequenceAction(
+                $"{press.OwnerId}:release",
+                sessionId.Value,
+                press.Binding.ReleaseSequence,
+                press.Ancestry));
+        }
+
         if (outputFailed || releaseDisposition == MappingDisposition.OutputFailed)
         {
             releaseDisposition = MappingDisposition.OutputFailed;
@@ -489,6 +521,47 @@ public sealed class MappingEngine
             : MappingDisposition.OutputFailed;
     }
 
+    private MappingDisposition ExecuteSequenceAction(
+        string ownerId,
+        string scopeId,
+        ControllerActionSequenceSnapshot sequence,
+        ExecutionAncestry ancestry)
+    {
+        if (sequence.IsEmpty)
+        {
+            return MappingDisposition.Tracked;
+        }
+
+        try
+        {
+            return _actionOutput.Start(new ControllerActionOutputRequest(
+                    ownerId, scopeId, sequence, _options.SelfInjectionMarker, ancestry))
+                ? MappingDisposition.Handled
+                : MappingDisposition.OutputFailed;
+        }
+        catch
+        {
+            return MappingDisposition.OutputFailed;
+        }
+    }
+
+    private static MappingDisposition Combine(MappingDisposition first, MappingDisposition second)
+    {
+        if (first == MappingDisposition.OutputFailed || second == MappingDisposition.OutputFailed)
+        {
+            return MappingDisposition.OutputFailed;
+        }
+
+        if (first == MappingDisposition.RateLimited || second == MappingDisposition.RateLimited)
+        {
+            return MappingDisposition.RateLimited;
+        }
+
+        return first == MappingDisposition.Handled || second == MappingDisposition.Handled
+            ? MappingDisposition.Handled
+            : MappingDisposition.Tracked;
+    }
+
     private bool TryDispatchDelta(string ownerId, HeldOutputDelta delta, ExecutionAncestry ancestry)
     {
         try
@@ -527,6 +600,8 @@ public sealed class MappingEngine
                 press.Ancestry);
         }
 
+        releaseSucceeded &= TryReleaseActionScope(sessionId.Value);
+
         _ = reason;
         return new OutputCleanupResult(active.Length, releaseSucceeded);
     }
@@ -540,6 +615,7 @@ public sealed class MappingEngine
             $"cleanup:{reason}",
             _heldOutputs.ReleaseAll(),
             ancestry);
+        releaseSucceeded &= TryReleaseAllActions();
         _rateGuard.Clear();
         return new OutputCleanupResult(count, releaseSucceeded);
     }
@@ -549,6 +625,42 @@ public sealed class MappingEngine
         IReadOnlyList<KeyboardOutputKey> keys,
         ExecutionAncestry ancestry) =>
         new(ownerId, keys, _options.SelfInjectionMarker, ancestry);
+
+    private bool TryReleaseActionOwner(string ownerId)
+    {
+        try
+        {
+            return _actionOutput.ReleaseOwner(ownerId);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool TryReleaseActionScope(string scopeId)
+    {
+        try
+        {
+            return _actionOutput.ReleaseScope(scopeId);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool TryReleaseAllActions()
+    {
+        try
+        {
+            return _actionOutput.ReleaseAll();
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private static string RouteNode(ControllerSessionId sessionId, ControlId controlId) =>
         $"{sessionId.Value}|{controlId.Value}";

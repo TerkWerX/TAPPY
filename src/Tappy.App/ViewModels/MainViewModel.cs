@@ -255,6 +255,23 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    public void AssignControllerAction(ControllerActionAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        if (_selectedControl is null)
+        {
+            MappingStatus = "Press a confirmed controller control or click a control tile first.";
+            return;
+        }
+
+        var result = _runtime.AssignControllerAction(_selectedControl.ControlId, assignment);
+        MappingStatus = result.Message;
+        if (result.Succeeded)
+        {
+            _selectedControl.Action = assignment.Name;
+        }
+    }
+
     public async Task SaveProfileAsync(CancellationToken cancellationToken = default)
     {
         var result = await _runtime.SaveProfileAsync(cancellationToken).ConfigureAwait(true);

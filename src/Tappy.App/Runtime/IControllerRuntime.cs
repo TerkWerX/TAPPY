@@ -19,6 +19,11 @@ public sealed record KeyboardMappingAssignment(
         new(name, KeyboardActionMode.None, [], KeyboardActionMode.Tap, keys);
 }
 
+public sealed record ControllerActionAssignment(
+    string Name,
+    ControllerActionSequenceDefinition PressSequence,
+    ControllerActionSequenceDefinition ReleaseSequence);
+
 public sealed record ControllerChoice(
     string SessionId,
     string PersistentId,
@@ -72,6 +77,8 @@ public interface IControllerRuntime : IAsyncDisposable
     RuntimeOperation ConfirmController();
     RuntimeOperation AssignMapping(string controlId, string outputKey);
     RuntimeOperation AssignKeyboardMapping(string controlId, KeyboardMappingAssignment assignment);
+    RuntimeOperation AssignControllerAction(string controlId, ControllerActionAssignment assignment) =>
+        RuntimeOperation.Failed("This runtime does not support multi-action controller assignments.");
     Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default);
     RuntimeOperation EmergencyStop(string reason);
 }

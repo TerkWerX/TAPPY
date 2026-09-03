@@ -12,12 +12,12 @@ target .NET 8. The verification was run in Release configuration.
 | Check | Result | Evidence boundary |
 |---|---:|---|
 | `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
-| `Tappy.Core.Tests` | 31 passed, 0 failed | Deterministic platform-neutral behavior, including explicit cleanup-dispatch results |
-| `Tappy.Windows.Tests` | 100 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, capability-isolated registration faults, bounded message-host shutdown routing, provider contracts, pre-arm neutrality, complete advertised-key output translation, output tagging, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
-| `Tappy.App.Tests` | 61 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, expanded keyboard catalog and chord assignment, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, readable dropdown/disabled-button/control-label themes, assignment-editor accessibility, and unplug handling with fake providers/output |
+| `Tappy.Core.Tests` | 46 passed, 0 failed | Deterministic platform-neutral behavior, including explicit cleanup-dispatch results, immutable action sequences, profile round-trip, MIDI parsing, OSC encoding, and action-output press/release/Rehearsal routing |
+| `Tappy.Windows.Tests` | 103 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, capability-isolated registration faults, bounded message-host shutdown routing, provider contracts, pre-arm neutrality, complete advertised-key output translation, output tagging, bounded action scheduling, PowerShell policy, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
+| `Tappy.App.Tests` | 62 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, expanded keyboard catalog and chord assignment, multi-step MIDI/OSC assignment routing, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, readable dropdown/disabled-button/control-label themes, assignment-editor accessibility, and unplug handling with fake providers/output |
 | `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
 | `Tappy.OutputWitness.Tests` | 53 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break and output state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
-| Current automated total | 268 passed, 0 failed | Core 31 + Windows 100 + App 61 + G13 HIL tool 23 + Output Witness 53 |
+| Current automated total | 287 passed, 0 failed | Core 46 + Windows 103 + App 62 + G13 HIL tool 23 + Output Witness 53 |
 | `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 12 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
@@ -32,7 +32,8 @@ serialized input/disposal and conservative unclean-session recovery;
 recursion/depth/rate guards; immutable profile round-trip and isolation; raw-path
 redaction; the app's safe F13-F24 milestone path; the searchable keyboard assignment
 catalog with more than 1,500 direct/modifier choices; tap, held, and release-trigger
-assignment projection; identification-time WPF key handling;
+assignment projection; bounded multi-step action schema and MIDI/OSC syntax/packet
+contracts; action-output press/release/Rehearsal routing; identification-time WPF key handling;
 live automation names; ordered deferred visual transitions; a truthful quick-tap
 illumination pulse; bounded backlog compaction with final-state preservation;
 presentation-mode minimums; and high-contrast theme

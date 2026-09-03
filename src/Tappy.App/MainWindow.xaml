@@ -121,7 +121,7 @@
                         <TextBlock Text="Press a confirmed controller key or click its tile. Then search named Windows actions or choose from thousands of supported key combinations."
                                    TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,10" />
                         <TextBlock Text="{Binding SelectedControlLabel, StringFormat=Selected: {0}}" FontWeight="SemiBold" />
-                        <Button Content="Choose keyboard assignment…" Click="OpenAssignmentEditor_OnClick"
+                        <Button Content="Build an assignment…" Click="OpenAssignmentEditor_OnClick"
                                 IsEnabled="{Binding CanAssignSelectedControl}" Margin="0,8,0,10"
                                 AutomationProperties.Name="Open the searchable keyboard assignment editor" />
                         <CheckBox IsChecked="{Binding IsRehearsal, Mode=TwoWay}" Margin="0,0,0,9"

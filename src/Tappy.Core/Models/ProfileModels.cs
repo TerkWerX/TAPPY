@@ -86,18 +86,25 @@ public sealed class ControlBindingDefinition
     public bool Enabled { get; set; } = true;
     public KeyboardActionDefinition PressAction { get; set; } = new();
     public KeyboardActionDefinition ReleaseAction { get; set; } = new();
+    public ControllerActionSequenceDefinition PressSequence { get; set; } = new();
+    public ControllerActionSequenceDefinition ReleaseSequence { get; set; } = new();
 
     public void Normalize()
     {
         Name = string.IsNullOrWhiteSpace(Name) ? "Unassigned" : Name.Trim();
         PressAction ??= new KeyboardActionDefinition();
         ReleaseAction ??= new KeyboardActionDefinition();
+        PressSequence ??= new ControllerActionSequenceDefinition();
+        ReleaseSequence ??= new ControllerActionSequenceDefinition();
         PressAction.Normalize();
         ReleaseAction.Normalize();
+        PressSequence.Normalize();
+        ReleaseSequence.Normalize();
         if (ReleaseAction.Mode == KeyboardActionMode.HoldUntilRelease)
         {
             ReleaseAction.Mode = KeyboardActionMode.Tap;
         }
+        ReleaseSequence.Mode = ControllerActionSequenceMode.RunOnce;
     }
 
     public ControlBindingDefinition Clone() => new()
@@ -106,7 +113,9 @@ public sealed class ControlBindingDefinition
         Name = Name,
         Enabled = Enabled,
         PressAction = PressAction?.Clone() ?? new KeyboardActionDefinition(),
-        ReleaseAction = ReleaseAction?.Clone() ?? new KeyboardActionDefinition()
+        ReleaseAction = ReleaseAction?.Clone() ?? new KeyboardActionDefinition(),
+        PressSequence = PressSequence?.Clone() ?? new ControllerActionSequenceDefinition(),
+        ReleaseSequence = ReleaseSequence?.Clone() ?? new ControllerActionSequenceDefinition()
     };
 }
 
@@ -360,7 +369,7 @@ public sealed class ControllerProfile
 
 public sealed class TappyProfile
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string Name { get; set; } = "Default";

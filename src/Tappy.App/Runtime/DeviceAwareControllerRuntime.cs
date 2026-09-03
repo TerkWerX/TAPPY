@@ -32,6 +32,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     private readonly IWindowsLifecycleSignalSource? _applicationLifecycleSource;
     private readonly AtomicProfileStore _profileStore;
     private readonly MappingEngine _engine;
+    private readonly IControllerActionOutput _actionOutput;
     private readonly Action? _beforeEngineProcess;
     private readonly Action? _beforeDisposeGate;
     private readonly InputDiagnosticAggregate _diagnostics = new();
@@ -51,22 +52,23 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     public DeviceAwareControllerRuntime(
         string? dataRoot = null,
         IWindowsLifecycleSignalSource? applicationLifecycleSource = null)
-        : this(CreateProductionProviders(), new SendInputKeyboardOutput(),
+        : this(CreateProductionProviders(), CreateProductionOutputs(),
             new AtomicProfileStore(dataRoot), applicationLifecycleSource)
     {
     }
 
     private DeviceAwareControllerRuntime(
         ProductionProviders providers,
-        IKeyboardOutput keyboardOutput,
+        ProductionOutputs outputs,
         AtomicProfileStore profileStore,
         IWindowsLifecycleSignalSource? applicationLifecycleSource)
         : this(
             providers.Keyboard,
             providers.LogitechG13,
-            keyboardOutput,
+            outputs.Keyboard,
             profileStore,
-            applicationLifecycleSource)
+            applicationLifecycleSource,
+            actionOutput: outputs.Actions)
     {
     }
 
@@ -76,7 +78,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         AtomicProfileStore profileStore,
         IWindowsLifecycleSignalSource? applicationLifecycleSource = null,
         Action? beforeEngineProcess = null,
-        Action? beforeDisposeGate = null)
+        Action? beforeDisposeGate = null,
+        IControllerActionOutput? actionOutput = null)
         : this(
             provider,
             null,
@@ -84,7 +87,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             profileStore,
             applicationLifecycleSource,
             beforeEngineProcess,
-            beforeDisposeGate)
+            beforeDisposeGate,
+            actionOutput)
     {
     }
 
@@ -95,11 +99,13 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         AtomicProfileStore profileStore,
         IWindowsLifecycleSignalSource? applicationLifecycleSource = null,
         Action? beforeEngineProcess = null,
-        Action? beforeDisposeGate = null)
+        Action? beforeDisposeGate = null,
+        IControllerActionOutput? actionOutput = null)
     {
         _keyboardProvider = keyboardProvider ?? throw new ArgumentNullException(nameof(keyboardProvider));
         _logitechG13Provider = logitechG13Provider;
         _profileStore = profileStore ?? throw new ArgumentNullException(nameof(profileStore));
+        _actionOutput = actionOutput ?? NullControllerActionOutput.Instance;
         _beforeEngineProcess = beforeEngineProcess;
         _beforeDisposeGate = beforeDisposeGate;
         _applicationLifecycleSource = ReferenceEquals(applicationLifecycleSource, keyboardProvider) ||
@@ -114,8 +120,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
                 MaximumAncestryDepth = 8,
                 MaximumOutputTransitionsPerWindow = 200,
                 OutputRateWindow = TimeSpan.FromSeconds(1)
-            });
+            },
+            actionOutput: _actionOutput);
         _engine.SetRehearsalMode(true);
+        _actionOutput.Faulted += ActionOutput_OnFaulted;
 
         _keyboardProvider.IdentificationInputReceived += KeyboardProvider_OnIdentificationInputReceived;
         _keyboardProvider.InputReceived += KeyboardProvider_OnInputReceived;
@@ -597,6 +605,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             binding.Enabled = true;
             binding.PressAction = pressAction;
             binding.ReleaseAction = releaseAction;
+            binding.PressSequence = new ControllerActionSequenceDefinition();
+            binding.ReleaseSequence = new ControllerActionSequenceDefinition();
             EnsureObservedLayout(controller, id);
             if (!RecordCleanupResultLocked(_engine.SetProfile(_editableProfile.CreateSnapshot())))
             {
@@ -605,6 +615,96 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
                 return RuntimeOperation.Failed(
                     "The mapping was updated, but Windows rejected a prior Tappy-owned output release. Rehearsal Mode remains on; restart Tappy before arming output.");
             }
+            _engine.ConnectController(controller.Identity);
+        }
+
+        return RuntimeOperation.Ok(
+            $"Mapped this control to {bindingName}. Rehearsal Mode currently {(IsRehearsal ? "suppresses" : "allows")} output.");
+    }
+
+    public RuntimeOperation AssignControllerAction(string controlId, ControllerActionAssignment assignment)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (string.IsNullOrWhiteSpace(controlId))
+        {
+            return RuntimeOperation.Failed("Choose a physical control first.");
+        }
+
+        ArgumentNullException.ThrowIfNull(assignment);
+        var press = assignment.PressSequence?.Clone() ?? new ControllerActionSequenceDefinition();
+        var release = assignment.ReleaseSequence?.Clone() ?? new ControllerActionSequenceDefinition();
+        press.Normalize();
+        release.Normalize();
+        release.Mode = ControllerActionSequenceMode.RunOnce;
+        if (press.IsEmpty && release.IsEmpty)
+        {
+            return RuntimeOperation.Failed("Add at least one output action before assigning this control.");
+        }
+
+        var validation = ValidateSequence(press) ?? ValidateSequence(release) ??
+                         ValidateMidiLifetime(press, release);
+        if (validation is not null)
+        {
+            return RuntimeOperation.Failed(validation);
+        }
+
+        var bindingName = string.IsNullOrWhiteSpace(assignment.Name)
+            ? (press.IsEmpty ? release.Name : press.Name)
+            : assignment.Name.Trim();
+        if (string.IsNullOrWhiteSpace(bindingName))
+        {
+            bindingName = press.IsEmpty ? "Release action" : "Controller action";
+        }
+
+        lock (_gate)
+        {
+            if (_outputSafetyNeedsAttention)
+            {
+                return RuntimeOperation.Failed(
+                    "An earlier Tappy-owned output release was rejected. Rehearsal Mode remains on; restart Tappy before assigning or arming output.");
+            }
+
+            if (_confirmed is null)
+            {
+                return RuntimeOperation.Failed("Select, identify, release, and confirm a spare controller before assigning it.");
+            }
+
+            var controller = FindEditableController(_confirmed.PersistentId);
+            if (controller is null)
+            {
+                return RuntimeOperation.Failed("The confirmed controller has no profile. Nothing was changed.");
+            }
+
+            var layer = controller.Layers.First(item => item.Id == controller.ActiveLayerId);
+            var id = new ControlId(controlId);
+            if (_confirmed.ProviderId == LogitechG13ProviderId &&
+                !LogitechG13InputProvider.SupportedControls.Any(item => item.ControlId == id))
+            {
+                return RuntimeOperation.Failed("That control does not belong to the confirmed Logitech G13 layout.");
+            }
+
+            var binding = layer.Bindings.FirstOrDefault(item => item.ControlId == id);
+            if (binding is null)
+            {
+                binding = new ControlBindingDefinition { ControlId = id };
+                layer.Bindings.Add(binding);
+            }
+
+            binding.Name = bindingName;
+            binding.Enabled = true;
+            binding.PressAction = new KeyboardActionDefinition();
+            binding.ReleaseAction = new KeyboardActionDefinition();
+            binding.PressSequence = press;
+            binding.ReleaseSequence = release;
+            EnsureObservedLayout(controller, id);
+            if (!RecordCleanupResultLocked(_engine.SetProfile(_editableProfile.CreateSnapshot())))
+            {
+                _isRehearsal = true;
+                _ = _engine.SetRehearsalMode(true);
+                return RuntimeOperation.Failed(
+                    "The assignment was updated, but cleanup of prior output failed. Rehearsal Mode remains on; restart Tappy before arming output.");
+            }
+
             _engine.ConnectController(controller.Identity);
         }
 
@@ -690,6 +790,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         _keyboardProvider.DeviceChanged -= KeyboardProvider_OnDeviceChanged;
         _keyboardProvider.LifecycleChanged -= Provider_OnLifecycleChanged;
         _keyboardProvider.Faulted -= Provider_OnFaulted;
+        _actionOutput.Faulted -= ActionOutput_OnFaulted;
         if (_logitechG13Provider is not null)
         {
             _logitechG13Provider.IdentificationInputReceived -= LogitechG13Provider_OnIdentificationInputReceived;
@@ -708,6 +809,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
 
         await _keyboardProvider.DisposeAsync().ConfigureAwait(false);
+        if (_actionOutput is IDisposable disposableActionOutput)
+        {
+            disposableActionOutput.Dispose();
+        }
     }
 
     private void KeyboardProvider_OnIdentificationInputReceived(object? sender, KeyboardInputReceivedEventArgs eventArgs) =>
@@ -1063,6 +1168,34 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
     }
 
+    private void ActionOutput_OnFaulted(object? sender, ControllerActionOutputFault fault)
+    {
+        RuntimeControlUpdate[] releasedUpdates;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            releasedUpdates = CaptureReleasedUpdatesLocked();
+            _ = _engine.EmergencyStop();
+            _engine.Activation.Reset();
+            _isRehearsal = true;
+            _ = _engine.SetRehearsalMode(true);
+            _outputSafetyNeedsAttention = true;
+            ClearCaptureTargets();
+            _candidate = null;
+            _confirmed = null;
+        }
+
+        PublishReleasedUpdates(releasedUpdates);
+        RaiseOutputSafetyFailureState(
+            identificationStatus: "An assigned output failed. Nothing is armed; restart Tappy before rearming.",
+            activeControllerLabel: "No controller confirmed",
+            mappingStatus: $"Action output failed: {PrivacyRedactor.SanitizeDiagnosticText(fault.Message)}");
+    }
+
     private RuntimeControlUpdate[] CaptureReleasedUpdatesLocked()
     {
         var confirmed = _confirmed;
@@ -1129,10 +1262,11 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
     private void RaiseOutputSafetyFailureState(
         string? identificationStatus = null,
-        string? activeControllerLabel = null) =>
+        string? activeControllerLabel = null,
+        string? mappingStatus = null) =>
         RaiseState(
             identificationStatus: identificationStatus,
-            mappingStatus: OutputSafetyFailureMappingStatus,
+            mappingStatus: mappingStatus ?? OutputSafetyFailureMappingStatus,
             status: OutputSafetyFailureStatus,
             activeControllerLabel: activeControllerLabel,
             sourceLabel: "Effective: Needs attention (fail-open)");
@@ -1371,6 +1505,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             new LogitechG13InputProvider(new NativeLogitechG13DeviceEnumerator(), host));
     }
 
+    private static ProductionOutputs CreateProductionOutputs()
+    {
+        var keyboard = new SendInputKeyboardOutput();
+        return new ProductionOutputs(keyboard, new WindowsControllerActionOutput(keyboard));
+    }
+
     private static ControllerIdentity ToIdentity(RuntimeInputDevice descriptor) => new(
         new ControllerSessionId(descriptor.SessionId),
         new ControllerPersistentId(descriptor.PersistentId),
@@ -1432,6 +1572,159 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         return new KeyboardActionDefinition { Mode = mode, Keys = keys };
     }
 
+    private static string? ValidateSequence(ControllerActionSequenceDefinition sequence)
+    {
+        if (sequence.Steps.Count > 500)
+        {
+            return "An assignment cannot contain more than 500 action steps.";
+        }
+
+        if (sequence.Mode == ControllerActionSequenceMode.RepeatWhileHeld &&
+            sequence.Steps.Any(step => step.Type is ControllerActionStepType.LaunchProgram or
+                ControllerActionStepType.PowerShellCommand))
+        {
+            return "Program and PowerShell actions cannot repeat while held.";
+        }
+
+        foreach (var step in sequence.Steps)
+        {
+            switch (step.Type)
+            {
+                case ControllerActionStepType.KeyboardChord:
+                case ControllerActionStepType.KeyDown:
+                case ControllerActionStepType.KeyUp:
+                    if (step.Keys.Count is 0 or > 8 ||
+                        step.Keys.Any(key => !KeyboardOutputCapabilities.IsSupported(key)))
+                    {
+                        return "A keyboard step contains an unsupported key or exceeds the eight-key chord safety limit.";
+                    }
+                    break;
+                case ControllerActionStepType.Text:
+                    if (string.IsNullOrEmpty(step.Value) || step.Value.Length > 32_768)
+                    {
+                        return "A text step must contain between 1 and 32,768 characters.";
+                    }
+                    break;
+                case ControllerActionStepType.Delay:
+                    if (step.DurationMs is < 1 or > 600_000)
+                    {
+                        return "A delay must be between 1 millisecond and 10 minutes.";
+                    }
+                    break;
+                case ControllerActionStepType.MouseButton:
+                    var mouse = step.Value.Replace(" ", string.Empty, StringComparison.Ordinal).ToLowerInvariant();
+                    if (mouse is not ("left" or "leftclick" or "leftdown" or "leftup" or
+                        "right" or "rightclick" or "rightdown" or "rightup" or
+                        "middle" or "middleclick" or "middledown" or "middleup" or
+                        "x1" or "x1click" or "x1down" or "x1up" or
+                        "x2" or "x2click" or "x2down" or "x2up"))
+                    {
+                        return "A mouse button step must use Left, Right, Middle, X1, or X2 with optional Click, Down, or Up.";
+                    }
+                    break;
+                case ControllerActionStepType.LaunchProgram:
+                    if (string.IsNullOrWhiteSpace(step.Value))
+                    {
+                        return "A program action requires a program, file, folder, or URL.";
+                    }
+                    break;
+                case ControllerActionStepType.PowerShellCommand:
+                    if (string.IsNullOrWhiteSpace(step.Value) ||
+                        step.Target is not ("" or "Windows PowerShell 5.1" or "PowerShell 7" or
+                            "powershell" or "powershell.exe" or "pwsh" or "pwsh.exe"))
+                    {
+                        return "A PowerShell action requires a command and a supported PowerShell host.";
+                    }
+                    break;
+                case ControllerActionStepType.Midi:
+                    try
+                    {
+                        _ = MidiMessageParser.Parse(step.Value);
+                    }
+                    catch (ArgumentException exception)
+                    {
+                        return exception.Message;
+                    }
+                    break;
+                case ControllerActionStepType.Osc:
+                    if (step.Amount is < 1 or > 65_535)
+                    {
+                        return "An OSC destination port must be between 1 and 65,535.";
+                    }
+                    try
+                    {
+                        _ = OscPacketBuilder.Build(step.Value, step.Arguments);
+                    }
+                    catch (ArgumentException exception)
+                    {
+                        return exception.Message;
+                    }
+                    break;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ValidateMidiLifetime(
+        ControllerActionSequenceDefinition press,
+        ControllerActionSequenceDefinition release)
+    {
+        var releaseEndingNotes = EndingMidiNotes(release);
+        if (releaseEndingNotes.Count > 0)
+        {
+            return "A release sequence cannot leave a MIDI note on. Add the matching note-off step.";
+        }
+
+        var pressEndingNotes = EndingMidiNotes(press);
+        if (pressEndingNotes.Count == 0 || press.Mode == ControllerActionSequenceMode.WhileHeld)
+        {
+            return null;
+        }
+
+        if (press.Mode == ControllerActionSequenceMode.RepeatWhileHeld)
+        {
+            return "A repeating sequence cannot leave a MIDI note on. Add a matching note-off within the sequence.";
+        }
+
+        pressEndingNotes.ExceptWith(MidiNoteOffs(release));
+        return pressEndingNotes.Count == 0
+            ? null
+            : "A run-once MIDI note-on needs a matching release note-off, or use stop-and-clean-up-on-release behavior.";
+    }
+
+    private static HashSet<string> EndingMidiNotes(ControllerActionSequenceDefinition sequence)
+    {
+        var notes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var step in sequence.Steps.Where(step => step.Type == ControllerActionStepType.Midi))
+        {
+            var message = MidiMessageParser.Parse(step.Value);
+            var key = MidiNoteKey(step.Target, message);
+            if (message.IsNoteOn)
+            {
+                notes.Add(key);
+            }
+            else if (message.Kind is MidiShortMessageKind.NoteOff or MidiShortMessageKind.NoteOn)
+            {
+                notes.Remove(key);
+            }
+        }
+
+        return notes;
+    }
+
+    private static HashSet<string> MidiNoteOffs(ControllerActionSequenceDefinition sequence) =>
+        sequence.Steps
+            .Where(step => step.Type == ControllerActionStepType.Midi)
+            .Select(step => (Step: step, Message: MidiMessageParser.Parse(step.Value)))
+            .Where(item => item.Message.Kind == MidiShortMessageKind.NoteOff ||
+                           item.Message.Kind == MidiShortMessageKind.NoteOn && item.Message.Data2 == 0)
+            .Select(item => MidiNoteKey(item.Step.Target, item.Message))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string MidiNoteKey(string device, MidiShortMessage message) =>
+        $"{device.Trim()}|{message.Channel}|{message.Data1}";
+
     private static string FormatKeyboardBinding(
         KeyboardActionDefinition pressAction,
         KeyboardActionDefinition releaseAction)
@@ -1449,6 +1742,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     private sealed record ProductionProviders(
         RawInputKeyboardProvider Keyboard,
         LogitechG13InputProvider LogitechG13);
+
+    private sealed record ProductionOutputs(
+        SendInputKeyboardOutput Keyboard,
+        WindowsControllerActionOutput Actions);
 
     private sealed record RuntimeInputDevice(
         string ProviderId,

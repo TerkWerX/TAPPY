@@ -1,4 +1,5 @@
 using Tappy.App.Runtime;
+using Tappy.Core.Models;
 using Tappy.Core.Output;
 using Tappy.Windows.Input;
 using Tappy.Windows.Lifecycle;
@@ -129,6 +130,76 @@ public sealed class DeviceAwareControllerRuntimeTests
 
             Assert.False(result.Succeeded);
             Assert.Contains("unsupported", result.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Multi_step_assignment_dispatches_through_action_output_and_cleans_up_on_release()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)45, @"\\?\HID#VID_1234&PID_5678#ACTIONS");
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor), host, keyboardIsNeutral: static () => true);
+            var actions = new RecordingActionOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider,
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                actionOutput: actions);
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirm(runtime, host, descriptor.SessionHandle, 0x4F, 0x61);
+            var controlId = Tappy.Core.Input.ControlId.FromRawInputKeyboard(0x4F).Value;
+            var sequence = new ControllerActionSequenceDefinition
+            {
+                Name = "MIDI and OSC",
+                Mode = ControllerActionSequenceMode.WhileHeld,
+                Steps =
+                [
+                    new ControllerActionStepDefinition
+                    {
+                        Type = ControllerActionStepType.Midi,
+                        Value = "note:1:60:100"
+                    },
+                    new ControllerActionStepDefinition
+                    {
+                        Type = ControllerActionStepType.Osc,
+                        Target = "127.0.0.1",
+                        Amount = 8000,
+                        Value = "/tappy/g13",
+                        Arguments = "1"
+                    }
+                ]
+            };
+
+            var unsafeRunOnce = sequence.Clone();
+            unsafeRunOnce.Mode = ControllerActionSequenceMode.RunOnce;
+            var unsafeResult = runtime.AssignControllerAction(controlId,
+                new ControllerActionAssignment(
+                    "Unsafe MIDI note",
+                    unsafeRunOnce,
+                    new ControllerActionSequenceDefinition()));
+            Assert.False(unsafeResult.Succeeded);
+            Assert.Contains("note-off", unsafeResult.Message, StringComparison.OrdinalIgnoreCase);
+
+            var assigned = runtime.AssignControllerAction(controlId,
+                new ControllerActionAssignment("MIDI and OSC", sequence, new ControllerActionSequenceDefinition()));
+            runtime.IsRehearsal = false;
+            host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Make));
+            host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Break));
+
+            Assert.True(assigned.Succeeded, assigned.Message);
+            var request = Assert.Single(actions.Started);
+            Assert.Equal(2, request.Sequence.Steps.Count);
+            Assert.Equal(request.OwnerId, Assert.Single(actions.ReleasedOwners));
         }
         finally
         {
@@ -984,5 +1055,32 @@ public sealed class DeviceAwareControllerRuntimeTests
                 DuringKeyUp?.Invoke();
             }
         }
+    }
+
+    private sealed class RecordingActionOutput : IControllerActionOutput
+    {
+        public List<ControllerActionOutputRequest> Started { get; } = [];
+        public List<string> ReleasedOwners { get; } = [];
+
+        public event EventHandler<ControllerActionOutputFault>? Faulted;
+
+        public bool Start(ControllerActionOutputRequest request)
+        {
+            Started.Add(request);
+            return true;
+        }
+
+        public bool ReleaseOwner(string ownerId)
+        {
+            ReleasedOwners.Add(ownerId);
+            return true;
+        }
+
+        public bool ReleaseScope(string scopeId) => true;
+        public bool ReleaseAll() => true;
+
+        public void RaiseFault(ControllerActionOutputRequest request, Exception exception) =>
+            Faulted?.Invoke(this, new ControllerActionOutputFault(
+                request.OwnerId, request.ScopeId, exception.Message, exception));
     }
 }

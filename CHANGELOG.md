@@ -68,6 +68,18 @@ Notable changes to Tappy are documented here.
   all 261 tests, published and freshly extracted readiness smoke checks, twelve package
   lock records, and zero injected input. The artifact remains an unsigned local
   checkpoint, not a public release.
+- A controller-native action-sequence profile schema and editor now combine up to
+  500 ordered keyboard, Unicode text, delay, mouse, launch, PowerShell, MIDI, and OSC
+  steps. Sequences support press, release, held-cleanup, and bounded repeat behavior.
+- Windows MIDI output uses the local `winmm` short-message API with explicit device
+  selection and strict note/CC/program validation. OSC output builds padded, typed
+  packets and sends only to the host and UDP port entered in the assignment.
+- The background action scheduler never blocks Raw Input, tags its keyboard/text/mouse
+  injection, caps a sequence pass at 30 seconds and repeating output at 20 seconds,
+  and joins emergency, unplug, lifecycle, profile-change, and fault cleanup through
+  the same owned-output boundary.
+- Current deterministic results: Core 46, Windows 103, App 62, G13 HIL tool 23,
+  and Output Witness 53 tests pass (287 total).
 
 ### Known limitations
 
@@ -75,8 +87,11 @@ Notable changes to Tappy are documented here.
   evidence is captured.
 - Windows cannot selectively suppress one keyboard through Raw Input; original keys
   remain pass-through.
-- The attached G13 is descriptor-enumerated and code-supported, but no live control
-  capture or HIL run has completed; it is not Functional or Verified.
+- The attached G13 is descriptor-enumerated and code-supported, with operator-reported
+  visual response for all controls, but no finite HIL/output/pass-through run has
+  completed; it is not Functional or Verified.
+- Virtual gamepad, variables, layer-control actions, gesture triggers, reusable MIDI/
+  OSC preset managers, and full independent press/release sequence editing remain.
 - Final mascot, wordmark, public license, signing, release, and website decisions are
   intentionally open.
 - Processed controller images remain excluded pending provenance, usage rights,

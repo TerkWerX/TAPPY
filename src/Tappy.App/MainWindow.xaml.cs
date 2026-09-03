@@ -178,7 +178,16 @@ public partial class MainWindow : Window
         }
 
         var editor = new KeyboardAssignmentWindow(_viewModel.SelectedControlLabel) { Owner = this };
-        if (editor.ShowDialog() == true && editor.Result is { } assignment)
+        if (editor.ShowDialog() != true)
+        {
+            return;
+        }
+
+        if (editor.ActionResult is { } actionAssignment)
+        {
+            _viewModel.AssignControllerAction(actionAssignment);
+        }
+        else if (editor.Result is { } assignment)
         {
             _viewModel.AssignKeyboardMapping(assignment);
         }

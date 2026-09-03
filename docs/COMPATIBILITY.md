@@ -68,8 +68,8 @@ consumer-control collections, identical serial-less devices, reconnect stability
 sleeping wireless receivers, Windows lock/suspend, and latency targets require real
 hardware evidence before support claims.
 
-The current automated suites pass with a zero-warning Release build: Core 31,
-Windows 100, App 61, G13 HIL tool 23, and Output Witness 53 (268 total).
+The current automated suites pass with a zero-warning Release build: Core 46,
+Windows 103, App 62, G13 HIL tool 23, and Output Witness 53 (287 total).
 Packaged-artifact checkpoint status is in [`TESTING.md`](TESTING.md). Every physical
 or manual check remains a separate gate.
 The current twelve-project NuGet advisory query reports no known vulnerable packages;

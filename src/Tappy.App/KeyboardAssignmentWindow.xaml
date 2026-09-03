@@ -1,42 +1,46 @@
 <Window x:Class="Tappy.App.KeyboardAssignmentWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Tappy keyboard assignment" Width="920" Height="680"
-        MinWidth="720" MinHeight="520" WindowStartupLocation="CenterOwner"
-        AutomationProperties.Name="Keyboard assignment editor">
+        Title="Tappy assignment editor" Width="1080" Height="760"
+        MinWidth="880" MinHeight="620" WindowStartupLocation="CenterOwner"
+        AutomationProperties.Name="Controller assignment editor">
     <Window.Resources>
         <DataTemplate x:Key="AssignmentCategoryItemTemplate">
-            <TextBlock Text="{Binding DisplayName}"
-                       Foreground="{DynamicResource ComboBoxTextBrush}" />
+            <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource ComboBoxTextBrush}" />
         </DataTemplate>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
+        </Style>
+        <Style x:Key="FormLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+            <Setter Property="Margin" Value="0,10,0,5" />
+        </Style>
         <Style x:Key="AssignmentPrimaryTextStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource AssignmentListTextBrush}" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
-                             Value="True">
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="AssignmentMutedTextStyle" TargetType="TextBlock"
-               BasedOn="{StaticResource AssignmentPrimaryTextStyle}">
+        <Style x:Key="AssignmentMutedTextStyle" TargetType="TextBlock" BasedOn="{StaticResource AssignmentPrimaryTextStyle}">
             <Setter Property="Foreground" Value="{DynamicResource AssignmentListMutedTextBrush}" />
         </Style>
         <Style x:Key="AssignmentListItemStyle" TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="0" />
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
-                    <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
+
     <Grid Background="{DynamicResource WindowBrush}" Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -44,112 +48,247 @@
         </Grid.RowDefinitions>
 
         <StackPanel>
-            <TextBlock Text="Choose a keyboard assignment" FontSize="23" FontWeight="SemiBold" />
-            <TextBlock x:Name="ControlLabelText" Margin="0,3,0,0"
-                       Foreground="{DynamicResource MutedTextBrush}" />
+            <TextBlock Text="Build an assignment" FontSize="23" FontWeight="SemiBold" />
+            <TextBlock x:Name="ControlLabelText" Margin="0,3,0,0" Foreground="{DynamicResource MutedTextBrush}" />
         </StackPanel>
 
         <Border Grid.Row="1" Background="#3B2F14" BorderBrush="{DynamicResource PressedBrush}"
                 BorderThickness="1" CornerRadius="10" Padding="11" Margin="0,12,0,12">
-            <TextBlock Text="Assignments are edited without producing output. Keep Rehearsal Mode on while reviewing a new shortcut; pass-through source input may still reach the focused application."
+            <TextBlock Text="Editing never produces output. Rehearsal Mode still suppresses every assignment while you safely review keyboard, text, mouse, program, PowerShell, MIDI, and OSC actions."
                        Foreground="#FFF6DA" TextWrapping="Wrap" />
         </Border>
 
-        <Grid Grid.Row="2" Margin="0,0,0,10">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" />
                 <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" MinWidth="290" />
             </Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock Text="SEARCH BY NAME, KEY, OR PURPOSE" FontSize="11" FontWeight="Bold"
-                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,5" />
-                <TextBox x:Name="SearchBox" TextChanged="SearchBox_OnTextChanged" Padding="9,7"
-                         AutomationProperties.Name="Search keyboard assignments" />
-            </StackPanel>
-            <StackPanel Grid.Column="2">
-                <TextBlock Text="CATEGORY" FontSize="11" FontWeight="Bold"
-                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,5" />
-                <ComboBox x:Name="CategoryBox" ItemTemplate="{StaticResource AssignmentCategoryItemTemplate}"
-                          SelectionChanged="CategoryBox_OnSelectionChanged"
-                          AutomationProperties.Name="Keyboard assignment category" />
-            </StackPanel>
-        </Grid>
 
-        <Border Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1" CornerRadius="11" Padding="5">
-            <ListBox x:Name="AssignmentList" SelectionChanged="AssignmentList_OnSelectionChanged"
-                     MouseDoubleClick="AssignmentList_OnMouseDoubleClick"
-                     Background="{DynamicResource AssignmentListBackgroundBrush}"
-                     Foreground="{DynamicResource AssignmentListTextBrush}"
-                     ItemContainerStyle="{StaticResource AssignmentListItemStyle}"
-                     ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling"
-                     AutomationProperties.Name="Available keyboard assignments">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Grid Margin="6,5" MinHeight="47">
+            <TabControl x:Name="ActionTabs" SelectionChanged="ActionTabs_OnSelectionChanged">
+                <TabItem Header="Keyboard">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"
-                                           Style="{StaticResource AssignmentPrimaryTextStyle}"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap"
-                                           Style="{StaticResource AssignmentMutedTextStyle}" Margin="0,2,12,0" />
-                                <TextBlock Text="{Binding Category}" FontSize="10"
-                                           Style="{StaticResource AssignmentMutedTextStyle}" Margin="0,2,12,0" />
+                                <TextBlock Text="SEARCH BY NAME, KEY, OR PURPOSE" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                                <TextBox x:Name="SearchBox" TextChanged="SearchBox_OnTextChanged" Padding="9,7"
+                                         AutomationProperties.Name="Search keyboard assignments" />
                             </StackPanel>
-                            <Border Grid.Column="1" Background="{DynamicResource RaisedBrush}"
-                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                    CornerRadius="6" Padding="9,5" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Shortcut}" FontFamily="Consolas"
-                                           FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="270" />
-                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="CATEGORY" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                                <ComboBox x:Name="CategoryBox" ItemTemplate="{StaticResource AssignmentCategoryItemTemplate}"
+                                          SelectionChanged="CategoryBox_OnSelectionChanged" />
+                            </StackPanel>
                         </Grid>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-        </Border>
+                        <Border Grid.Row="1" Background="{DynamicResource AssignmentListBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="8" Margin="0,10,0,0" Padding="4">
+                            <ListBox x:Name="AssignmentList" SelectionChanged="AssignmentList_OnSelectionChanged"
+                                     MouseDoubleClick="AssignmentList_OnMouseDoubleClick"
+                                     Background="{DynamicResource AssignmentListBackgroundBrush}"
+                                     Foreground="{DynamicResource AssignmentListTextBrush}"
+                                     ItemContainerStyle="{StaticResource AssignmentListItemStyle}"
+                                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="6,5" MinHeight="43">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"
+                                                           Style="{StaticResource AssignmentPrimaryTextStyle}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap"
+                                                           Style="{StaticResource AssignmentMutedTextStyle}" Margin="0,2,10,0" />
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Background="{DynamicResource RaisedBrush}"
+                                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                    CornerRadius="6" Padding="8,4" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Shortcut}" FontFamily="Consolas" FontWeight="SemiBold"
+                                                           TextWrapping="Wrap" MaxWidth="220" />
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                        <Grid Grid.Row="2" Margin="0,8,0,0">
+                            <TextBlock x:Name="CountText" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                            <Button Content="Add keyboard step" HorizontalAlignment="Right"
+                                    Click="AddKeyboardStep_OnClick" />
+                        </Grid>
+                    </Grid>
+                </TabItem>
 
-        <Grid Grid.Row="4" Margin="0,12,0,0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+                <TabItem Header="Text + delay">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="TEXT TO TYPE" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                        <TextBox x:Name="TextValueBox" Height="160" AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" Padding="8" />
+                        <Button Content="Add text step" HorizontalAlignment="Left" Margin="0,10,0,0"
+                                Click="AddTextStep_OnClick" />
+                        <Separator Margin="0,18" />
+                        <TextBlock Text="DELAY IN MILLISECONDS" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                        <TextBox x:Name="DelayBox" Text="250" Padding="8" Width="160" HorizontalAlignment="Left" />
+                        <Button Content="Add delay step" HorizontalAlignment="Left" Margin="0,10,0,0"
+                                Click="AddDelayStep_OnClick" />
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="Mouse">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="MOUSE ACTION" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                        <ComboBox x:Name="MouseActionBox" SelectedIndex="0">
+                            <ComboBoxItem Tag="Left click">Left click</ComboBoxItem>
+                            <ComboBoxItem Tag="Right click">Right click</ComboBoxItem>
+                            <ComboBoxItem Tag="Middle click">Middle click</ComboBoxItem>
+                            <ComboBoxItem Tag="X1 click">X1 click</ComboBoxItem>
+                            <ComboBoxItem Tag="X2 click">X2 click</ComboBoxItem>
+                            <ComboBoxItem Tag="Move">Relative move</ComboBoxItem>
+                            <ComboBoxItem Tag="Vertical wheel">Vertical scroll</ComboBoxItem>
+                            <ComboBoxItem Tag="Horizontal wheel">Horizontal scroll</ComboBoxItem>
+                        </ComboBox>
+                        <TextBlock Text="X / HORIZONTAL AMOUNT" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="MouseXBox" Text="0" Padding="8" />
+                        <TextBlock Text="Y / VERTICAL AMOUNT" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="MouseYBox" Text="120" Padding="8" />
+                        <Button Content="Add mouse step" HorizontalAlignment="Left" Margin="0,14,0,0"
+                                Click="AddMouseStep_OnClick" />
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="Program">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="PROGRAM, FILE, FOLDER, OR URL" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                        <TextBox x:Name="ProgramPathBox" Padding="8" />
+                        <TextBlock Text="ARGUMENTS (OPTIONAL)" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="ProgramArgumentsBox" Padding="8" />
+                        <TextBlock Text="WORKING DIRECTORY (OPTIONAL)" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="ProgramWorkingDirectoryBox" Padding="8" />
+                        <Button Content="Add launch step" HorizontalAlignment="Left" Margin="0,14,0,0"
+                                Click="AddProgramStep_OnClick" />
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="PowerShell">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="POWERSHELL HOST" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                        <ComboBox x:Name="PowerShellHostBox" SelectedIndex="0">
+                            <ComboBoxItem Tag="Windows PowerShell 5.1">Windows PowerShell 5.1 (built in)</ComboBoxItem>
+                            <ComboBoxItem Tag="PowerShell 7">PowerShell 7 (pwsh, if installed)</ComboBoxItem>
+                        </ComboBox>
+                        <TextBlock Text="COMMAND" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="PowerShellCommandBox" Height="190" AcceptsReturn="True"
+                                 TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" />
+                        <TextBlock Text="WORKING DIRECTORY (OPTIONAL)" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="PowerShellWorkingDirectoryBox" Padding="8" />
+                        <Button Content="Add PowerShell step" HorizontalAlignment="Left" Margin="0,14,0,0"
+                                Click="AddPowerShellStep_OnClick" />
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="MIDI">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="MIDI OUTPUT" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Refresh" Margin="8,0,0,0"
+                                    Click="RefreshMidi_OnClick" />
+                            <ComboBox x:Name="MidiDeviceBox" DisplayMemberPath="DisplayName" />
+                        </DockPanel>
+                        <TextBlock Text="MESSAGE" Style="{StaticResource FormLabel}" />
+                        <ComboBox x:Name="MidiKindBox" SelectedIndex="0">
+                            <ComboBoxItem Tag="note">Note on</ComboBoxItem>
+                            <ComboBoxItem Tag="noteoff">Note off</ComboBoxItem>
+                            <ComboBoxItem Tag="cc">Control change</ComboBoxItem>
+                            <ComboBoxItem Tag="pc">Program change</ComboBoxItem>
+                        </ComboBox>
+                        <TextBlock Text="CHANNEL (1–16)" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="MidiChannelBox" Text="1" Padding="8" />
+                        <TextBlock Text="NOTE / CONTROLLER / PROGRAM (0–127)" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="MidiData1Box" Text="60" Padding="8" />
+                        <TextBlock Text="VELOCITY / VALUE (0–127)" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="MidiData2Box" Text="100" Padding="8" />
+                        <Button Content="Add MIDI step" HorizontalAlignment="Left" Margin="0,14,0,0"
+                                Click="AddMidiStep_OnClick" />
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="OSC">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="HOST" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                        <TextBox x:Name="OscHostBox" Text="127.0.0.1" Padding="8" />
+                        <TextBlock Text="UDP PORT" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="OscPortBox" Text="8000" Padding="8" />
+                        <TextBlock Text="OSC ADDRESS" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="OscAddressBox" Text="/tappy" Padding="8" />
+                        <TextBlock Text="VALUES (COMMA-SEPARATED INTS, FLOATS, OR TEXT)" Style="{StaticResource FormLabel}" />
+                        <TextBox x:Name="OscValuesBox" Padding="8" />
+                        <Button Content="Add OSC step" HorizontalAlignment="Left" Margin="0,14,0,0"
+                                Click="AddOscStep_OnClick" />
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
+
+            <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="STEPS IN THIS ASSIGNMENT" Style="{StaticResource FormLabel}" Margin="0,0,0,4" />
+                        <TextBlock Text="Steps run from top to bottom. Use explicit delays when timing matters."
+                                   Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ListBox x:Name="SequenceList" Grid.Row="1" Margin="0,10"
+                             DisplayMemberPath="Summary" SelectionChanged="SequenceList_OnSelectionChanged" />
+                    <StackPanel Grid.Row="2">
+                        <WrapPanel>
+                            <Button x:Name="MoveUpButton" Content="Up" Click="MoveStepUp_OnClick" IsEnabled="False" />
+                            <Button x:Name="MoveDownButton" Content="Down" Click="MoveStepDown_OnClick" IsEnabled="False" Margin="6,0,0,0" />
+                            <Button x:Name="RemoveStepButton" Content="Remove" Click="RemoveStep_OnClick" IsEnabled="False" Margin="6,0,0,0" />
+                            <Button Content="Clear" Click="ClearSteps_OnClick" Margin="6,0,0,0" />
+                        </WrapPanel>
+                        <TextBlock x:Name="SequenceCountText" Text="0 of 500 steps" Margin="0,9,0,0"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="3" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="330" />
             </Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock x:Name="CountText" Foreground="{DynamicResource MutedTextBrush}" />
-                <TextBlock x:Name="SelectionSummaryText" Text="Choose an assignment above."
-                           TextWrapping="Wrap" Margin="0,3,12,0" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" MinWidth="280">
-                <TextBlock Text="WHEN THIS CONTROLLER KEY IS USED" FontSize="11" FontWeight="Bold"
-                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,5" />
-                <ComboBox x:Name="TimingBox" SelectedIndex="0"
-                          AutomationProperties.Name="Keyboard assignment behavior">
-                    <ComboBoxItem Tag="PressOnce">
-                        <TextBlock Text="Tap once when pressed" Foreground="{DynamicResource ComboBoxTextBrush}" />
-                    </ComboBoxItem>
-                    <ComboBoxItem Tag="HoldUntilRelease">
-                        <TextBlock Text="Hold until controller key is released" Foreground="{DynamicResource ComboBoxTextBrush}" />
-                    </ComboBoxItem>
-                    <ComboBoxItem Tag="ReleaseOnce">
-                        <TextBlock Text="Tap once when released" Foreground="{DynamicResource ComboBoxTextBrush}" />
-                    </ComboBoxItem>
+            <TextBlock x:Name="ValidationText" Text="Add one or more steps."
+                       TextWrapping="Wrap" Margin="0,0,12,0" />
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="WHEN THIS CONTROLLER KEY IS USED" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
+                <ComboBox x:Name="TimingBox" SelectedIndex="0">
+                    <ComboBoxItem Tag="PressOnce"><TextBlock Text="Run once when pressed" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                    <ComboBoxItem Tag="HoldUntilRelease"><TextBlock Text="Start when pressed; stop and clean up on release" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                    <ComboBoxItem Tag="RepeatWhileHeld"><TextBlock Text="Repeat while held" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                    <ComboBoxItem Tag="ReleaseOnce"><TextBlock Text="Run once when released" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
                 </ComboBox>
-            </StackPanel>
-            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal"
-                        HorizontalAlignment="Right" Margin="0,12,0,0">
-                <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0" />
-                <Button x:Name="AssignButton" Content="Use selected assignment"
-                        Click="AssignButton_OnClick" IsEnabled="False"
-                        AutomationProperties.Name="Use the selected keyboard assignment" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0" />
+                    <Button x:Name="AssignButton" Content="Use this assignment" Click="AssignButton_OnClick"
+                            AutomationProperties.Name="Use this controller assignment" />
+                </StackPanel>
             </StackPanel>
         </Grid>
     </Grid>

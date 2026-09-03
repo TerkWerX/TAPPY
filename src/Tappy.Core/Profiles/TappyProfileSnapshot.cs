@@ -30,6 +30,76 @@ public sealed class KeyboardActionSnapshot
     };
 }
 
+public sealed class ControllerActionStepSnapshot
+{
+    private readonly KeyboardOutputKey[] _keys;
+
+    internal ControllerActionStepSnapshot(ControllerActionStepDefinition source)
+    {
+        Type = source.Type;
+        _keys = [.. source.Keys];
+        Keys = Array.AsReadOnly(_keys);
+        Value = source.Value;
+        Arguments = source.Arguments;
+        Target = source.Target;
+        WorkingDirectory = source.WorkingDirectory;
+        DurationMs = source.DurationMs;
+        Amount = source.Amount;
+        X = source.X;
+        Y = source.Y;
+    }
+
+    public ControllerActionStepType Type { get; }
+    public IReadOnlyList<KeyboardOutputKey> Keys { get; }
+    public string Value { get; }
+    public string Arguments { get; }
+    public string Target { get; }
+    public string WorkingDirectory { get; }
+    public int DurationMs { get; }
+    public int Amount { get; }
+    public int X { get; }
+    public int Y { get; }
+
+    internal ControllerActionStepDefinition ToEditable() => new()
+    {
+        Type = Type,
+        Keys = [.. _keys],
+        Value = Value,
+        Arguments = Arguments,
+        Target = Target,
+        WorkingDirectory = WorkingDirectory,
+        DurationMs = DurationMs,
+        Amount = Amount,
+        X = X,
+        Y = Y
+    };
+}
+
+public sealed class ControllerActionSequenceSnapshot
+{
+    private readonly ControllerActionStepSnapshot[] _steps;
+
+    internal ControllerActionSequenceSnapshot(ControllerActionSequenceDefinition source)
+    {
+        Name = source.Name;
+        Mode = source.Mode;
+        _steps = source.Steps.Select(step => new ControllerActionStepSnapshot(step)).ToArray();
+        Steps = Array.AsReadOnly(_steps);
+    }
+
+    public string Name { get; }
+    public ControllerActionSequenceMode Mode { get; }
+    public IReadOnlyList<ControllerActionStepSnapshot> Steps { get; }
+    public bool IsEmpty => _steps.Length == 0;
+
+    internal ControllerActionSequenceDefinition ToEditable() => new()
+    {
+        Name = Name,
+        Mode = Mode,
+        Steps = _steps.Select(step => step.ToEditable()).ToList()
+    };
+}
+
 public sealed class ControlBindingSnapshot
 {
     internal ControlBindingSnapshot(ControlBindingDefinition source)
@@ -39,6 +109,8 @@ public sealed class ControlBindingSnapshot
         Enabled = source.Enabled;
         PressAction = new KeyboardActionSnapshot(source.PressAction);
         ReleaseAction = new KeyboardActionSnapshot(source.ReleaseAction);
+        PressSequence = new ControllerActionSequenceSnapshot(source.PressSequence);
+        ReleaseSequence = new ControllerActionSequenceSnapshot(source.ReleaseSequence);
     }
 
     public ControlId ControlId { get; }
@@ -46,6 +118,8 @@ public sealed class ControlBindingSnapshot
     public bool Enabled { get; }
     public KeyboardActionSnapshot PressAction { get; }
     public KeyboardActionSnapshot ReleaseAction { get; }
+    public ControllerActionSequenceSnapshot PressSequence { get; }
+    public ControllerActionSequenceSnapshot ReleaseSequence { get; }
 
     internal ControlBindingDefinition ToEditable() => new()
     {
@@ -53,7 +127,9 @@ public sealed class ControlBindingSnapshot
         Name = Name,
         Enabled = Enabled,
         PressAction = PressAction.ToEditable(),
-        ReleaseAction = ReleaseAction.ToEditable()
+        ReleaseAction = ReleaseAction.ToEditable(),
+        PressSequence = PressSequence.ToEditable(),
+        ReleaseSequence = ReleaseSequence.ToEditable()
     };
 }
 

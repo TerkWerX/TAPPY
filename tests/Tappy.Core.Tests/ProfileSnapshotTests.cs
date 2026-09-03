@@ -27,7 +27,15 @@ public sealed class ProfileSnapshotTests
         {
             ControlId = control,
             Name = "Original",
-            PressAction = KeyboardActionDefinition.Hold("Ctrl", "A")
+            PressAction = KeyboardActionDefinition.Hold("Ctrl", "A"),
+            PressSequence = ControllerActionSequenceDefinition.Once("OSC",
+                new ControllerActionStepDefinition
+                {
+                    Type = ControllerActionStepType.Osc,
+                    Target = "127.0.0.1",
+                    Amount = 8000,
+                    Value = "/original"
+                })
         });
         var editable = new TappyProfile { Name = "Before", Controllers = [controller] };
 
@@ -36,6 +44,7 @@ public sealed class ProfileSnapshotTests
         editable.Controllers[0].DisplayName = "Changed";
         editable.Controllers[0].Layers[0].Bindings[0].Name = "Changed";
         editable.Controllers[0].Layers[0].Bindings[0].PressAction.Keys.Clear();
+        editable.Controllers[0].Layers[0].Bindings[0].PressSequence.Steps[0].Value = "/changed";
         editable.Controllers.Clear();
 
         Assert.Equal("Before", snapshot.Name);
@@ -44,6 +53,7 @@ public sealed class ProfileSnapshotTests
         var frozenBinding = Assert.Single(frozenController.Layers[0].Bindings);
         Assert.Equal("Original", frozenBinding.Name);
         Assert.Equal(["CTRL", "A"], frozenBinding.PressAction.Keys.Select(key => key.Value));
+        Assert.Equal("/original", Assert.Single(frozenBinding.PressSequence.Steps).Value);
     }
 
     [Fact]

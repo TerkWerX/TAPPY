@@ -18,10 +18,14 @@ selection, press/release identification, neutral state, and explicit confirmatio
 before input can reach mapping. The UI shows press/release/repeat and simultaneous
 state. Its searchable keyboard editor offers named Windows actions, direct keys,
 media/browser keys, and more than 1,500 Ctrl/Alt/Shift/Win combinations with tap,
-hold-until-release, or release-trigger behavior. The milestone witness still uses
+hold-until-release, or release-trigger behavior. A new bounded sequence editor can
+combine keyboard chords, Unicode text, delays, mouse clicks/movement/scrolling,
+program or document launch, non-interactive Windows PowerShell 5.1 or PowerShell 7,
+Windows MIDI short messages, and typed OSC/UDP messages. Assignments can run once
+on press or release, remain owned until release, or repeat while held. The milestone witness still uses
 the deliberately harmless F24 mapping. The Release solution build passes with zero
-warnings or errors; 268 current automated tests pass
-(Core 31, Windows 100, App 61, G13 HIL tool 23, Output Witness 53). Exact package and
+warnings or errors; 287 current automated tests pass
+(Core 46, Windows 103, App 62, G13 HIL tool 23, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its
@@ -74,6 +78,10 @@ not claim exclusive per-device remapping.
   rejects a release, Tappy reports that it cannot confirm a safe output state, forces
   Rehearsal Mode, and refuses re-arming until restart. Mouse-accessible window and
   notification-area commands remain available.
+- Action sequences are limited to 500 steps and 30 seconds per pass. Repeat-while-held
+  stops after 20 seconds. Program and PowerShell launch cannot be placed in a repeating
+  assignment; PowerShell runs hidden, non-interactive, without a profile, elevation,
+  or an execution-policy bypass.
 - SendInput is not firmware-level USB HID. Elevated, secure, exclusive-input, or
   anti-cheat-protected applications may reject it, and application/game rules win.
 
@@ -126,7 +134,8 @@ until source rights, exact models, and reviewer approval are recorded.
 ## Non-goals for this milestone
 
 Global blocking, per-device exclusive input, generic learned raw-HID support beyond
-the dedicated G13 provider, arbitrary analog mappings, MIDI/joystick providers, G13
-LCD/lighting output, full macro parity, controller support packs, polished brand
+the dedicated G13 provider, arbitrary analog input mappings, MIDI/joystick input
+providers, virtual-gamepad output, variables, gesture/toggle/layer actions, G13
+LCD/lighting output, complete Tippy parity, controller support packs, polished brand
 artwork, and public packaged/binary distribution remain future work. Their extension
 boundaries are documented; the UI and README do not advertise them as complete.

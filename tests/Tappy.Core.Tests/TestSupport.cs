@@ -36,6 +36,46 @@ internal sealed class RecordingKeyboardOutput : IKeyboardOutput
         new ExecutionAncestry(request.Ancestry.RootId, request.Ancestry.Nodes));
 }
 
+internal sealed class RecordingControllerActionOutput : IControllerActionOutput
+{
+    public List<ControllerActionOutputRequest> Started { get; } = [];
+    public List<string> ReleasedOwners { get; } = [];
+    public List<string> ReleasedScopes { get; } = [];
+    public int ReleaseAllCount { get; private set; }
+    public bool AcceptStarts { get; set; } = true;
+    public bool ReleaseSucceeds { get; set; } = true;
+
+    public event EventHandler<ControllerActionOutputFault>? Faulted;
+
+    public bool Start(ControllerActionOutputRequest request)
+    {
+        Started.Add(request);
+        return AcceptStarts;
+    }
+
+    public bool ReleaseOwner(string ownerId)
+    {
+        ReleasedOwners.Add(ownerId);
+        return ReleaseSucceeds;
+    }
+
+    public bool ReleaseScope(string scopeId)
+    {
+        ReleasedScopes.Add(scopeId);
+        return ReleaseSucceeds;
+    }
+
+    public bool ReleaseAll()
+    {
+        ReleaseAllCount++;
+        return ReleaseSucceeds;
+    }
+
+    public void RaiseFault(ControllerActionOutputRequest request, Exception exception) =>
+        Faulted?.Invoke(this, new ControllerActionOutputFault(
+            request.OwnerId, request.ScopeId, exception.Message, exception));
+}
+
 internal static class TestProfiles
 {
     public const ulong Marker = 0x54505059;
