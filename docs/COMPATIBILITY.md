@@ -23,15 +23,19 @@ F13–F24. A second full keyboard is not completely or exclusively remapped.
 | Tier | Meaning | Current devices |
 |---|---|---|
 | Architecture-ready | Provider/layout boundary exists, without device proof | Raw keyboard-class controls and generic future provider seams |
-| Enumerated | Windows listed an exact sanitized logical device; no controls were captured | Freewolf K15 candidate: one authoritative ContainerId group, `1A2C:2D43`, four Raw Input keyboard interfaces, reported totals 56/264. Logitech G13: one ContainerId group, exact `046D:C21C`, `FF00:0000`, one vendor-HID interface. |
-| Code-supported | Exact provider/layout behavior passes deterministic tests, without physical control proof | Logitech G13: dedicated eight-byte report decoder/provider and 39-control code-defined tile grid. Freewolf K15: generic grouped-keyboard path. |
+| Enumerated | Windows listed an exact sanitized logical device; no controls were captured | Freewolf K15 candidate: one authoritative ContainerId group, `1A2C:2D43`, four Raw Input keyboard interfaces, reported totals 56/264. User-identified Targus numberpad candidate: `05A4:9862`, one keyboard interface, reported total 264. Windows-identified Razer Tartarus: `1532:0201`, two grouped keyboard interfaces, reported total 264. Logitech G13: one ContainerId group, exact `046D:C21C`, `FF00:0000`, one vendor-HID interface. |
+| Code-supported | Exact provider/layout behavior passes deterministic tests, without physical control proof | Logitech G13: dedicated eight-byte report decoder/provider and 39-control code-defined tile grid. K15, Targus numberpad, and Tartarus keyboard collections: generic grouped-keyboard path only. |
 | Functional | Make/break/repeat/state/mapping checks passed on hardware | None |
 | Verified | Controller Passport and HIL evidence passed review | None |
 
-The descriptor-only schema-3 probe reports six logical controllers in the current
-session: five grouped keyboard controllers (including the K15) and one G13. It
+The latest descriptor-only schema-3 probe reports eight logical controllers in the
+current session: seven grouped keyboard controllers (including the K15, Targus
+candidate, and Tartarus) and one G13. It
 excludes the `046D:C232` G HUB virtual keyboard from both keyboard and G13 identity.
-No K15 key or G13 button/stick events were captured by that probe.
+No K15, Targus, or Tartarus key events or G13 button/stick events were captured by
+that probe. Windows also exposes non-keyboard Tartarus collections; the current
+generic provider does not claim their mouse, consumer-control, system-control, or
+vendor-HID behavior.
 
 The images under `PAD IMAGES` are visual references and do not move any product into
 a support tier. Shared VID/PID, shells, labels, or marketing names are not protocol

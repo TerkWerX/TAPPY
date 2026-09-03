@@ -23,12 +23,13 @@ automated tests pass
 boundaries are in [testing](docs/TESTING.md).
 
 Descriptor-only evidence now shows the attached K15 as one four-interface
-`1A2C:2D43` physical group and the attached G13 as one single-interface
-`046D:C21C`, `FF00:0000` group with 39 code-defined controls in a stable
-code-rendered tile grid. No K15 key or
-G13 button/stick capture, Controller Passport, or physical HIL run has completed;
-both remain below Functional/Verified, and the G13 is **code-supported only**. See
-the [G13 support boundary](docs/LOGITECH_G13.md).
+`1A2C:2D43` keyboard group, the user-identified Targus numberpad candidate as one
+`05A4:9862` keyboard interface, and the Razer Tartarus as one two-interface
+`1532:0201` keyboard group. The attached G13 is one single-interface `046D:C21C`,
+`FF00:0000` group with 39 code-defined controls in a stable code-rendered tile grid.
+No key/button/stick capture, Controller Passport, or physical HIL run has completed
+for these devices; all remain below Functional/Verified, and the G13 is
+**code-supported only**. See the [G13 support boundary](docs/LOGITECH_G13.md).
 
 The owner has authorized the source, documentation, and CI configuration for the
 public `TerkWerX/TAPPY` repository. That source-publication decision does not

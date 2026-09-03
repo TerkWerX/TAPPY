@@ -68,19 +68,25 @@ has been completed. In particular, the following remain unverified on hardware:
 - Windows lock/unlock, suspend/resume, orderly shutdown, multi-monitor/DPI behavior,
   theme/high-contrast accessibility, and input-to-output latency targets.
 
-The schema-3 descriptor-only `Tappy.DeviceProbe` completed with exit code 0. It
-reported six logical controllers: five keyboard groups and one supported-controller
-group. The attached, user-identified Freewolf K15 candidate is one authoritative
+The latest schema-3 descriptor-only `Tappy.DeviceProbe` completed with exit code 0.
+It reported eight logical controllers: seven keyboard groups and one
+supported-controller group. The attached, user-identified Freewolf K15 candidate is one authoritative
 ContainerId group at VID `1A2C`/PID `2D43`, with four Raw Input keyboard interfaces
-and distinct reported total-key capabilities of 56 and 264. The physical Logitech
-G13 is exactly one `046D:C21C`, `FF00:0000` ContainerId group with one interface and
-39 code-defined controls. `046D:C232` does not appear because it is the excluded G
-HUB virtual keyboard, not G13 identity.
+and distinct reported total-key capabilities of 56 and 264. The user-identified
+Targus numberpad candidate is one `05A4:9862` keyboard interface with reported total
+264. Windows identifies the Razer Tartarus at `1532:0201`; Tappy groups its two Raw
+Input keyboard interfaces and reports total 264. Windows exposes additional
+Tartarus mouse, consumer-control, system-control, and vendor-HID collections outside
+the current generic keyboard provider. The physical Logitech G13 is exactly one
+`046D:C21C`, `FF00:0000` ContainerId group with one interface and 39 code-defined
+controls. `046D:C232` does not appear because it is the excluded G HUB virtual
+keyboard, not G13 identity.
 
 The probe registered no input, opened no reports, captured no control activity, and
 printed no raw paths or ContainerIds. These are Enumerated/code-supported facts only:
-they establish neither K15 key behavior nor G13 button/stick behavior, mappings,
-unplug recovery, image identity, Functional status, or Verified support. Follow
+they establish neither K15/Targus/Tartarus key behavior nor G13 button/stick
+behavior, mappings, unplug recovery, image identity, Functional status, or Verified
+support. Follow
 [`HARDWARE_TEST_STATION.md`](HARDWARE_TEST_STATION.md) before promotion.
 
 `Tappy.G13Hil` now provides a finite, explicitly armed aggregate verifier for all 39
@@ -120,8 +126,11 @@ G13 path was independently implemented from the public sources recorded in
 
 ## Next milestone
 
-Run the explicitly armed G13 verifier and retain a passing aggregate HIL record;
-then complete K15 Controller Passport/HIL input and pass-through checks. Re-run the
+Use the single-interface Targus numberpad as the simplest first Raw Input/manual
+vertical-slice witness, then test the K15 and Tartarus through the same app workflow.
+Run the explicitly armed G13 verifier and retain a passing aggregate HIL record.
+Complete Controller Passport/HIL input and pass-through checks before promoting any
+device. Re-run the
 portable audit and clean-checkout CI after the provider additions, and continue to
 repeat the dependency advisory query at release checkpoints. Keep generic
 code-rendered layouts: all processed controller images remain excluded pending

@@ -21,6 +21,10 @@ Notable changes to Tappy are documented here.
 - Authoritative Windows ContainerId grouping: the attached Freewolf K15 now appears
   as one four-interface `1A2C:2D43` logical keyboard controller instead of four
   selectable interfaces.
+- Descriptor-only inventory for the attached, user-identified Targus numberpad
+  candidate (`05A4:9862`, one keyboard interface) and Windows-identified Razer
+  Tartarus (`1532:0201`, two grouped keyboard interfaces), without promoting either
+  to a functional support tier.
 - A dedicated Logitech G13 input path for the exact physical `046D:C21C`,
   `FF00:0000` vendor-HID collection, with strict report validation, 39 code-defined
   controls, a stable code-rendered tile grid, provider-specific profile round-trip, and safe
