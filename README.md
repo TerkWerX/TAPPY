@@ -24,8 +24,8 @@ program or document launch, non-interactive Windows PowerShell 5.1 or PowerShell
 Windows MIDI short messages, and typed OSC/UDP messages. Assignments can run once
 on press or release, remain owned until release, or repeat while held. The milestone witness still uses
 the deliberately harmless F24 mapping. The Release solution build passes with zero
-warnings or errors; 287 current automated tests pass
-(Core 46, Windows 103, App 62, G13 HIL tool 23, Output Witness 53). Exact package and
+warnings or errors; 291 current automated tests pass
+(Core 46, Windows 103, App 66, G13 HIL tool 23, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its
@@ -39,7 +39,9 @@ Descriptor-only evidence now shows the attached K15 as one four-interface
 `1A2C:2D43` keyboard group, the user-identified Targus numberpad candidate as one
 `05A4:9862` keyboard interface, and the Razer Tartarus as one two-interface
 `1532:0201` keyboard group. The attached G13 is one single-interface `046D:C21C`,
-`FF00:0000` group with 39 code-defined controls in a stable code-rendered tile grid.
+`FF00:0000` group with 39 code-defined controls in a stable tile grid. For this exact
+identity, the grid sits beside an owner-supplied G13 photo whose matching control
+glows when its square is selected or its physical input is pressed.
 No complete Controller Passport or physical HIL run has completed for these
 devices; all remain below Functional/Verified. The G13 has operator-reported visual
 control response but still requires the finite armed record. See the
@@ -129,7 +131,10 @@ installer/               Unique per-user Inno Setup definition
 
 The raw and processed files under `PAD IMAGES` are separately managed reference
 artwork. They are preserved but not shipped or treated as hardware/protocol evidence
-until source rights, exact models, and reviewer approval are recorded.
+until source rights, exact models, and reviewer approval are recorded. The tracked
+G13 locator PNG is the narrow exception: it was made from the owner's own submitted
+photo, approved for this UI use, stripped to a transparent device cutout, embedded
+as an application resource, and matched only to exact G13 identity.
 
 ## Non-goals for this milestone
 

@@ -106,6 +106,11 @@ PowerShell, MIDI, and OSC steps without producing output while it is open.
 The visual buffer preserves press/release ordering, compacts only after a bounded
 backlog, and keeps physical `IsPressed` state separate from a minimum-duration
 illumination pulse so a quick tap is visible without delaying input or output.
+For the exact G13 identity, each photo hotspot references the same
+`ControlTileViewModel` used by the assignment grid. Grid selection and physical
+press illumination therefore cannot drift, while the photo remains non-interactive
+and simultaneous held controls can glow together. Unknown identities receive no
+photo rather than guessed artwork.
 During identification it marks WPF key events handled so the candidate press cannot
 activate Tappy's own focused controls; this is local UI protection, not system-wide
 suppression of the original key.

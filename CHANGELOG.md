@@ -78,11 +78,15 @@ Notable changes to Tappy are documented here.
   injection, caps a sequence pass at 30 seconds and repeating output at 20 seconds,
   and joins emergency, unplug, lifecycle, profile-change, and fault cleanup through
   the same owned-output boundary.
-- Current deterministic results: Core 46, Windows 103, App 62, G13 HIL tool 23,
-  and Output Witness 53 tests pass (287 total).
+- Current deterministic results: Core 46, Windows 103, App 66, G13 HIL tool 23,
+  and Output Witness 53 tests pass (291 total).
 - Assignment-editor tab headers now use explicit theme-aware foreground and
   background brushes. The tab content, result count, and sequence list also use
   explicit high-contrast surfaces so native WPF styling cannot wash out their text.
+- The G13 keeps its clean 39-control assignment grid beside a non-interactive,
+  owner-supplied device photo. Selecting a grid square or pressing its physical
+  control illuminates the same photo hotspot; simultaneous physical controls can
+  illuminate together. Exact provider/VID/PID matching prevents artwork guessing.
 
 ### Known limitations
 
@@ -97,8 +101,8 @@ Notable changes to Tappy are documented here.
   OSC preset managers, and full independent press/release sequence editing remain.
 - Final mascot, wordmark, public license, signing, release, and website decisions are
   intentionally open.
-- Processed controller images remain excluded pending provenance, usage rights,
-  exact-model/protocol evidence, processing records, and explicit approval.
+- Other processed controller images remain excluded pending provenance, usage
+  rights, exact-model/protocol evidence, processing records, and explicit approval.
 - Source/docs/CI publication to the existing public `TerkWerX/TAPPY` repository is
   authorized; a packaged release, signing, website, hosting, and final branding are
   not authorized or implied.

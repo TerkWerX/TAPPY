@@ -88,6 +88,14 @@ parity. Collections are variable-length and validation permits more.
 `PAD IMAGES` are protected references/derivatives and are excluded from packages
 until exact model, source/license, processing history, and approval are recorded.
 
+**2026-09-03 amendment:** Assignment controls remain clean, selectable grid tiles;
+device artwork is a separate, non-interactive locator beside the grid. A selected
+tile and its physical input share one state object, so either path illuminates the
+matching photo hotspot and simultaneous held inputs remain visible. The first
+approved exception is the owner's own G13 photograph, embedded as a transparent
+resource and gated by exact `raw-hid-g13`/`046D:C21C` identity. No other reference
+image is approved by this amendment.
+
 ## D-010 — Unique application/release identity
 
 **Status:** Accepted.

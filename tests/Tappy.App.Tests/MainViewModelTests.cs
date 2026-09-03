@@ -1,6 +1,7 @@
 using Tappy.App.Runtime;
 using Tappy.App.Services;
 using Tappy.App.ViewModels;
+using Tappy.Windows.Input;
 
 namespace Tappy.App.Tests;
 
@@ -146,6 +147,59 @@ public sealed class MainViewModelTests
         Assert.Contains("Numpad 1", viewModel.PressedSummary, StringComparison.Ordinal);
         Assert.Contains("Numpad 2", viewModel.PressedSummary, StringComparison.Ordinal);
         Assert.Contains("simultaneous: 2", viewModel.EventSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task G13_grid_selection_and_physical_input_share_the_same_photo_hotspot_state()
+    {
+        var runtime = new FakeRuntime();
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        runtime.EmitState(new RuntimeState(
+            true,
+            false,
+            "Controller confirmed.",
+            "Logitech G13",
+            "Layer 1",
+            "Rehearsal Mode suppresses output.",
+            "Controller ready.",
+            ActiveControllerProviderId: "raw-hid-g13",
+            ActiveControllerVendorId: LogitechG13Protocol.VendorId,
+            ActiveControllerProductId: LogitechG13Protocol.ProductId));
+        var g1 = LogitechG13InputProvider.SupportedControls.Single(item => item.Control == LogitechG13Control.G1);
+        var g2 = LogitechG13InputProvider.SupportedControls.Single(item => item.Control == LogitechG13Control.G2);
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "g13-persistent", g1.ControlId.Value, g1.DisplayName, false, false,
+            "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "g13-persistent", g2.ControlId.Value, g2.DisplayName, false, false,
+            "Unassigned", 0, 0, IsSnapshot: true));
+
+        Assert.True(viewModel.HasControllerPhoto);
+        Assert.Equal(2, viewModel.ControllerPhotoHotspots.Count);
+        var g1Tile = viewModel.Controls.Single(item => item.ControlId == g1.ControlId.Value);
+        var g1Hotspot = viewModel.ControllerPhotoHotspots.Single(item => item.Tile == g1Tile);
+
+        viewModel.SelectControl(g1Tile);
+
+        Assert.True(g1Hotspot.Tile.IsSelected);
+
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "g13-persistent", g2.ControlId.Value, g2.DisplayName, true, false,
+            "Unassigned", 1, 1));
+
+        var g2Hotspot = viewModel.ControllerPhotoHotspots.Single(item => item.Tile.ControlId == g2.ControlId.Value);
+        Assert.False(g1Hotspot.Tile.IsSelected);
+        Assert.True(g2Hotspot.Tile.IsSelected);
+        Assert.True(g2Hotspot.Tile.IsIlluminated);
+
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "g13-persistent", g1.ControlId.Value, g1.DisplayName, true, false,
+            "Unassigned", 2, 2));
+
+        Assert.True(g1Hotspot.Tile.IsSelected);
+        Assert.True(g1Hotspot.Tile.IsIlluminated);
+        Assert.True(g2Hotspot.Tile.IsIlluminated);
     }
 
     [Fact]

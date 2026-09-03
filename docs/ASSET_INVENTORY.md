@@ -78,6 +78,31 @@ model confidence, protocol evidence, processing history, and human approval. Unt
 then, Tappy uses generic code-rendered layouts and `.gitignore` excludes the entire
 `PAD IMAGES` tree from source control, builds, and portable artifacts.
 
+## 2026-09-03 owner-supplied Logitech G13 locator
+
+The product owner photographed the attached physical G13 and supplied the original
+directly for the requested in-app visual locator. This is the first narrowly
+approved runtime controller image; it does not approve any other derivative.
+
+- Protected original: `PAD IMAGES/originals/Logitech G13 user photo 20260903_124613.jpg`
+  (ignored, preserved locally), SHA-256
+  `25A49B84273170E3E2D8CFDC21F97B3B34DC47977DE9BC54E6F29FCE7BF10F30`.
+- Runtime derivative: `src/Tappy.App/Assets/Controllers/logitech-g13-user-photo.png`,
+  `853 x 1844` RGBA PNG, SHA-256
+  `67F74F1A9F7BF295E46BF4FBCA357E185D010CFB6448AAAF39F9632233511D83`.
+- Ownership/permission: owner-created and owner-submitted; explicitly requested for
+  the Tappy controller-photo UI in this project.
+- Processing: the built-in image editor removed the tabletop, surrounding objects,
+  and loose cable while preserving the photographed controller, labels, geometry,
+  and perspective. A first opaque-checkerboard output and a later opaque crop were
+  rejected. The accepted derivative was mechanically verified as 32-bit ARGB with
+  transparent corner pixels; WPF crops only its transparent canvas at render time.
+- Runtime scope: embedded as an application resource and selected only for the exact
+  `raw-hid-g13`, VID `046D`, PID `C21C` identity. The separate assignment grid remains
+  interactive; 39 non-interactive hotspots mirror grid selection and physical input.
+- Evidence boundary: visual alignment and software state mapping do not promote G13
+  hardware support. Physical HIL and Controller Passport gates remain unchanged.
+
 ## 2026-09-02 Freewolf enumeration note
 
 With a user-identified Freewolf K15 candidate attached, the sanitized descriptor

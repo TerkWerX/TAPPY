@@ -14,10 +14,10 @@ target .NET 8. The verification was run in Release configuration.
 | `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
 | `Tappy.Core.Tests` | 46 passed, 0 failed | Deterministic platform-neutral behavior, including explicit cleanup-dispatch results, immutable action sequences, profile round-trip, MIDI parsing, OSC encoding, and action-output press/release/Rehearsal routing |
 | `Tappy.Windows.Tests` | 103 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, capability-isolated registration faults, bounded message-host shutdown routing, provider contracts, pre-arm neutrality, complete advertised-key output translation, output tagging, bounded action scheduling, PowerShell policy, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
-| `Tappy.App.Tests` | 62 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, expanded keyboard catalog and chord assignment, multi-step MIDI/OSC assignment routing, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, readable dropdown/disabled-button/control-label themes, assignment-editor accessibility, and unplug handling with fake providers/output |
+| `Tappy.App.Tests` | 66 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, exact G13 photo identity and all 39 hotspots, accepted RGBA asset validation, shared grid/physical photo state, expanded keyboard catalog and chord assignment, multi-step MIDI/OSC assignment routing, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, readable dropdown/disabled-button/control-label themes, assignment-editor accessibility, and unplug handling with fake providers/output |
 | `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
 | `Tappy.OutputWitness.Tests` | 53 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break and output state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
-| Current automated total | 287 passed, 0 failed | Core 46 + Windows 103 + App 62 + G13 HIL tool 23 + Output Witness 53 |
+| Current automated total | 291 passed, 0 failed | Core 46 + Windows 103 + App 66 + G13 HIL tool 23 + Output Witness 53 |
 | `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 12 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
@@ -40,7 +40,10 @@ presentation-mode minimums; and high-contrast theme
 precedence. Added coverage proves authoritative keyboard ContainerId grouping and
 the dedicated G13 decoder/provider/App path, including exact identity, `C232`
 exclusion, all code-defined controls, simultaneous state, profile round-trip, and
-fail-safe cleanup. Those are code tests, not physical G13 control evidence.
+fail-safe cleanup. The G13 locator tests also prove that all 39 supported controls
+have unique bounded hotspots, unknown identities receive no photo, and grid clicks
+plus physical presses reference the same visual state. Those are code tests, not
+physical G13 control or hotspot-alignment evidence.
 
 The Output Witness tests cover its narrow allowlist, explicit acknowledgments,
 aggregate-only evidence, exact selected-output cardinality, source repeat, and
@@ -169,7 +172,8 @@ Run the explicitly armed G13 verifier and retain a passing aggregate HIL record.
 Complete Controller Passport/HIL input and pass-through checks before promoting any
 device. Re-run the
 portable audit and clean-checkout CI after the provider additions, and continue to
-repeat the dependency advisory query at release checkpoints. Keep generic
-code-rendered layouts: all processed controller images remain excluded pending
-source provenance, usage rights, exact-model/protocol evidence, processing records,
-and explicit human approval.
+repeat the dependency advisory query at release checkpoints. Keep generic layouts
+for other devices: their processed controller images remain excluded pending source
+provenance, usage rights, exact-model/protocol evidence, processing records, and
+explicit human approval. The owner-supplied G13 locator is approved narrowly for
+the exact implemented G13 identity.

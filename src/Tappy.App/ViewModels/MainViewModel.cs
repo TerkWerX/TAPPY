@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Tappy.App.Runtime;
+using Tappy.App.Services;
 
 namespace Tappy.App.ViewModels;
 
@@ -11,6 +12,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly Action<TimeSpan, Action> _onUiAfter;
     private readonly VisualUpdateBuffer _pendingVisuals = new();
     private readonly Dictionary<string, ControlTileViewModel> _tiles = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _photoHotspotIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IlluminationState> _illuminationStates = new(StringComparer.Ordinal);
     private ControllerChoice? _selectedDevice;
     private ControlTileViewModel? _selectedControl;
@@ -23,7 +25,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private string _eventSummary = "No selected-device events retained";
     private string _status = "Tappy is not listening to a controller.";
     private string _effectiveSourceLabel = "Effective: Pass-through";
+    private string _controllerPhotoName = string.Empty;
     private string? _persistentStatusWarning;
+    private ControllerPhotoDefinition? _activeControllerPhoto;
     private bool _canConfirmController;
     private bool _isIdentificationCaptureActive;
     private bool _isRehearsal = true;
@@ -41,6 +45,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _onUiAfter = onUiAfter ?? ((_, action) => _onUi(action));
         Devices = [];
         Controls = [];
+        ControllerPhotoHotspots = [];
         HarmlessOutputKeys = Enumerable.Range(13, 12).Select(number => $"F{number}").ToArray();
         _runtime.DevicesChanged += Runtime_OnDevicesChanged;
         _runtime.ControlChanged += Runtime_OnControlChanged;
@@ -49,6 +54,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public ObservableCollection<ControllerChoice> Devices { get; }
     public ObservableCollection<ControlTileViewModel> Controls { get; }
+    public ObservableCollection<ControllerPhotoHotspotViewModel> ControllerPhotoHotspots { get; }
     public IReadOnlyList<string> HarmlessOutputKeys { get; }
 
     public ControllerChoice? SelectedDevice
@@ -135,6 +141,14 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public string SelectedControlLabel => _selectedControl?.Label ?? "None";
     public bool CanAssignSelectedControl => _selectedControl is not null;
+
+    public bool HasControllerPhoto => _activeControllerPhoto is not null;
+
+    public string ControllerPhotoName
+    {
+        get => _controllerPhotoName;
+        private set => Set(ref _controllerPhotoName, value);
+    }
 
     public string PressedSummary
     {
@@ -387,6 +401,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             Controls.Add(tile);
         }
 
+        EnsurePhotoHotspot(tile);
+
         tile.IsPressed = update.IsPressed;
         UpdateIllumination(tile, update);
         tile.Action = update.AssignedAction;
@@ -462,6 +478,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         MappingStatus = state.MappingStatus;
         Status = state.Status;
         EffectiveSourceLabel = state.EffectiveSourceLabel;
+        SynchronizeControllerPhoto(state);
         if (!state.IsConfirmed && !state.IsIdentificationCaptureActive)
         {
             ClearPressedVisuals();
@@ -482,6 +499,42 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         CanConfirmController = _runtime.CanConfirmController;
         IsIdentificationCaptureActive = _runtime.IsIdentificationCaptureActive;
+    }
+
+    private void SynchronizeControllerPhoto(RuntimeState state)
+    {
+        var next = state.IsConfirmed
+            ? ControllerPhotoCatalog.Find(
+                state.ActiveControllerProviderId,
+                state.ActiveControllerVendorId,
+                state.ActiveControllerProductId)
+            : null;
+        if (string.Equals(_activeControllerPhoto?.Id, next?.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _activeControllerPhoto = next;
+        ControllerPhotoName = next?.AccessibleName ?? string.Empty;
+        ControllerPhotoHotspots.Clear();
+        _photoHotspotIds.Clear();
+        Raise(nameof(HasControllerPhoto));
+        foreach (var tile in Controls)
+        {
+            EnsurePhotoHotspot(tile);
+        }
+    }
+
+    private void EnsurePhotoHotspot(ControlTileViewModel tile)
+    {
+        if (_activeControllerPhoto is null ||
+            !_activeControllerPhoto.Hotspots.TryGetValue(tile.ControlId, out var definition) ||
+            !_photoHotspotIds.Add(tile.ControlId))
+        {
+            return;
+        }
+
+        ControllerPhotoHotspots.Add(new ControllerPhotoHotspotViewModel(tile, definition));
     }
 
     private string IncludePersistentStatusWarning(string message)
@@ -507,6 +560,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
         Controls.Clear();
         _tiles.Clear();
+        ControllerPhotoHotspots.Clear();
+        _photoHotspotIds.Clear();
         PressedSummary = "None";
         EventSummary = "No selected-device events retained";
     }

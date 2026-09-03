@@ -8,6 +8,7 @@
     <Color x:Key="AccentColor">#66E3C4</Color>
     <Color x:Key="BlueColor">#69B7FF</Color>
     <Color x:Key="PressedColor">#F2C14E</Color>
+    <Color x:Key="ControllerPhotoGlowColor">#F2C14E</Color>
     <Color x:Key="DangerColor">#FF7A90</Color>
     <Color x:Key="BorderColor">#3A4654</Color>
     <Color x:Key="ComboBoxTextColor">#101318</Color>
@@ -28,6 +29,7 @@
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="BlueBrush" Color="{StaticResource BlueColor}" />
     <SolidColorBrush x:Key="PressedBrush" Color="{StaticResource PressedColor}" />
+    <SolidColorBrush x:Key="ControllerPhotoGlowBrush" Color="{StaticResource ControllerPhotoGlowColor}" />
     <SolidColorBrush x:Key="PressedTextBrush" Color="#101318" />
     <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />

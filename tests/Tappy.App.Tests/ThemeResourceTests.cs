@@ -163,6 +163,21 @@ public sealed class ThemeResourceTests
         Assert.Equal("None", tileLabel.Attribute("TextTrimming")?.Value);
         Assert.Equal("Center", tileLabel.Attribute("TextAlignment")?.Value);
 
+        var photoHotspots = NamedElement(document, "ItemsControl", "ControllerPhotoHotspots");
+        Assert.Equal("{Binding ControllerPhotoHotspots}", photoHotspots.Attribute("ItemsSource")?.Value);
+        var photo = document.Descendants().Single(element =>
+            element.Name.LocalName == "Image" &&
+            element.Attribute("AutomationProperties.Name")?.Value ==
+            "User-provided Logitech G13 controller photo");
+        Assert.Equal("{StaticResource LogitechG13ControllerPhoto}", photo.Attribute("Source")?.Value);
+        Assert.DoesNotContain(photo.Ancestors(), element => element.Name.LocalName == "Button");
+        var photoTriggers = photoHotspots.Descendants()
+            .Where(element => element.Name.LocalName == "DataTrigger")
+            .Select(element => element.Attribute("Binding")?.Value)
+            .ToArray();
+        Assert.Contains("{Binding Tile.IsSelected}", photoTriggers);
+        Assert.Contains("{Binding Tile.IsIlluminated}", photoTriggers);
+
         var rehearsalLabel = document
             .Descendants()
             .Single(element =>

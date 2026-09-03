@@ -20,6 +20,11 @@
             <Setter Property="CornerRadius" Value="13" />
             <Setter Property="Padding" Value="16" />
         </Style>
+        <CroppedBitmap x:Key="LogitechG13ControllerPhoto" SourceRect="0,240,853,1275">
+            <CroppedBitmap.Source>
+                <BitmapImage UriSource="/Tappy;component/Assets/Controllers/logitech-g13-user-photo.png" />
+            </CroppedBitmap.Source>
+        </CroppedBitmap>
     </Window.Resources>
     <Grid Background="{DynamicResource WindowBrush}" Margin="16">
         <Grid.RowDefinitions>
@@ -159,52 +164,122 @@
                             <TextBlock Text="{Binding ActiveLayerName}" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
                     </Grid>
-                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                                  PanningMode="Both" Focusable="False" AutomationProperties.Name="Controller canvas">
-                        <ItemsControl ItemsSource="{Binding Controls}" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel IsItemsHost="True" ItemWidth="144" ItemHeight="116" MaxWidth="760" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:ControlTileViewModel}">
-                                    <Button Click="ControlTile_OnClick" Tag="{Binding}" Margin="5" Padding="5"
-                                            AutomationProperties.Name="{Binding AutomationName}"
-                                            AutomationProperties.HelpText="Pressing the physical control selects and illuminates this tile">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
-                                                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-                                                <Setter Property="BorderThickness" Value="1" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                                        <Setter Property="BorderThickness" Value="3" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsIlluminated}" Value="True">
-                                                        <Setter Property="Background" Value="{DynamicResource PressedBrush}" />
-                                                        <Setter Property="Foreground" Value="{DynamicResource PressedTextBrush}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="13"
-                                                       TextWrapping="Wrap" TextTrimming="None" TextAlignment="Center"
-                                                       LineHeight="15" MaxWidth="122" HorizontalAlignment="Center"
-                                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                                            <TextBlock Text="{Binding Action}" TextWrapping="Wrap" TextAlignment="Center" FontSize="11"
-                                                       MaxWidth="94" Margin="0,5,0,0"
-                                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                                            <TextBlock Text="{Binding StateText}" TextAlignment="Center" FontSize="10"
-                                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Margin="0,3,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="120" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                      PanningMode="Both" Focusable="False" AutomationProperties.Name="Controller control grid">
+                            <ItemsControl ItemsSource="{Binding Controls}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel IsItemsHost="True" ItemWidth="144" ItemHeight="116" MaxWidth="760" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ControlTileViewModel}">
+                                        <Button Click="ControlTile_OnClick" Tag="{Binding}" Margin="5" Padding="5"
+                                                AutomationProperties.Name="{Binding AutomationName}"
+                                                AutomationProperties.HelpText="Pressing the physical control selects and illuminates this tile">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                                                    <Setter Property="BorderThickness" Value="1" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                                            <Setter Property="BorderThickness" Value="3" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsIlluminated}" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource PressedBrush}" />
+                                                            <Setter Property="Foreground" Value="{DynamicResource PressedTextBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="13"
+                                                           TextWrapping="Wrap" TextTrimming="None" TextAlignment="Center"
+                                                           LineHeight="15" MaxWidth="122" HorizontalAlignment="Center"
+                                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                                <TextBlock Text="{Binding Action}" TextWrapping="Wrap" TextAlignment="Center" FontSize="11"
+                                                           MaxWidth="94" Margin="0,5,0,0"
+                                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                                <TextBlock Text="{Binding StateText}" TextAlignment="Center" FontSize="10"
+                                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Margin="0,3,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Border Grid.Column="1" Width="300" Margin="12,0,0,0" Padding="10"
+                                Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1" CornerRadius="10"
+                                Visibility="{Binding HasControllerPhoto, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                AutomationProperties.Name="{Binding ControllerPhotoName}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="Visual locator" FontWeight="SemiBold" FontSize="15" />
+                                    <TextBlock Text="A selected square or physical press lights the matching control. The photo is not another button grid."
+                                               Foreground="{DynamicResource MutedTextBrush}" FontSize="10"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="Both"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                                         AutomationProperties.Name="Logitech G13 photo with live control illumination">
+                                    <Grid Width="853" Height="1275" IsHitTestVisible="False">
+                                        <Image Source="{StaticResource LogitechG13ControllerPhoto}" Stretch="Fill"
+                                               AutomationProperties.Name="User-provided Logitech G13 controller photo" />
+                                        <ItemsControl x:Name="ControllerPhotoHotspots"
+                                                      ItemsSource="{Binding ControllerPhotoHotspots}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas IsItemsHost="True" Width="853" Height="1275" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding Left}" />
+                                                    <Setter Property="Canvas.Top" Value="{Binding Top}" />
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:ControllerPhotoHotspotViewModel}">
+                                                    <Border Width="{Binding Width}" Height="{Binding Height}"
+                                                            CornerRadius="{Binding CornerRadius}"
+                                                            Background="{DynamicResource ControllerPhotoGlowBrush}"
+                                                            BorderBrush="{DynamicResource ControllerPhotoGlowBrush}"
+                                                            BorderThickness="4">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Opacity" Value="0" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Tile.IsSelected}" Value="True">
+                                                                        <Setter Property="Opacity" Value="0.82" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Tile.IsIlluminated}" Value="True">
+                                                                        <Setter Property="Opacity" Value="0.82" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </Viewbox>
+                            </Grid>
+                        </Border>
+                    </Grid>
                     <Border Grid.Row="2" Background="{DynamicResource RaisedBrush}" CornerRadius="8" Padding="9" Margin="4,10,4,0">
                         <WrapPanel>
                             <TextBlock Text="{Binding PressedSummary, StringFormat=Down: {0}}" Margin="0,0,18,0" />

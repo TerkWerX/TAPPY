@@ -19,6 +19,10 @@
     <ProjectReference Include="..\Tappy.Windows\Tappy.Windows.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Assets\Controllers\logitech-g13-user-photo.png" />
+    <Resource Include="Assets\Controllers\logitech-g13-user-photo.png" />
+  </ItemGroup>
+  <ItemGroup>
     <Content Include="..\..\controller-packs\controller_registry.json" Link="ControllerPacks\controller_registry.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
              ExcludeFromSingleFile="true" />

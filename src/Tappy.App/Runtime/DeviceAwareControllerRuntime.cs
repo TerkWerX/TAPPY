@@ -1307,7 +1307,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             mappingStatus ?? (IsRehearsal ? "Rehearsal Mode suppresses output." : "Normal output is enabled for confirmed mappings."),
             effectiveStatus,
             sourceLabel ?? (controller is null ? "Effective: Pass-through" : SourceLabel(controller)),
-            IsIdentificationCaptureActive: identificationCaptureActive));
+            IsIdentificationCaptureActive: identificationCaptureActive,
+            ActiveControllerProviderId: confirmed?.ProviderId,
+            ActiveControllerVendorId: confirmed?.VendorId,
+            ActiveControllerProductId: confirmed?.ProductId));
     }
 
     private ControllerProfile? FindEditableController(string persistentId) =>
@@ -1537,7 +1540,9 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
          descriptor.Descriptor.Grouping != PhysicalDeviceGrouping.WindowsContainerId
             ? ControllerIdentityConfidence.Ambiguous
             : ControllerIdentityConfidence.PortBound).ToString(),
-        descriptor.ProviderId);
+        descriptor.ProviderId,
+        descriptor.VendorId,
+        descriptor.ProductId);
 
     private static bool IsHarmlessOutputKey(string value) =>
         value.Length is 3 or 4 &&

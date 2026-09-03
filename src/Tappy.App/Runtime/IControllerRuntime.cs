@@ -29,7 +29,9 @@ public sealed record ControllerChoice(
     string PersistentId,
     string DisplayName,
     string IdentityConfidence,
-    string ProviderId = "raw-input");
+    string ProviderId = "raw-input",
+    ushort? VendorId = null,
+    ushort? ProductId = null);
 
 public sealed record RuntimeControlUpdate(
     string ControllerPersistentId,
@@ -51,7 +53,10 @@ public sealed record RuntimeState(
     string MappingStatus,
     string Status,
     string EffectiveSourceLabel = "Effective: Pass-through",
-    bool IsIdentificationCaptureActive = false);
+    bool IsIdentificationCaptureActive = false,
+    string? ActiveControllerProviderId = null,
+    ushort? ActiveControllerVendorId = null,
+    ushort? ActiveControllerProductId = null);
 
 public sealed record RuntimeOperation(bool Succeeded, string Message)
 {
