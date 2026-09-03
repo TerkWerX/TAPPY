@@ -68,7 +68,10 @@ readiness artifact is not an authorized software release.
 The finite attended procedure is recorded in
 [`FIRST_MILESTONE_OPERATOR_RUN.md`](FIRST_MILESTONE_OPERATOR_RUN.md). It separates
 the binding one-Targus milestone witness from broader K15/Tartarus/G13 Passport and
-HIL promotion. The procedure itself is not evidence that any step passed.
+HIL promotion. Copy the
+[`attended evidence template`](FIRST_MILESTONE_RECORD_TEMPLATE.md) into the ignored
+run directory; the procedure and blank template are not evidence that any step
+passed.
 
 No Controller Passport, G13 HIL session, or operator-reviewed physical control run
 has been completed. In particular, the following remain unverified on hardware:

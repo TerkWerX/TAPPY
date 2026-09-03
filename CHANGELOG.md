@@ -43,6 +43,9 @@ Notable changes to Tappy are documented here.
   and held-controller unplug cleanup without claiming device attribution.
 - An attended first-milestone operator runbook binds that witness to one deliberately
   identified Targus numberpad while keeping K15, Tartarus, and G13 promotion separate.
+- A privacy-bounded attended-record template keeps T01-T12, package/profile hashes,
+  witness attribution, recovery, and closeout evidence explicitly pending until a
+  human performs and reviews the physical run.
 - Raw Input startup/shutdown is serialized and bounded, optional G13 registration
   failure no longer poisons keyboard capture, G13 interface membership changes disarm
   visibly, and disposal cannot race a stale input into new output.

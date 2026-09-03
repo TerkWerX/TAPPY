@@ -22,7 +22,10 @@ automated tests pass
 (Core 31, Windows 99, App 50, G13 HIL tool 23, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
-finite Targus witness and keeps broader K15, Tartarus, and G13 promotion separate.
+finite Targus witness; its
+[fillable evidence record](docs/FIRST_MILESTONE_RECORD_TEMPLATE.md) keeps every
+physical check pending until observed. Broader K15, Tartarus, and G13 promotion is
+separate.
 
 Descriptor-only evidence now shows the attached K15 as one four-interface
 `1A2C:2D43` keyboard group, the user-identified Targus numberpad candidate as one

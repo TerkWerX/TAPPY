@@ -79,7 +79,10 @@ the global chord is unavailable.
 ## Evidence bundle
 
 Create one local run directory outside the portable payload. Give it an opaque run
-ID and record these fields before touching a controller:
+ID, copy
+[`FIRST_MILESTONE_RECORD_TEMPLATE.md`](FIRST_MILESTONE_RECORD_TEMPLATE.md) into it,
+and fill that copy during the attended session. Keep the tracked template unchanged.
+Record these fields before touching a controller:
 
 - UTC start/end, operator initials, Windows version/build, local-console versus
   remote session, and whether Num Lock was on;
