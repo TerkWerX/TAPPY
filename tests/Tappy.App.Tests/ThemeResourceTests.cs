@@ -228,12 +228,36 @@ public sealed class ThemeResourceTests
             element.Attribute(XamlNamespace + "Key")?.Value == "AssignmentTabItemStyle");
         var tabSetters = tabStyle.Elements()
             .Where(element => element.Name.LocalName == "Setter")
+            .Where(element => element.Attribute("Value") is not null)
             .ToDictionary(
                 element => element.Attribute("Property")!.Value,
                 element => element.Attribute("Value")!.Value,
                 StringComparer.Ordinal);
-        Assert.Equal("{DynamicResource ComboBoxTextBrush}", tabSetters["Foreground"]);
-        Assert.Equal("{DynamicResource ComboBoxBackgroundBrush}", tabSetters["Background"]);
+        Assert.Equal("{DynamicResource TextBrush}", tabSetters["Foreground"]);
+        Assert.Equal("{DynamicResource RaisedBrush}", tabSetters["Background"]);
+        Assert.Equal("72", tabSetters["MinWidth"]);
+
+        var tabTemplate = tabStyle.Descendants().Single(element =>
+            element.Name.LocalName == "ControlTemplate" &&
+            element.Attribute("TargetType")?.Value == "TabItem");
+        var headerText = tabTemplate.Descendants().Single(element =>
+            element.Name.LocalName == "TextBlock" &&
+            element.Attribute(XamlNamespace + "Name")?.Value == "HeaderText");
+        Assert.Equal("{TemplateBinding Header}", headerText.Attribute("Text")?.Value);
+        Assert.Equal("{TemplateBinding Foreground}", headerText.Attribute("Foreground")?.Value);
+
+        var selectedTabTrigger = tabTemplate.Descendants().Single(element =>
+            element.Name.LocalName == "Trigger" &&
+            element.Attribute("Property")?.Value == "IsSelected" &&
+            element.Attribute("Value")?.Value == "True");
+        var selectedTabSetters = selectedTabTrigger.Elements()
+            .Where(element => element.Name.LocalName == "Setter")
+            .ToDictionary(
+                element => element.Attribute("Property")!.Value,
+                element => element.Attribute("Value")!.Value,
+                StringComparer.Ordinal);
+        Assert.Equal("{DynamicResource PressedTextBrush}", selectedTabSetters["Foreground"]);
+        Assert.Equal("{DynamicResource AccentBrush}", selectedTabSetters["Background"]);
         var sequenceList = NamedElement(document, "ListBox", "SequenceList");
         Assert.Equal("{DynamicResource AssignmentListBackgroundBrush}", sequenceList.Attribute("Background")?.Value);
         Assert.Equal("{DynamicResource AssignmentListTextBrush}", sequenceList.Attribute("Foreground")?.Value);

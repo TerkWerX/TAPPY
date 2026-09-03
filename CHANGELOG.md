@@ -80,9 +80,11 @@ Notable changes to Tappy are documented here.
   the same owned-output boundary.
 - Current deterministic results: Core 46, Windows 103, App 72, G13 HIL tool 23,
   and Output Witness 53 tests pass (297 total).
-- Assignment-editor tab headers now use explicit theme-aware foreground and
-  background brushes. The tab content, result count, and sequence list also use
-  explicit high-contrast surfaces so native WPF styling cannot wash out their text.
+- Assignment-editor tab headers now use an explicit custom header template instead
+  of relying on the native WPF tab renderer to inherit foreground colors. Selected,
+  unselected, hovered, focused, disabled, and High Contrast labels retain readable
+  foreground/background pairs. The tab content, result count, and sequence list also
+  use explicit high-contrast surfaces.
 - The G13 keeps its clean 39-control assignment grid beside a non-interactive,
   owner-supplied device photo. Selecting a grid square or pressing its physical
   control illuminates the same photo hotspot; simultaneous physical controls can

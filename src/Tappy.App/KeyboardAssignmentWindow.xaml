@@ -13,21 +13,57 @@
             <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
         </Style>
         <Style x:Key="AssignmentTabItemStyle" TargetType="TabItem">
-            <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
-            <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-            <Setter Property="Padding" Value="10,6" />
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
-                    <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
-                    <Setter Property="FontWeight" Value="SemiBold" />
-                </Trigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
-                    <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Padding" Value="11,7" />
+            <Setter Property="Margin" Value="0,0,3,0" />
+            <Setter Property="MinWidth" Value="72" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="HeaderShell"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="5,5,0,0"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock x:Name="HeaderText"
+                                       Text="{TemplateBinding Header}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       FontSize="12"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PressedTextBrush}" />
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="IsSelected" Value="False" />
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
+                                <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </MultiTrigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="HeaderShell" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource ButtonDisabledTextBrush}" />
+                                <Setter Property="Background" Value="{DynamicResource ButtonDisabledBackgroundBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource ButtonDisabledBorderBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="FormLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11" />
