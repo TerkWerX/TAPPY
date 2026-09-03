@@ -204,7 +204,24 @@ public sealed class ThemeResourceTests
         Assert.Equal(
             ["Keyboard", "Text + delay", "Mouse", "Program", "PowerShell", "MIDI", "OSC"],
             tabHeaders);
-        Assert.NotNull(NamedElement(document, "ListBox", "SequenceList"));
+        var tabs = NamedElement(document, "TabControl", "ActionTabs");
+        Assert.Equal("{DynamicResource PanelBrush}", tabs.Attribute("Background")?.Value);
+        Assert.Equal("{DynamicResource TextBrush}", tabs.Attribute("Foreground")?.Value);
+        Assert.Equal("{StaticResource AssignmentTabItemStyle}", tabs.Attribute("ItemContainerStyle")?.Value);
+        var tabStyle = document.Descendants().Single(element =>
+            element.Name.LocalName == "Style" &&
+            element.Attribute(XamlNamespace + "Key")?.Value == "AssignmentTabItemStyle");
+        var tabSetters = tabStyle.Elements()
+            .Where(element => element.Name.LocalName == "Setter")
+            .ToDictionary(
+                element => element.Attribute("Property")!.Value,
+                element => element.Attribute("Value")!.Value,
+                StringComparer.Ordinal);
+        Assert.Equal("{DynamicResource ComboBoxTextBrush}", tabSetters["Foreground"]);
+        Assert.Equal("{DynamicResource ComboBoxBackgroundBrush}", tabSetters["Background"]);
+        var sequenceList = NamedElement(document, "ListBox", "SequenceList");
+        Assert.Equal("{DynamicResource AssignmentListBackgroundBrush}", sequenceList.Attribute("Background")?.Value);
+        Assert.Equal("{DynamicResource AssignmentListTextBrush}", sequenceList.Attribute("Foreground")?.Value);
         Assert.NotNull(NamedElement(document, "Button", "AssignButton"));
     }
 

@@ -56,7 +56,10 @@ and that long control/Rehearsal labels wrap rather than clip. After the first
 expanded-editor visual pass exposed pale inherited text on native white list and
 selector surfaces, dedicated assignment-list resources were added: standard-theme
 title, description, and selected-row pairs are now mechanically held to at least
-7:1 contrast, while High Contrast routes through Windows system colors.
+7:1 contrast, while High Contrast routes through Windows system colors. The action
+tabs now bind explicit header foreground/background brushes, and the tab content,
+result count, and sequence list bind explicit dark-panel or assignment-list
+surfaces rather than inheriting colors from native WPF controls.
 
 The build above validates the current source tree. Source, documentation, and CI are
 authorized for the public repository. Clean-checkout CI and every local package run

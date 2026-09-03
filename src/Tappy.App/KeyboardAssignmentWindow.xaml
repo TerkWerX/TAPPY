@@ -11,6 +11,23 @@
         <Style TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
         </Style>
+        <Style x:Key="AssignmentTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="Padding" Value="10,6" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
+                    <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
+                    <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="FormLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="FontWeight" Value="Bold" />
@@ -34,6 +51,7 @@
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -65,7 +83,11 @@
                 <ColumnDefinition Width="*" MinWidth="290" />
             </Grid.ColumnDefinitions>
 
-            <TabControl x:Name="ActionTabs" SelectionChanged="ActionTabs_OnSelectionChanged">
+            <TabControl x:Name="ActionTabs" SelectionChanged="ActionTabs_OnSelectionChanged"
+                        Background="{DynamicResource PanelBrush}"
+                        Foreground="{DynamicResource TextBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        ItemContainerStyle="{StaticResource AssignmentTabItemStyle}">
                 <TabItem Header="Keyboard">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
@@ -124,7 +146,8 @@
                             </ListBox>
                         </Border>
                         <Grid Grid.Row="2" Margin="0,8,0,0">
-                            <TextBlock x:Name="CountText" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="CountText" Foreground="{DynamicResource MutedTextBrush}"
+                                       Background="{DynamicResource PanelBrush}" VerticalAlignment="Center" />
                             <Button Content="Add keyboard step" HorizontalAlignment="Right"
                                     Click="AddKeyboardStep_OnClick" />
                         </Grid>
@@ -254,6 +277,9 @@
                                    Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                     <ListBox x:Name="SequenceList" Grid.Row="1" Margin="0,10"
+                             Background="{DynamicResource AssignmentListBackgroundBrush}"
+                             Foreground="{DynamicResource AssignmentListTextBrush}"
+                             ItemContainerStyle="{StaticResource AssignmentListItemStyle}"
                              DisplayMemberPath="Summary" SelectionChanged="SequenceList_OnSelectionChanged" />
                     <StackPanel Grid.Row="2">
                         <WrapPanel>

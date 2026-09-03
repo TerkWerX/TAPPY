@@ -80,6 +80,9 @@ Notable changes to Tappy are documented here.
   the same owned-output boundary.
 - Current deterministic results: Core 46, Windows 103, App 62, G13 HIL tool 23,
   and Output Witness 53 tests pass (287 total).
+- Assignment-editor tab headers now use explicit theme-aware foreground and
+  background brushes. The tab content, result count, and sequence list also use
+  explicit high-contrast surfaces so native WPF styling cannot wash out their text.
 
 ### Known limitations
 
