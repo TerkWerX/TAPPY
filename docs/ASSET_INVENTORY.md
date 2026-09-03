@@ -1,11 +1,11 @@
 # Initial Tappy controller artwork inventory
 
 The source images under `F:\TAPPY\PAD IMAGES` predate this project-start package.
-The separate image-processing handoff is complete and reconciled below: all source
-byte streams were preserved, two PNG originals were relocated under `originals`, and
-eight transparent derivatives were produced. These remain raw/reference candidates,
-not approved application assets. No first-milestone runtime registry or package uses
-them.
+The separate controller-image processing handoff is complete and reconciled below:
+all source byte streams were preserved, two PNG originals were relocated under
+`originals`, and eight transparent derivatives were produced. Those controller
+images remain raw/reference candidates, not approved application assets. The
+separate owner-approved Tappy brand set is recorded below and is embedded in the app.
 
 | Initial source filename | Likely device/category | Initial status |
 |---|---|---|
@@ -117,3 +117,24 @@ The SpacePilot Pro image remains only a visual/provider candidate. Dedicated G13
 support does not supply a SpacePilot implementation: the two devices can share Raw
 Input transport, identity, selection, lifecycle, and cleanup concepts, but not a
 report protocol or decoder.
+
+## 2026-09-03 owner-approved Tappy brand set
+
+The product owner explicitly directed Tappy to use the following three supplied
+images in the same visual scheme as Tippy, including the splash screen, and selected
+the single-letter tattooed hand as the application icon. The originals remain
+untouched in `docs/images`; byte-identical canonical PNG copies are embedded under
+`src/Tappy.App/Assets/Branding`.
+
+| Owner-supplied original | Canonical embedded asset | Role | SHA-256 |
+|---|---|---|---|
+| `docs/images/TAPPY_hand_T.png` | `Assets/Branding/tappy-hand-t.png` | Main-header mascot and source for the application/tray icon | `89329DE6252F28851CD4653548D51B551B3C794A5FFEEA97E931CB6851758D51` |
+| `docs/images/TAPPY_hand.png` | `Assets/Branding/tappy-hand.png` | Splash and About mascot | `552AC1BAEAB6623E6327157A66397B8A5C58DDD816BD1ECFB3DD5B0A6AAC03B5` |
+| `docs/images/TAPPY_logo.png` | `Assets/Branding/tappy-wordmark.png` | Main-header wordmark | `833DBCEB738E311956C854A85DB9C8B4A8A75354F86CA2CAFDAFD9F09387926F` |
+
+`Assets/Icons/tappy.ico` is a generated 32-bit Windows icon with 16, 20, 24, 32,
+40, 48, 64, 96, 128, and 256-pixel frames. `tools/New-TappyIcon.ps1` reproducibly
+generates it from `tappy-hand-t.png`; its SHA-256 is
+`0BE7C9CFF3A2E4C308912AD37A2826CB5D2B19353BC5149E7EB3B2D746961587`.
+Approval covers Tappy product identity and app surfaces; it does not change the
+software-license, signing, or binary-release status.

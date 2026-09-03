@@ -4,6 +4,7 @@
         xmlns:vm="clr-namespace:Tappy.App.ViewModels"
         Title="Tappy — Put every key to work" Width="1120" Height="760"
         MinWidth="760" MinHeight="540" WindowStartupLocation="CenterScreen"
+        Icon="/Tappy;component/Assets/Icons/tappy.ico"
         Closing="MainWindow_OnClosing" StateChanged="MainWindow_OnStateChanged"
         PreviewKeyDown="MainWindow_OnPreviewKeyDown" PreviewKeyUp="MainWindow_OnPreviewKeyUp"
         AutomationProperties.Name="Tappy controller workspace">
@@ -39,19 +40,31 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Border Background="#D9DEE4" CornerRadius="11" Padding="12,7" VerticalAlignment="Top">
-                <StackPanel Orientation="Horizontal">
-                    <UniformGrid Rows="2" Columns="2" Width="36" Height="36" Margin="0,0,10,0">
-                        <Border Background="#69B7FF" CornerRadius="4" Margin="2" />
-                        <Border Background="#66E3C4" CornerRadius="4" Margin="2" />
-                        <Border Background="#66E3C4" CornerRadius="4" Margin="2" />
-                        <Border Background="#F2C14E" CornerRadius="4" Margin="2" />
-                    </UniformGrid>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="Tappy" Foreground="#1769AA" FontSize="27" FontWeight="SemiBold" />
-                        <TextBlock Text="by TerkWerX.com" Foreground="#263746" FontSize="10" />
+            <Border x:Name="BrandBadge" Background="#E6E8EB" BorderBrush="#C8CDD3"
+                    BorderThickness="1" CornerRadius="7" Padding="8,3,10,4" VerticalAlignment="Top">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel x:Name="BrandTopRow" Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image x:Name="HeaderMascot"
+                               Source="/Tappy;component/Assets/Branding/tappy-hand-t.png"
+                               Width="52" Height="70" Margin="0,-1,2,-1"
+                               Stretch="Uniform" SnapsToDevicePixels="True"
+                               IsHitTestVisible="False"
+                               AutomationProperties.Name="Tappy tattooed T hand" />
+                        <Image x:Name="HeaderWordmark"
+                               Source="/Tappy;component/Assets/Branding/tappy-wordmark.png"
+                               Width="118" Height="68" Margin="0,0,0,-1"
+                               Stretch="Uniform" VerticalAlignment="Center"
+                               SnapsToDevicePixels="True" IsHitTestVisible="False"
+                               AutomationProperties.Name="TAPPY tattoo wordmark" />
                     </StackPanel>
-                </StackPanel>
+                    <TextBlock Grid.Row="1" Text="by TerkWerX.com"
+                               Foreground="#46586A" FontSize="10" Margin="0,-4,0,0"
+                               HorizontalAlignment="Center" TextAlignment="Center" />
+                </Grid>
             </Border>
             <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
                 <Button Content="Full view" Click="FullView_OnClick" x:Name="FullViewButton"

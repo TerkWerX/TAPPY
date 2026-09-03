@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Tappy assignment editor" Width="1080" Height="760"
         MinWidth="880" MinHeight="620" WindowStartupLocation="CenterOwner"
+        Icon="/Tappy;component/Assets/Icons/tappy.ico"
         AutomationProperties.Name="Controller assignment editor">
     <Window.Resources>
         <DataTemplate x:Key="AssignmentCategoryItemTemplate">

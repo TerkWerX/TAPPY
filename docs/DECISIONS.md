@@ -106,19 +106,27 @@ image is approved by this amendment.
 `Ctrl+Alt+Shift+F12`, a newly generated installer AppId, Tappy extensions, and only
 Tappy endpoints. The reserved update endpoint is the Tappy-only GitHub
 `releases/latest` API URL; no update check is implemented or enabled in this
-milestone. A code-rendered `T` tray glyph is a placeholder, not final artwork.
+milestone. The application, window, and tray icon is generated from the
+owner-approved single-letter tattooed-hand artwork.
 
 ## D-011 — Source publication is authorized; release decisions remain open
 
 **Status:** Partially resolved 2026-09-02.
 
 The owner authorized publishing Tappy source, documentation, and CI configuration to
-the public `https://github.com/TerkWerX/TAPPY` repository. Final mascot/wordmark,
-artwork licensing, public software license, verified device list, signing
+the public `https://github.com/TerkWerX/TAPPY` repository. Public software license,
+verified device list, signing
 certificate, driver-based exclusivity, packaged software release, website
 publication, and production hosting remain open or deferred and are not implied by
 source-publication authorization. Until license and contribution terms are selected,
 all rights are reserved and external contributions must not be submitted or merged.
+
+**2026-09-03 branding amendment:** The owner approved the supplied `TAPPY_hand_T`,
+`TAPPY_hand`, and `TAPPY_logo` images for Tappy application use, requested the same
+placement scheme used by Tippy, and selected the single-letter hand for the app icon.
+This resolves the mascot/wordmark/application-icon decision only; it does not
+authorize signing, a packaged binary release, website publication, or a public
+software license.
 
 ## D-012 — ContainerId is authoritative for physical keyboard grouping
 

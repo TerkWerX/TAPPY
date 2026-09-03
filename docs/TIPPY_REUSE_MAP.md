@@ -101,8 +101,9 @@ a blind global text replacement.
     issue templates, update feed, and crash-report destination.
 12. **Separate publication scopes.** The owner authorized Tappy source,
     documentation, and CI in the public repository. That does not authorize a
-    packaged release, signing, website upload, production sync, final branding, or
-    a public software license.
+    packaged release, signing, website upload, production sync, or a public software
+    license. The owner separately approved the three supplied Tappy brand images for
+    in-app use on 2026-09-03; that approval does not extend to Tippy mascot assets.
 
 ## New keyboard-specific failure modes to prevent
 

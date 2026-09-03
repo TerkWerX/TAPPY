@@ -24,8 +24,8 @@ program or document launch, non-interactive Windows PowerShell 5.1 or PowerShell
 Windows MIDI short messages, and typed OSC/UDP messages. Assignments can run once
 on press or release, remain owned until release, or repeat while held. The milestone witness still uses
 the deliberately harmless F24 mapping. The Release solution build passes with zero
-warnings or errors; 291 current automated tests pass
-(Core 46, Windows 103, App 66, G13 HIL tool 23, Output Witness 53). Exact package and
+warnings or errors; 297 current automated tests pass
+(Core 46, Windows 103, App 72, G13 HIL tool 23, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its
@@ -48,9 +48,10 @@ control response but still requires the finite armed record. See the
 [G13 support boundary](docs/LOGITECH_G13.md).
 
 The owner has authorized the source, documentation, and CI configuration for the
-public `TerkWerX/TAPPY` repository. That source-publication decision does not
-authorize a packaged software release, signing, website publication, production
-hosting, or final branding. No public software license has been selected or granted;
+public `TerkWerX/TAPPY` repository and approved the supplied tattooed-hand Tappy
+brand set for the application header, splash, About surface, application icon, and
+tray identity. Those decisions do not authorize a packaged software release,
+signing, website publication, or production hosting. No public software license has been selected or granted;
 all rights are reserved. Source visibility does not imply permission to use,
 redistribute, or create derivative works from Tappy code or binaries. External
 contributions should not be submitted or merged until the owner defines contribution

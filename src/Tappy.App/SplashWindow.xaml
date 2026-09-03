@@ -2,36 +2,33 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Tappy starting"
-        Width="560" Height="330" ResizeMode="NoResize" WindowStyle="None"
-        WindowStartupLocation="CenterScreen" ShowInTaskbar="True"
+        Width="620" Height="680" ResizeMode="NoResize" WindowStyle="None"
+        AllowsTransparency="True" Background="Transparent"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="False" Topmost="True"
         AutomationProperties.Name="Tappy startup presentation"
         MouseLeftButtonDown="Dismiss_OnMouseLeftButtonDown"
         KeyDown="Dismiss_OnKeyDown">
     <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource AccentBrush}"
-            BorderThickness="1" CornerRadius="22" Padding="32">
+            BorderThickness="1" CornerRadius="22" Padding="28">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="30" ShadowDepth="8" Opacity="0.45" Color="#000000" />
+        </Border.Effect>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                <Border Background="#D9DEE4" CornerRadius="18" Padding="24,13" Margin="0,0,0,18">
-                    <StackPanel Orientation="Horizontal">
-                        <UniformGrid Rows="2" Columns="2" Width="68" Height="68" Margin="0,0,18,0">
-                            <Border Background="#69B7FF" CornerRadius="7" Margin="3" />
-                            <Border Background="#66E3C4" CornerRadius="7" Margin="3" />
-                            <Border Background="#66E3C4" CornerRadius="7" Margin="3" />
-                            <Border Background="#F2C14E" CornerRadius="7" Margin="3" />
-                        </UniformGrid>
-                        <TextBlock Text="Tappy" Foreground="#1769AA" FontSize="54" FontWeight="SemiBold"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Border>
-                <TextBlock Text="Put every key to work." FontSize="20" HorizontalAlignment="Center" />
-                <TextBlock Text="Placeholder branding · artwork review pending" FontSize="12"
-                           Foreground="{DynamicResource MutedTextBrush}" HorizontalAlignment="Center" Margin="0,8,0,0" />
-            </StackPanel>
-            <StackPanel Grid.Row="1" HorizontalAlignment="Center">
+            <Image Source="/Tappy;component/Assets/Branding/tappy-hand.png"
+                   Stretch="Uniform" Margin="24,4" SnapsToDevicePixels="True"
+                   AutomationProperties.Name="Tappy tattooed hand mascot" />
+            <TextBlock Grid.Row="1" Text="TAPPY" FontSize="34" FontWeight="Bold"
+                       HorizontalAlignment="Center" Margin="0,8,0,0" />
+            <TextBlock Grid.Row="2" Text="Put every key to work." FontSize="16"
+                       Foreground="{DynamicResource MutedTextBrush}"
+                       HorizontalAlignment="Center" Margin="0,4,0,2" />
+            <StackPanel Grid.Row="3" HorizontalAlignment="Center" Margin="0,7,0,0">
                 <TextBlock x:Name="VersionText" HorizontalAlignment="Center" />
                 <TextBlock x:Name="CopyrightText" HorizontalAlignment="Center"
                            Foreground="{DynamicResource MutedTextBrush}" Margin="0,4,0,0" />

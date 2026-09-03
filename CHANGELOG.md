@@ -78,8 +78,8 @@ Notable changes to Tappy are documented here.
   injection, caps a sequence pass at 30 seconds and repeating output at 20 seconds,
   and joins emergency, unplug, lifecycle, profile-change, and fault cleanup through
   the same owned-output boundary.
-- Current deterministic results: Core 46, Windows 103, App 66, G13 HIL tool 23,
-  and Output Witness 53 tests pass (291 total).
+- Current deterministic results: Core 46, Windows 103, App 72, G13 HIL tool 23,
+  and Output Witness 53 tests pass (297 total).
 - Assignment-editor tab headers now use explicit theme-aware foreground and
   background brushes. The tab content, result count, and sequence list also use
   explicit high-contrast surfaces so native WPF styling cannot wash out their text.
@@ -87,6 +87,11 @@ Notable changes to Tappy are documented here.
   owner-supplied device photo. Selecting a grid square or pressing its physical
   control illuminates the same photo hotspot; simultaneous physical controls can
   illuminate together. Exact provider/VID/PID matching prevents artwork guessing.
+- The owner-approved tattooed-hand Tappy brand set now follows the sister Tippy
+  placement scheme: single-letter hand plus wordmark in the main header and the full
+  Tappy hand on the splash and About surfaces.
+- A reproducible multi-size Windows icon generated from the tattooed `T` hand now
+  identifies the executable, application windows, taskbar, and notification area.
 
 ### Known limitations
 
@@ -99,10 +104,9 @@ Notable changes to Tappy are documented here.
   completed; it is not Functional or Verified.
 - Virtual gamepad, variables, layer-control actions, gesture triggers, reusable MIDI/
   OSC preset managers, and full independent press/release sequence editing remain.
-- Final mascot, wordmark, public license, signing, release, and website decisions are
-  intentionally open.
+- Public license, signing, packaged release, and website decisions remain open.
 - Other processed controller images remain excluded pending provenance, usage
   rights, exact-model/protocol evidence, processing records, and explicit approval.
-- Source/docs/CI publication to the existing public `TerkWerX/TAPPY` repository is
-  authorized; a packaged release, signing, website, hosting, and final branding are
-  not authorized or implied.
+- Source/docs/CI publication and the supplied in-app brand set are authorized for the
+  existing public `TerkWerX/TAPPY` repository; a packaged release, signing, website,
+  or hosting is not authorized or implied.

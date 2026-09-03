@@ -292,9 +292,9 @@ Every item needs implementation evidence and tests before parity can be claimed.
   accessible light-theme values.
 - Use a permanent light-gray brand badge so detailed branding stays legible in both
   themes. The Tappy wordmark should use the approved whimsical blue family style.
-- Recommended mascot direction: a tasteful tattooed hand/controller motif named by
-  the product owner, with no face, prepared as transparent master artwork. Use a
-  placeholder until artwork is explicitly approved; do not invent final branding.
+- Use the owner-approved transparent tattooed-hand brand set: the single-letter hand
+  beside the wordmark in the permanent badge, the full Tappy hand on splash/About,
+  and the single-letter hand as the Windows application and tray icon.
 - Splash screen default: ten seconds, dismissible after first presentation, with
   `Tappy`, `by TerkWerX.com`, and the current copyright year.
 - About window: version, website, GitHub/support links, acknowledgments, optional
@@ -481,8 +481,8 @@ layer, or input bindings must not leak through that interchange.
   hand.
 - Source/documentation/CI publication to the named repository is authorized.
   Packaged software releases, signing, website publication, production hosting, and
-  final branding still require the product owner's explicit instruction at that
-  stage.
+  any new or replacement branding still require the product owner's explicit
+  instruction at that stage.
 
 ## 13. Phased implementation plan
 
@@ -523,7 +523,7 @@ Record owner-approved answers here rather than burying them in code:
 
 | Decision | Status | Resolution |
 |---|---|---|
-| Final mascot/wordmark artwork | Open | Use placeholders until approved |
+| Final mascot/wordmark artwork | Resolved 2026-09-03 | Use the three owner-supplied Tappy images in the Tippy placement scheme; use the tattooed `T` hand for application and tray icons |
 | Public license | Open | Source may be public, but all rights remain reserved; define license and contribution terms before accepting external contributions or releasing binaries |
 | Initial verified controller models | Open | Based on available real hardware |
 | Layer limit exposed in v0.1 | Open | Model remains configurable |

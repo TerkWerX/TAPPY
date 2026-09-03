@@ -10,7 +10,7 @@ public partial class AboutWindow : Window
     {
         InitializeComponent();
         VersionText.Text = $"Version {Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0"}";
-        CopyrightText.Text = $"© {DateTime.Now.Year} TerkWerX. Final branding and public license remain under review.";
+        CopyrightText.Text = $"© {DateTime.Now.Year} TerkWerX. All rights reserved.";
     }
 
     private static void Open(string url)

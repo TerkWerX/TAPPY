@@ -8,6 +8,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Icons\tappy.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -21,6 +22,8 @@
   <ItemGroup>
     <None Remove="Assets\Controllers\logitech-g13-user-photo.png" />
     <Resource Include="Assets\Controllers\logitech-g13-user-photo.png" />
+    <Resource Include="Assets\Branding\*.png" />
+    <Resource Include="Assets\Icons\tappy.ico" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\controller-packs\controller_registry.json" Link="ControllerPacks\controller_registry.json"

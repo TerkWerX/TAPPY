@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.Runtime.InteropServices;
 using Forms = System.Windows.Forms;
 
 namespace Tappy.App.Services;
@@ -15,7 +14,7 @@ public sealed class TrayRecoveryService : IDisposable
         ArgumentNullException.ThrowIfNull(emergencyStop);
         ArgumentNullException.ThrowIfNull(exit);
 
-        _ownedIcon = CreatePlaceholderIcon();
+        _ownedIcon = CreateApplicationIcon();
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Show Tappy", null, (_, _) => show());
         menu.Items.Add("Emergency stop — release Tappy output", null, (_, _) => emergencyStop());
@@ -48,45 +47,18 @@ public sealed class TrayRecoveryService : IDisposable
         _ownedIcon.Dispose();
     }
 
-    private static Icon CreatePlaceholderIcon()
+    private static Icon CreateApplicationIcon()
     {
-        using var bitmap = new Bitmap(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        using var graphics = Graphics.FromImage(bitmap);
-        graphics.Clear(Color.Transparent);
-        using var background = new SolidBrush(Color.FromArgb(255, 23, 105, 170));
-        using var accent = new SolidBrush(Color.FromArgb(255, 102, 227, 196));
-        using var textBrush = new SolidBrush(Color.White);
-        graphics.FillRoundedRectangle(background, new Rectangle(1, 1, 30, 30), 7);
-        graphics.FillEllipse(accent, 21, 3, 8, 8);
-        using var font = new Font("Segoe UI", 19, FontStyle.Bold, GraphicsUnit.Pixel);
-        graphics.DrawString("T", font, textBrush, 7, 5);
-        var handle = bitmap.GetHicon();
-        try
+        var executablePath = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(executablePath))
         {
-            using var temporary = Icon.FromHandle(handle);
-            return (Icon)temporary.Clone();
+            var associated = Icon.ExtractAssociatedIcon(executablePath);
+            if (associated is not null)
+            {
+                return associated;
+            }
         }
-        finally
-        {
-            _ = DestroyIcon(handle);
-        }
-    }
 
-    [DllImport("user32.dll")]
-    private static extern bool DestroyIcon(IntPtr icon);
-}
-
-internal static class GraphicsExtensions
-{
-    public static void FillRoundedRectangle(this Graphics graphics, Brush brush, Rectangle bounds, int radius)
-    {
-        using var path = new System.Drawing.Drawing2D.GraphicsPath();
-        var diameter = radius * 2;
-        path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-        path.AddArc(bounds.Left, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-        path.CloseFigure();
-        graphics.FillPath(brush, path);
+        return (Icon)SystemIcons.Application.Clone();
     }
 }
