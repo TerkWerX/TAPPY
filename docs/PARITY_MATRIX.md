@@ -7,8 +7,9 @@ tree.
 
 Evidence snapshot: the Release solution build has zero warnings/errors and all 174
 current automated tests pass (Core 30, Windows 90, App 31, G13 HIL tool 23). The
-last portable-artifact checkpoint predates the K15/G13 additions and requires a
-fresh rebuild. Exact evidence boundaries are in [`TESTING.md`](TESTING.md). All
+current clean-source portable checkpoint includes the K15/G13 provider additions
+and passes both published/extracted readiness audits. Exact evidence boundaries are
+in [`TESTING.md`](TESTING.md). All
 physical/manual control checks remain pending.
 
 | Capability | Status | Source / Tappy adaptation | Automated evidence | Remaining evidence or work |
@@ -34,7 +35,7 @@ physical/manual control checks remain pending.
 | Permission-gated application discovery | Planned | Local installed/Start Menu/visible process review | None | Implement; no documents/history/data |
 | Windows/application catalogs | Planned | Adapt catalog organization, add scan-aware keys | None | Port data and search tests |
 | MIDI/OSC setup and variable manager | Planned | Reusable named configuration | None | Implement and device tests |
-| Rehearsal Mode | First-slice | Mapping path runs with output suppressed | Core/App tests; an earlier published/extracted-package smoke proved zero output before K15/G13 integration | Fresh package smoke and physical visual check |
+| Rehearsal Mode | First-slice | Mapping path runs with output suppressed | Core/App tests plus current published/extracted-package smoke with zero injected input | Physical visual check |
 | Emergency stop and output bounds | First-slice | Unique hotkey plus mouse/tray commands; depth/rate limits | Safety tests | Hotkey conflict/physical recovery test |
 | Tray/background/startup | First-slice | Unique tray identity and recovery; startup deferred | App compiles; no automated tray interaction test | Tray/background manual test; startup settings UI |
 | Themes and responsive modes | First-slice | Family tokens, code-rendered placeholder brand | App tests cover mode minimums, live automation names, and high-contrast theme precedence; WPF resources compile | Manual light/dark/high-contrast, DPI, and layout-mode accessibility checks |
@@ -49,7 +50,7 @@ physical/manual control checks remain pending.
 | Logitech G13 vendor-HID provider | Code-supported | Exact `046D:C21C`, `FF00:0000` provider; `C232` excluded; fixed 39-control model and stable tile grid | Decoder/provider/App tests plus 23 finite-verifier tests | No live button/stick capture yet; complete armed input run and broader Passport/HIL |
 | Learned raw-HID provider | Planned | Core has a discrete provider seam with no fixed 32-control cap; current App composition is explicitly keyboard plus model-specific G13 | Interface and G13-specific composition only | Generic identity, selection/UI integration, learner, report schema, and real-device tests |
 | MIDI/encoder/joystick triggers | Planned | Discrete Core seam; G13 has provider-specific raw X/Y and fixed-threshold directions, not a generic analog profile model | Interface plus model-specific G13 direction tests | Add generic analog values/threshold/deadzone schemas, integrate new providers, and hardware-test |
-| Data-driven controller layouts | First-slice | Generic grid/registry plus a code-defined 39-control G13 model published in stable presentation order | Profile tests round-trip more than 100 controls; App tests cover G13 model/grid state; earlier package registry audit passed | Row/cluster-aware WPF projection, fresh package audit, designer/templates, and reviewed art |
+| Data-driven controller layouts | First-slice | Generic grid/registry plus a code-defined 39-control G13 model published in stable presentation order | Profile tests round-trip more than 100 controls; App tests cover G13 model/grid state; current package registry audit passed | Row/cluster-aware WPF projection, designer/templates, and reviewed art |
 | Batch/drag/compare/learn-all/search | Planned | Tappy-specific mapping workflows | None | Implement |
 | Source behavior/rollover/conflict pages | First-slice | Pass-through truth and live simultaneous state | State/repeat/simultaneous tests | Dedicated rollover/conflict screens and HIL |
 | Usage heatmaps | Deferred | Local-only ControlId counts, disabled by default | None | Privacy review and opt-in UI |

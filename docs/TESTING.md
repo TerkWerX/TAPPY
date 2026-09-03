@@ -41,12 +41,13 @@ duplicate a commit ID that would become stale when the record itself is committe
 
 ## Local portable artifact checkpoint
 
-The last completed package checkpoint verified the allowlisted three-file payload
-and executed both the actual published `Tappy.exe` and a fresh copy extracted from
-the portable ZIP. Each run passed `controller-registry`, `profile-round-trip`,
-`rehearsal-no-output`, and `tappy-doctor`, with `injectedInputCount: 0`. Changes made
-after that checkpoint require a fresh run; the K15 grouping and G13 provider are
-awaiting that final rebuild.
+The current post-provider package checkpoint was built from clean committed source.
+It ran all 174 tests, recorded all ten package locks, verified the allowlisted
+three-file payload, and executed both the actual published `Tappy.exe` and a fresh
+copy extracted from the portable ZIP. Each readiness run passed
+`controller-registry`, `profile-round-trip`, `rehearsal-no-output`, and
+`tappy-doctor`, with `injectedInputCount: 0`. The manifest records the source as not
+dirty and includes the exact source revision, payload and archive hashes.
 
 The generated manifest is authoritative for the exact source revision, payload
 paths/sizes/hashes, archive hash, toolchain, and unsigned status. A passing local

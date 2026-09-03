@@ -34,6 +34,10 @@ Notable changes to Tappy are documented here.
 - A locked restore, formatting verification, and all-project dependency advisory
   query pass; NuGet reports no known vulnerable packages in the current ten-project
   solution. This is an advisory checkpoint, not a complete security audit.
+- A clean committed-source portable audit passes the three-file payload allowlist,
+  all 174 tests, published and freshly extracted readiness smoke checks, ten package
+  lock records, and zero injected input. The artifact remains an unsigned local
+  checkpoint, not a public release.
 
 ### Known limitations
 
