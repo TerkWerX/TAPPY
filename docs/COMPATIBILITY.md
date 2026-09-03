@@ -33,7 +33,10 @@ current session: seven grouped keyboard controllers (including the K15, Targus
 candidate, and Tartarus) and one G13. It
 excludes the `046D:C232` G HUB virtual keyboard from both keyboard and G13 identity.
 No K15, Targus, or Tartarus key events or G13 button/stick events were captured by
-that probe. Windows also exposes non-keyboard Tartarus collections; the current
+that descriptor-only probe. Separately, the operator reported visual response from
+every G13 control during an attended Rehearsal preflight; that observation does not
+replace the finite verifier or promote the device to Functional. Windows also
+exposes non-keyboard Tartarus collections; the current
 generic provider does not claim their mouse, consumer-control, system-control, or
 vendor-HID behavior.
 
@@ -66,7 +69,7 @@ sleeping wireless receivers, Windows lock/suspend, and latency targets require r
 hardware evidence before support claims.
 
 The current automated suites pass with a zero-warning Release build: Core 31,
-Windows 99, App 55, G13 HIL tool 23, and Output Witness 53 (261 total).
+Windows 100, App 61, G13 HIL tool 23, and Output Witness 53 (268 total).
 Packaged-artifact checkpoint status is in [`TESTING.md`](TESTING.md). Every physical
 or manual check remains a separate gate.
 The current twelve-project NuGet advisory query reports no known vulnerable packages;

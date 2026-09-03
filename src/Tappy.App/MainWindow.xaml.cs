@@ -170,7 +170,19 @@ public partial class MainWindow : Window
     private void RefreshDevices_OnClick(object sender, RoutedEventArgs e) => _viewModel.RefreshDevices();
     private void BeginIdentification_OnClick(object sender, RoutedEventArgs e) => _viewModel.BeginIdentification();
     private void ConfirmController_OnClick(object sender, RoutedEventArgs e) => _viewModel.ConfirmController();
-    private void AssignMapping_OnClick(object sender, RoutedEventArgs e) => _viewModel.AssignMapping();
+    private void OpenAssignmentEditor_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.CanAssignSelectedControl)
+        {
+            return;
+        }
+
+        var editor = new KeyboardAssignmentWindow(_viewModel.SelectedControlLabel) { Owner = this };
+        if (editor.ShowDialog() == true && editor.Result is { } assignment)
+        {
+            _viewModel.AssignKeyboardMapping(assignment);
+        }
+    }
 
     private async void SaveProfile_OnClick(object sender, RoutedEventArgs e) =>
         await _viewModel.SaveProfileAsync().ConfigureAwait(true);

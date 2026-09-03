@@ -298,6 +298,26 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task Expanded_keyboard_assignment_is_forwarded_with_its_chord_and_tile_summary()
+    {
+        var runtime = new FakeRuntime();
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "persistent-1", "g13:g1", "G1", true, false,
+            "Unassigned", 1, 1));
+        var assignment = KeyboardMappingAssignment.PressOnce(
+            "Save as — Ctrl + Shift + S", ["CTRL", "SHIFT", "S"]);
+
+        viewModel.AssignKeyboardMapping(assignment);
+
+        Assert.Equal(1, runtime.KeyboardAssignCalls);
+        Assert.Equal("g13:g1", runtime.LastKeyboardAssignment.Control);
+        Assert.Same(assignment, runtime.LastKeyboardAssignment.Assignment);
+        Assert.Equal(assignment.Name, viewModel.Controls[0].Action);
+    }
+
+    [Fact]
     public async Task Identification_clears_stale_selection_and_suppresses_focused_wpf_keys()
     {
         var runtime = new FakeRuntime
@@ -471,6 +491,8 @@ public sealed class MainViewModelTests
         public ControllerChoice? LastCandidate { get; private set; }
         public int AssignCalls { get; private set; }
         public (string Control, string Output) LastAssignment { get; private set; }
+        public int KeyboardAssignCalls { get; private set; }
+        public (string Control, KeyboardMappingAssignment? Assignment) LastKeyboardAssignment { get; private set; }
         public RuntimeOperation EmergencyResult { get; init; } = RuntimeOperation.Ok("Emergency stop completed.");
 
         public Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -506,6 +528,13 @@ public sealed class MainViewModelTests
             AssignCalls++;
             LastAssignment = (controlId, outputKey);
             return RuntimeOperation.Ok($"Mapped to {outputKey}.");
+        }
+
+        public RuntimeOperation AssignKeyboardMapping(string controlId, KeyboardMappingAssignment assignment)
+        {
+            KeyboardAssignCalls++;
+            LastKeyboardAssignment = (controlId, assignment);
+            return RuntimeOperation.Ok($"Mapped to {assignment.Name}.");
         }
 
         public Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default) =>

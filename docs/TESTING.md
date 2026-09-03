@@ -13,11 +13,11 @@ target .NET 8. The verification was run in Release configuration.
 |---|---:|---|
 | `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
 | `Tappy.Core.Tests` | 31 passed, 0 failed | Deterministic platform-neutral behavior, including explicit cleanup-dispatch results |
-| `Tappy.Windows.Tests` | 99 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, capability-isolated registration faults, bounded message-host shutdown routing, provider contracts, pre-arm neutrality, output tagging, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
-| `Tappy.App.Tests` | 55 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, readable dropdown/disabled-button/control-label themes, accessibility state, and unplug handling with fake providers/output |
+| `Tappy.Windows.Tests` | 100 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, capability-isolated registration faults, bounded message-host shutdown routing, provider contracts, pre-arm neutrality, complete advertised-key output translation, output tagging, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
+| `Tappy.App.Tests` | 61 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, expanded keyboard catalog and chord assignment, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, readable dropdown/disabled-button/control-label themes, assignment-editor accessibility, and unplug handling with fake providers/output |
 | `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
 | `Tappy.OutputWitness.Tests` | 53 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break and output state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
-| Current automated total | 261 passed, 0 failed | Core 31 + Windows 99 + App 55 + G13 HIL tool 23 + Output Witness 53 |
+| Current automated total | 268 passed, 0 failed | Core 31 + Windows 100 + App 61 + G13 HIL tool 23 + Output Witness 53 |
 | `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 12 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
@@ -30,7 +30,9 @@ truthful latching and re-arm refusal when an owned-output release is rejected;
 bounded native message-host shutdown; optional G13-capability fault isolation;
 serialized input/disposal and conservative unclean-session recovery;
 recursion/depth/rate guards; immutable profile round-trip and isolation; raw-path
-redaction; the app's safe F13-F24 mapping path; identification-time WPF key handling;
+redaction; the app's safe F13-F24 milestone path; the searchable keyboard assignment
+catalog with more than 1,500 direct/modifier choices; tap, held, and release-trigger
+assignment projection; identification-time WPF key handling;
 live automation names; ordered deferred visual transitions; a truthful quick-tap
 illumination pulse; bounded backlog compaction with final-state preservation;
 presentation-mode minimums; and high-contrast theme
@@ -46,9 +48,10 @@ the attended operator record.
 
 The app suite also asserts that both standard theme palettes provide at least 4.5:1
 ComboBox and disabled-button text/background contrast, that High Contrast uses
-Windows system colors, that both visible dropdowns override the global TextBlock
+Windows system colors, that the device dropdown overrides the global TextBlock
 foreground which made unselected device names unreadable during the first attended
-T01 attempt, and that long control/Rehearsal labels wrap rather than clip.
+T01 attempt, that the expanded assignment results are virtualized and searchable,
+and that long control/Rehearsal labels wrap rather than clip.
 
 The build above validates the current source tree. Source, documentation, and CI are
 authorized for the public repository. Clean-checkout CI and every local package run
@@ -57,8 +60,8 @@ duplicate a commit ID that would become stale when the record itself is committe
 
 ## Local portable artifact checkpoint
 
-The current post-provider package checkpoint was built from clean committed source.
-It ran all 261 tests, recorded all twelve package locks, verified the allowlisted
+The last post-provider package checkpoint was built from clean committed source and
+predates the expanded assignment editor. It ran all 261 tests, recorded all twelve package locks, verified the allowlisted
 three-file payload, and executed both the actual published `Tappy.exe` and a fresh
 copy extracted from the portable ZIP. Each readiness run passed
 `controller-registry`, `profile-round-trip`, `rehearsal-no-output`, and
@@ -79,8 +82,12 @@ HIL promotion. Copy the
 run directory; the procedure and blank template are not evidence that any step
 passed.
 
-No Controller Passport, G13 HIL session, or operator-reviewed physical control run
-has been completed. In particular, the following remain unverified on hardware:
+No complete Controller Passport, finite G13 HIL session, or Targus T01–T12 run has
+been completed. The operator did select/identify/confirm the G13 in the final
+accessibility build and reported that all of its controls responded visually in
+Tappy; the local ignored record preserves that statement and screenshot without
+promoting it into a formal output or pass-through result. In particular, the
+following remain unverified on hardware:
 
 - make/break illumination, OS repeat, rollover/ghosting, simultaneous-state truth,
   Num Lock variants, reconnect identity, and identical-device selection;

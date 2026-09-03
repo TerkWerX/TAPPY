@@ -1,0 +1,116 @@
+<Window x:Class="Tappy.App.KeyboardAssignmentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Tappy keyboard assignment" Width="920" Height="680"
+        MinWidth="720" MinHeight="520" WindowStartupLocation="CenterOwner"
+        AutomationProperties.Name="Keyboard assignment editor">
+    <Grid Background="{DynamicResource WindowBrush}" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="Choose a keyboard assignment" FontSize="23" FontWeight="SemiBold" />
+            <TextBlock x:Name="ControlLabelText" Margin="0,3,0,0"
+                       Foreground="{DynamicResource MutedTextBrush}" />
+        </StackPanel>
+
+        <Border Grid.Row="1" Background="#3B2F14" BorderBrush="{DynamicResource PressedBrush}"
+                BorderThickness="1" CornerRadius="10" Padding="11" Margin="0,12,0,12">
+            <TextBlock Text="Assignments are edited without producing output. Keep Rehearsal Mode on while reviewing a new shortcut; pass-through source input may still reach the focused application."
+                       Foreground="#FFF6DA" TextWrapping="Wrap" />
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="SEARCH BY NAME, KEY, OR PURPOSE" FontSize="11" FontWeight="Bold"
+                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,5" />
+                <TextBox x:Name="SearchBox" TextChanged="SearchBox_OnTextChanged" Padding="9,7"
+                         AutomationProperties.Name="Search keyboard assignments" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="CATEGORY" FontSize="11" FontWeight="Bold"
+                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,5" />
+                <ComboBox x:Name="CategoryBox" DisplayMemberPath="DisplayName"
+                          SelectionChanged="CategoryBox_OnSelectionChanged"
+                          AutomationProperties.Name="Keyboard assignment category" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1" CornerRadius="11" Padding="5">
+            <ListBox x:Name="AssignmentList" SelectionChanged="AssignmentList_OnSelectionChanged"
+                     MouseDoubleClick="AssignmentList_OnMouseDoubleClick"
+                     ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     AutomationProperties.Name="Available keyboard assignments">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="6,5" MinHeight="47">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,2,12,0" />
+                                <TextBlock Text="{Binding Category}" FontSize="10"
+                                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,2,12,0" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="{DynamicResource RaisedBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="6" Padding="9,5" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Shortcut}" FontFamily="Consolas"
+                                           FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="270" />
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock x:Name="CountText" Foreground="{DynamicResource MutedTextBrush}" />
+                <TextBlock x:Name="SelectionSummaryText" Text="Choose an assignment above."
+                           TextWrapping="Wrap" Margin="0,3,12,0" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" MinWidth="280">
+                <TextBlock Text="WHEN THIS CONTROLLER KEY IS USED" FontSize="11" FontWeight="Bold"
+                           Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,5" />
+                <ComboBox x:Name="TimingBox" SelectedIndex="0"
+                          AutomationProperties.Name="Keyboard assignment behavior">
+                    <ComboBoxItem Tag="PressOnce" Content="Tap once when pressed" />
+                    <ComboBoxItem Tag="HoldUntilRelease" Content="Hold until controller key is released" />
+                    <ComboBoxItem Tag="ReleaseOnce" Content="Tap once when released" />
+                </ComboBox>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal"
+                        HorizontalAlignment="Right" Margin="0,12,0,0">
+                <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0" />
+                <Button x:Name="AssignButton" Content="Use selected assignment"
+                        Click="AssignButton_OnClick" IsEnabled="False"
+                        AutomationProperties.Name="Use the selected keyboard assignment" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -5,13 +5,15 @@ Status values are `Implemented`, `First-slice`, `Code-supported`, `Planned`,
 provenance, not a runtime dependency; Tappy does not reference the Tippy working
 tree.
 
-Evidence snapshot: the Release solution build has zero warnings/errors and all 261
-current automated tests pass (Core 31, Windows 99, App 55, G13 HIL tool 23,
+Evidence snapshot: the Release solution build has zero warnings/errors and all 268
+current automated tests pass (Core 31, Windows 100, App 61, G13 HIL tool 23,
 Output Witness 53). The
-current clean-source portable checkpoint includes the K15/G13 provider additions
-and passes both published/extracted readiness audits. Exact evidence boundaries are
-in [`TESTING.md`](TESTING.md). All
-physical/manual control checks remain pending.
+last clean-source portable checkpoint includes the K15/G13 provider additions and
+passes both published/extracted readiness audits; it predates the expanded keyboard
+assignment editor. Exact evidence boundaries are in [`TESTING.md`](TESTING.md).
+Formal Targus and finite G13 output/pass-through checks remain pending; an attended
+preflight separately records the operator's report that every G13 control responds
+visually.
 The finite attended run and its narrow-versus-promotion boundary are defined in
 [`FIRST_MILESTONE_OPERATOR_RUN.md`](FIRST_MILESTONE_OPERATOR_RUN.md); publishing the
 procedure does not advance any hardware tier.
@@ -21,13 +23,14 @@ procedure does not advance any hardware tier.
 | Multiple physical controllers | First-slice | New session/persistent identity, per-device state, and authoritative ContainerId interface grouping | Multi-session isolation plus K15 four-interface grouping/reconnect tests | Two real devices, identical pair/rebind, and physical K15 control evidence |
 | Configurable independent layers | First-slice | Generalized from Tippy banks; variable-length schema, three defaults | Profile/layer tests | Full UI switching and portable layer preview |
 | Portable layer save/load/copy | Planned | ControlId compatibility rather than control count | Compatibility validator planned | Preview UI and differing-layout tests |
-| Keyboard chords/sequences/text/timed recording | Planned | Macro model behind output interfaces | Model validation only | Execution/editor and balanced recording |
+| Keyboard keys and chords | First-slice | Native searchable editor with named Windows actions, direct keys, media/browser keys, and generated modifier combinations | More than 1,500 catalog choices validated against the complete Windows output translation contract; balanced chord engine tests | Physical output-witness checks and future locale/scan-code choice refinements |
+| Keyboard sequences/text/timed recording | Planned | Macro model behind output interfaces | Model validation only | Execution/editor and balanced recording |
 | Mouse/program outputs | Planned | Tippy concepts split from platform-neutral core | Interfaces only | Implement and safety test |
 | PowerShell 5.1/7 output | Planned | Preserve non-elevated/no-bypass policy | Interface/import safety only | Timeout/cancel service and tests |
 | MIDI/OSC output and presets | Planned | Adapt Tippy services; lazy resources | Parser/endpoint tests planned | Real endpoints and UI |
 | Virtual Xbox output | Deferred | Optional adapter, never bundled driver | None | Driver review and real output evidence |
 | Variables and previews | Planned | `{control}`/`{layer}` native vocabulary | Parser tests planned | Manager UI |
-| Press/release/run-once/hold | First-slice | Frozen execution leases and held ledger | Press/release/cleanup tests | Broader output types |
+| Press/release/run-once/hold | First-slice | Frozen execution leases and held ledger; editor exposes tap-on-press, hold-until-release, and tap-on-release | Press/release/chord/cleanup plus editor-projection tests | Broader output types and independent multi-step press/release editors |
 | Repeat/toggle/tap/double/long | Planned | Keyboard-aware gesture engine | Repeat classification in first slice | Gesture/conflict UI and timing tests |
 | Momentary/toggle/one-shot layers, dual role | Planned | New layer ownership model | Schema only | Engine/UI/conflict tests |
 | Cross-device chords | Planned | Explicit additive/consuming policy | Model tests planned | Visible consuming delay and HIL |
@@ -37,7 +40,7 @@ procedure does not advance any hardware tier.
 | Freeze key-down context through release | First-slice | New immutable execution lease | Mid-hold profile/layer tests | Application-scene coverage |
 | Foreground application scenes | Planned | Resolve only on input, no polling | Interface/model tests planned | Full scene editor and Windows tests |
 | Permission-gated application discovery | Planned | Local installed/Start Menu/visible process review | None | Implement; no documents/history/data |
-| Windows/application catalogs | Planned | Adapt catalog organization, add scan-aware keys | None | Port data and search tests |
+| Windows/application catalogs | First-slice | Native searchable Windows/key catalog with virtualized results and more than 1,500 choices; Tippy's catalog organization was deliberately adapted | Catalog count/category/key-contract/search UI tests | Port and review the 557-command application-specific catalog |
 | MIDI/OSC setup and variable manager | Planned | Reusable named configuration | None | Implement and device tests |
 | Rehearsal Mode | First-slice | Mapping path runs with output suppressed | Core/App tests plus current published/extracted-package smoke with zero injected input | Physical visual check |
 | Emergency stop and output bounds | First-slice | Unique hotkey plus mouse/tray commands; depth/rate limits | Safety tests | Hotkey conflict/physical recovery test |
@@ -51,7 +54,7 @@ procedure does not advance any hardware tier.
 | Controller Passport/HIL | Hardware evidence required | General station plan, finite G13 input verifier, and focused-console output witness | 23 G13-verifier plus 53 output-witness state-machine/refusal/evidence tests; no physical capture | Attended Targus milestone record, armed G13 input-functional record, and full controller Passport/output/pass-through/latency HIL |
 | Signed data-only controller packs | Planned | New extension/schema/trust store | Fixture only | Auth/sign/install/catalog implementation |
 | Raw keyboard provider | First-slice | Scan/E0/E1/device identity, dedicated message thread, and ContainerId grouping | Normalizer/provider contracts plus authoritative K15 four-interface and Tartarus two-interface grouping | Physical K15/Targus/Tartarus make-break, rollover, pass-through, reconnect, and cleanup |
-| Logitech G13 vendor-HID provider | Code-supported | Exact `046D:C21C`, `FF00:0000` provider; `C232` excluded; fixed 39-control model and stable tile grid | Decoder/provider/App tests plus 23 finite-verifier tests | No live button/stick capture yet; complete armed input run and broader Passport/HIL |
+| Logitech G13 vendor-HID provider | Hardware evidence required | Exact `046D:C21C`, `FF00:0000` provider; `C232` excluded; fixed 39-control model and stable tile grid | Decoder/provider/App tests plus 23 finite-verifier tests; attended operator report that every control responds visually | Complete the finite armed input record and broader Passport/output/pass-through HIL; the operator report alone is not a promotion pass |
 | Learned raw-HID provider | Planned | Core has a discrete provider seam with no fixed 32-control cap; current App composition is explicitly keyboard plus model-specific G13 | Interface and G13-specific composition only | Generic identity, selection/UI integration, learner, report schema, and real-device tests |
 | MIDI/encoder/joystick triggers | Planned | Discrete Core seam; G13 has provider-specific raw X/Y and fixed-threshold directions, not a generic analog profile model | Interface plus model-specific G13 direction tests | Add generic analog values/threshold/deadzone schemas, integrate new providers, and hardware-test |
 | Data-driven controller layouts | First-slice | Generic grid/registry plus a code-defined 39-control G13 model published in stable presentation order | Profile tests round-trip more than 100 controls; App tests cover G13 model/grid state; current package registry audit passed | Row/cluster-aware WPF projection, designer/templates, and reviewed art |

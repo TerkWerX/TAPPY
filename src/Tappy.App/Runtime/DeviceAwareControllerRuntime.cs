@@ -523,6 +523,42 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             return RuntimeOperation.Failed("The first milestone permits only F13 through F24 as harmless starter outputs.");
         }
 
+        return AssignKeyboardMapping(
+            controlId,
+            KeyboardMappingAssignment.HoldUntilRelease($"Hold {outputKey} until release", [outputKey]));
+    }
+
+    public RuntimeOperation AssignKeyboardMapping(string controlId, KeyboardMappingAssignment assignment)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (string.IsNullOrWhiteSpace(controlId))
+        {
+            return RuntimeOperation.Failed("Choose a physical control first.");
+        }
+
+        ArgumentNullException.ThrowIfNull(assignment);
+        var pressAction = CreateKeyboardAction(assignment.PressMode, assignment.PressKeys);
+        var releaseAction = CreateKeyboardAction(assignment.ReleaseMode, assignment.ReleaseKeys);
+        if (pressAction is null || releaseAction is null)
+        {
+            return RuntimeOperation.Failed(
+                "That shortcut contains an unsupported key or exceeds Tappy's eight-key chord safety limit.");
+        }
+
+        if (releaseAction.Mode == KeyboardActionMode.HoldUntilRelease)
+        {
+            return RuntimeOperation.Failed("A release action must tap once; it cannot begin a held output.");
+        }
+
+        if (pressAction.Mode == KeyboardActionMode.None && releaseAction.Mode == KeyboardActionMode.None)
+        {
+            return RuntimeOperation.Failed("Choose a keyboard action before assigning this control.");
+        }
+
+        var bindingName = string.IsNullOrWhiteSpace(assignment.Name)
+            ? FormatKeyboardBinding(pressAction, releaseAction)
+            : assignment.Name.Trim();
+
         lock (_gate)
         {
             if (_outputSafetyNeedsAttention)
@@ -557,10 +593,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
                 layer.Bindings.Add(binding);
             }
 
-            binding.Name = $"Hold {outputKey} until release";
+            binding.Name = bindingName;
             binding.Enabled = true;
-            binding.PressAction = KeyboardActionDefinition.Hold(outputKey);
-            binding.ReleaseAction = new KeyboardActionDefinition();
+            binding.PressAction = pressAction;
+            binding.ReleaseAction = releaseAction;
             EnsureObservedLayout(controller, id);
             if (!RecordCleanupResultLocked(_engine.SetProfile(_editableProfile.CreateSnapshot())))
             {
@@ -573,7 +609,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
 
         return RuntimeOperation.Ok(
-            $"Mapped this control to hold {outputKey} until physical release. Rehearsal Mode currently {(IsRehearsal ? "suppresses" : "allows")} output.");
+            $"Mapped this control to {bindingName}. Rehearsal Mode currently {(IsRehearsal ? "suppresses" : "allows")} output.");
     }
 
     public async Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default)
@@ -1368,6 +1404,47 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         value.StartsWith('F') &&
         int.TryParse(value.AsSpan(1), out var number) &&
         number is >= 13 and <= 24;
+
+    private static KeyboardActionDefinition? CreateKeyboardAction(
+        KeyboardActionMode mode,
+        IReadOnlyList<string>? keyNames)
+    {
+        if (mode == KeyboardActionMode.None)
+        {
+            return new KeyboardActionDefinition();
+        }
+
+        if (keyNames is null || keyNames.Count is 0 or > 8)
+        {
+            return null;
+        }
+
+        var keys = keyNames
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Select(key => new KeyboardOutputKey(key))
+            .Distinct()
+            .ToList();
+        if (keys.Count == 0 || keys.Any(key => !KeyboardOutputCapabilities.IsSupported(key)))
+        {
+            return null;
+        }
+
+        return new KeyboardActionDefinition { Mode = mode, Keys = keys };
+    }
+
+    private static string FormatKeyboardBinding(
+        KeyboardActionDefinition pressAction,
+        KeyboardActionDefinition releaseAction)
+    {
+        var action = pressAction.Mode == KeyboardActionMode.None ? releaseAction : pressAction;
+        var shortcut = string.Join(" + ", action.Keys.Select(key => key.Value));
+        return pressAction.Mode switch
+        {
+            KeyboardActionMode.Tap => $"Tap {shortcut}",
+            KeyboardActionMode.HoldUntilRelease => $"Hold {shortcut} until release",
+            _ => $"On release: {shortcut}"
+        };
+    }
 
     private sealed record ProductionProviders(
         RawInputKeyboardProvider Keyboard,

@@ -210,7 +210,9 @@ meaning without changing Tappy's scan-based physical identity.
 ### T04 — assign and save the harmless mapping
 
 1. Press/release `1 / End` once so its tile is selected.
-2. Choose F24 and click **Assign mapping**.
+2. Click **Choose keyboard assignment…**, search for `F24`, select the direct
+   **F24 key** entry, choose **Hold until controller key is released**, and click
+   **Use selected assignment**.
 3. Confirm the tile says `Hold F24 until release` and Rehearsal Mode still says it
    suppresses output.
 4. Click **Save profile** with all controls released. Record the symbolic path and

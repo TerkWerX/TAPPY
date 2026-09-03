@@ -134,6 +134,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
 
     public string SelectedControlLabel => _selectedControl?.Label ?? "None";
+    public bool CanAssignSelectedControl => _selectedControl is not null;
 
     public string PressedSummary
     {
@@ -218,6 +219,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _selectedControl = tile;
         tile.IsSelected = true;
         Raise(nameof(SelectedControlLabel));
+        Raise(nameof(CanAssignSelectedControl));
     }
 
     public void AssignMapping()
@@ -233,6 +235,23 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         if (result.Succeeded)
         {
             _selectedControl.Action = $"Hold {SelectedOutputKey} until release";
+        }
+    }
+
+    public void AssignKeyboardMapping(KeyboardMappingAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        if (_selectedControl is null)
+        {
+            MappingStatus = "Press a confirmed controller control or click a control tile first.";
+            return;
+        }
+
+        var result = _runtime.AssignKeyboardMapping(_selectedControl.ControlId, assignment);
+        MappingStatus = result.Message;
+        if (result.Succeeded)
+        {
+            _selectedControl.Action = assignment.Name;
         }
     }
 
@@ -466,6 +485,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             _selectedControl.IsSelected = false;
             _selectedControl = null;
             Raise(nameof(SelectedControlLabel));
+            Raise(nameof(CanAssignSelectedControl));
         }
 
         Controls.Clear();

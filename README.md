@@ -16,25 +16,30 @@ The source now implements the safe vertical slice for ContainerId-grouped Raw In
 keyboards plus a dedicated Logitech G13 vendor-HID provider. Both require deliberate
 selection, press/release identification, neutral state, and explicit confirmation
 before input can reach mapping. The UI shows press/release/repeat and simultaneous
-state and maps one control to a harmless F13–F24 output in Rehearsal or normal mode.
-The Release solution build passes with zero warnings or errors; 261 current
-automated tests pass
-(Core 31, Windows 99, App 55, G13 HIL tool 23, Output Witness 53). Exact package and
+state. Its searchable keyboard editor offers named Windows actions, direct keys,
+media/browser keys, and more than 1,500 Ctrl/Alt/Shift/Win combinations with tap,
+hold-until-release, or release-trigger behavior. The milestone witness still uses
+the deliberately harmless F24 mapping. The Release solution build passes with zero
+warnings or errors; 268 current automated tests pass
+(Core 31, Windows 100, App 61, G13 HIL tool 23, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its
 [fillable evidence record](docs/FIRST_MILESTONE_RECORD_TEMPLATE.md) keeps every
 physical check pending until observed. Broader K15, Tartarus, and G13 promotion is
-separate.
+separate. An attended preflight records the operator's report that every G13 control
+responds visually; the formal finite G13 verifier and output/pass-through checks
+remain pending.
 
 Descriptor-only evidence now shows the attached K15 as one four-interface
 `1A2C:2D43` keyboard group, the user-identified Targus numberpad candidate as one
 `05A4:9862` keyboard interface, and the Razer Tartarus as one two-interface
 `1532:0201` keyboard group. The attached G13 is one single-interface `046D:C21C`,
 `FF00:0000` group with 39 code-defined controls in a stable code-rendered tile grid.
-No key/button/stick capture, Controller Passport, or physical HIL run has completed
-for these devices; all remain below Functional/Verified, and the G13 is
-**code-supported only**. See the [G13 support boundary](docs/LOGITECH_G13.md).
+No complete Controller Passport or physical HIL run has completed for these
+devices; all remain below Functional/Verified. The G13 has operator-reported visual
+control response but still requires the finite armed record. See the
+[G13 support boundary](docs/LOGITECH_G13.md).
 
 The owner has authorized the source, documentation, and CI configuration for the
 public `TerkWerX/TAPPY` repository. That source-publication decision does not

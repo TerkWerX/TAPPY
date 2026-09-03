@@ -13,10 +13,6 @@
             <TextBlock Text="{Binding DisplayName}"
                        Foreground="{DynamicResource ComboBoxTextBrush}" />
         </DataTemplate>
-        <DataTemplate x:Key="OutputKeyComboBoxItemTemplate">
-            <TextBlock Text="{Binding}"
-                       Foreground="{DynamicResource ComboBoxTextBrush}" />
-        </DataTemplate>
         <Style x:Key="PanelStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
@@ -122,20 +118,18 @@
                 <Border Style="{StaticResource PanelStyle}">
                     <StackPanel>
                         <TextBlock Text="2 · Map the selected control" FontSize="17" FontWeight="SemiBold" />
-                        <TextBlock Text="Press a confirmed controller key or click its tile. The starter mapping sends one unused function key."
+                        <TextBlock Text="Press a confirmed controller key or click its tile. Then search named Windows actions or choose from thousands of supported key combinations."
                                    TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,10" />
                         <TextBlock Text="{Binding SelectedControlLabel, StringFormat=Selected: {0}}" FontWeight="SemiBold" />
-                        <ComboBox x:Name="OutputKeyPicker" ItemsSource="{Binding HarmlessOutputKeys}"
-                                  SelectedItem="{Binding SelectedOutputKey, Mode=TwoWay}" Margin="0,8,0,10"
-                                  ItemTemplate="{StaticResource OutputKeyComboBoxItemTemplate}"
-                                  AutomationProperties.Name="Harmless output key F13 through F24" />
+                        <Button Content="Choose keyboard assignment…" Click="OpenAssignmentEditor_OnClick"
+                                IsEnabled="{Binding CanAssignSelectedControl}" Margin="0,8,0,10"
+                                AutomationProperties.Name="Open the searchable keyboard assignment editor" />
                         <CheckBox IsChecked="{Binding IsRehearsal, Mode=TwoWay}" Margin="0,0,0,9"
                                   AutomationProperties.Name="Rehearsal Mode">
                             <TextBlock Text="Rehearsal Mode — recognize and illuminate; suppress all output"
                                        TextWrapping="Wrap" />
                         </CheckBox>
                         <WrapPanel>
-                            <Button Content="Assign mapping" Click="AssignMapping_OnClick" />
                             <Button Content="Save profile" Click="SaveProfile_OnClick" />
                         </WrapPanel>
                         <TextBlock Text="{Binding MappingStatus}" TextWrapping="Wrap"

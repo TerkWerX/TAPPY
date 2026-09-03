@@ -1,4 +1,23 @@
+using Tappy.Core.Models;
+
 namespace Tappy.App.Runtime;
+
+public sealed record KeyboardMappingAssignment(
+    string Name,
+    KeyboardActionMode PressMode,
+    IReadOnlyList<string> PressKeys,
+    KeyboardActionMode ReleaseMode,
+    IReadOnlyList<string> ReleaseKeys)
+{
+    public static KeyboardMappingAssignment PressOnce(string name, IReadOnlyList<string> keys) =>
+        new(name, KeyboardActionMode.Tap, keys, KeyboardActionMode.None, []);
+
+    public static KeyboardMappingAssignment HoldUntilRelease(string name, IReadOnlyList<string> keys) =>
+        new(name, KeyboardActionMode.HoldUntilRelease, keys, KeyboardActionMode.None, []);
+
+    public static KeyboardMappingAssignment ReleaseOnce(string name, IReadOnlyList<string> keys) =>
+        new(name, KeyboardActionMode.None, [], KeyboardActionMode.Tap, keys);
+}
 
 public sealed record ControllerChoice(
     string SessionId,
@@ -52,6 +71,7 @@ public interface IControllerRuntime : IAsyncDisposable
     RuntimeOperation BeginIdentification(ControllerChoice device);
     RuntimeOperation ConfirmController();
     RuntimeOperation AssignMapping(string controlId, string outputKey);
+    RuntimeOperation AssignKeyboardMapping(string controlId, KeyboardMappingAssignment assignment);
     Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default);
     RuntimeOperation EmergencyStop(string reason);
 }

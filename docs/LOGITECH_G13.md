@@ -1,6 +1,6 @@
 # Logitech G13 support boundary
 
-> Status: enumerated and code-supported; physical control/HIL evidence pending
+> Status: code-supported with an attended all-control visual-response report; formal finite HIL evidence pending
 >
 > Exact physical identity: USB `046D:C21C`, Raw Input `RIM_TYPEHID`, usage
 > page/usage `FF00:0000`
@@ -46,9 +46,13 @@ bits, joystick direction thresholds, simultaneous transitions, exact device
 identity, `C232` exclusion, deliberate confirmation, mapping/profile round-trip,
 and cleanup. Another 23 deterministic tests cover the finite verifier's state
 machine, exact-device/explicit-arm refusal, interruption handling, and aggregate
-evidence contract. The attached G13 has been enumerated only. No live G13 button or
-stick capture, mapped-output run, unplug-while-held run, or completed HIL record
-exists, so the device is not Functional or Verified.
+evidence contract. During the final accessibility-build preflight, the operator
+selected, identified, and confirmed the attached G13 with Rehearsal Mode checked,
+then reported that every G13 control responded visually in Tappy. The ignored local
+run record preserves the statement and screenshot. This is useful attended evidence,
+but it is not the finite verifier: no aggregate verifier record, mapped-output run,
+pass-through witness, unplug-while-held run, or completed HIL record exists, so the
+device is not Functional or Verified.
 
 The finite verifier and its safeguards are described in
 [`HARDWARE_TEST_STATION.md`](HARDWARE_TEST_STATION.md). It must be explicitly armed;

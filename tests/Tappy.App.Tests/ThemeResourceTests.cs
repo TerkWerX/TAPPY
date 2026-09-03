@@ -97,22 +97,25 @@ public sealed class ThemeResourceTests
     }
 
     [Fact]
-    public void Main_window_dropdowns_and_control_labels_are_readable()
+    public void Main_window_device_dropdown_assignment_launcher_and_control_labels_are_readable()
     {
         var document = XDocument.Load(SourcePath("src", "Tappy.App", "MainWindow.xaml"));
         var devicePicker = NamedElement(document, "ComboBox", "DevicePicker");
-        var outputPicker = NamedElement(document, "ComboBox", "OutputKeyPicker");
 
         Assert.Equal(
             "{StaticResource ControllerChoiceComboBoxItemTemplate}",
             devicePicker.Attribute("ItemTemplate")?.Value);
         Assert.Null(devicePicker.Attribute("DisplayMemberPath"));
-        Assert.Equal(
-            "{StaticResource OutputKeyComboBoxItemTemplate}",
-            outputPicker.Attribute("ItemTemplate")?.Value);
 
         AssertReadableTemplate(document, "ControllerChoiceComboBoxItemTemplate", "{Binding DisplayName}");
-        AssertReadableTemplate(document, "OutputKeyComboBoxItemTemplate", "{Binding}");
+
+        var assignmentButton = document
+            .Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Button" &&
+                element.Attribute("Content")?.Value == "Choose keyboard assignment…");
+        Assert.Equal("{Binding CanAssignSelectedControl}", assignmentButton.Attribute("IsEnabled")?.Value);
+        Assert.Equal("OpenAssignmentEditor_OnClick", assignmentButton.Attribute("Click")?.Value);
 
         var tilePanel = document
             .Descendants()
@@ -141,6 +144,22 @@ public sealed class ThemeResourceTests
                     "Rehearsal Mode —",
                     StringComparison.Ordinal) == true);
         Assert.Equal("Wrap", rehearsalLabel.Attribute("TextWrapping")?.Value);
+    }
+
+    [Fact]
+    public void Assignment_editor_exposes_search_category_behavior_and_virtualized_results()
+    {
+        var document = XDocument.Load(
+            SourcePath("src", "Tappy.App", "KeyboardAssignmentWindow.xaml"));
+
+        Assert.NotNull(NamedElement(document, "TextBox", "SearchBox"));
+        Assert.NotNull(NamedElement(document, "ComboBox", "CategoryBox"));
+        var behavior = NamedElement(document, "ComboBox", "TimingBox");
+        Assert.Equal(3, behavior.Elements().Count(element => element.Name.LocalName == "ComboBoxItem"));
+
+        var list = NamedElement(document, "ListBox", "AssignmentList");
+        Assert.Equal("True", list.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
+        Assert.Equal("Recycling", list.Attribute("VirtualizingPanel.VirtualizationMode")?.Value);
     }
 
     private static void AssertComboBoxStyleUsesDedicatedBrushes(XDocument document)

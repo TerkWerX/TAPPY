@@ -67,6 +67,76 @@ public sealed class DeviceAwareControllerRuntimeTests
     }
 
     [Fact]
+    public async Task Expanded_assignment_dispatches_a_balanced_three_key_chord()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)43, @"\\?\HID#VID_1234&PID_5678#CHORD");
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
+            var output = new RecordingOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider, output, new AtomicProfileStore(root));
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirm(runtime, host, descriptor.SessionHandle, 0x4F, 0x61);
+            var controlId = Tappy.Core.Input.ControlId.FromRawInputKeyboard(0x4F).Value;
+            var assignment = KeyboardMappingAssignment.PressOnce(
+                "Save as — Ctrl + Shift + S", ["CTRL", "SHIFT", "S"]);
+
+            Assert.True(runtime.AssignKeyboardMapping(controlId, assignment).Succeeded);
+            runtime.IsRehearsal = false;
+            host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Make));
+            host.Emit(Packet(descriptor.SessionHandle, 0x4F, 0x61, RawKeyboardFlags.Break));
+
+            Assert.Equal(["CTRL", "SHIFT", "S"], output.Down.Single().Keys.Select(key => key.Value));
+            Assert.Equal(["S", "SHIFT", "CTRL"], output.Up.Single().Keys.Select(key => key.Value));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Expanded_assignment_rejects_unknown_keys_before_profile_mutation()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var descriptor = DeviceDescriptorSanitizer.CreateKeyboard(
+                (nint)44, @"\\?\HID#VID_1234&PID_5678#UNKNOWN_KEY");
+            var host = new FakeMessageHost();
+            var provider = new RawInputKeyboardProvider(
+                new FakeEnumerator(descriptor),
+                host,
+                keyboardIsNeutral: static () => true);
+            await using var runtime = new DeviceAwareControllerRuntime(
+                provider, new RecordingOutput(), new AtomicProfileStore(root));
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirm(runtime, host, descriptor.SessionHandle, 0x4F, 0x61);
+            var controlId = Tappy.Core.Input.ControlId.FromRawInputKeyboard(0x4F).Value;
+
+            var result = runtime.AssignKeyboardMapping(
+                controlId,
+                KeyboardMappingAssignment.PressOnce("Unknown", ["NOT-A-KEY"]));
+
+            Assert.False(result.Succeeded);
+            Assert.Contains("unsupported", result.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Rehearsal_runs_recognition_without_calling_output()
     {
         var root = NewTemporaryDirectory();

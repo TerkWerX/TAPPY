@@ -105,4 +105,22 @@ public sealed class InjectedInputMarkerAndOutputTests
         Assert.Equal(2, sink.Batches.Count);
         Assert.All(sink.Batches[1], item => Assert.True(item.Flags.HasFlag(KeyboardInjectionFlags.KeyUp)));
     }
+
+    [Fact]
+    public void Windows_backend_translates_every_key_promised_by_the_portable_contract()
+    {
+        var sink = new RecordingKeyboardInputSink();
+        var output = new SendInputKeyboardOutput(sink);
+        var ancestry = new ExecutionAncestry("catalog-contract");
+
+        foreach (var key in KeyboardOutputCapabilities.SupportedKeys)
+        {
+            var outputKey = new KeyboardOutputKey(key);
+            output.KeyDown(new KeyboardOutputRequest(
+                "catalog-contract", [outputKey], output.Marker, ancestry));
+        }
+
+        Assert.Equal(KeyboardOutputCapabilities.SupportedKeys.Count, sink.Batches.Count);
+        Assert.All(sink.Batches, batch => Assert.Single(batch));
+    }
 }
