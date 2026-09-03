@@ -51,7 +51,11 @@ ComboBox and disabled-button text/background contrast, that High Contrast uses
 Windows system colors, that the device dropdown overrides the global TextBlock
 foreground which made unselected device names unreadable during the first attended
 T01 attempt, that the expanded assignment results are virtualized and searchable,
-and that long control/Rehearsal labels wrap rather than clip.
+and that long control/Rehearsal labels wrap rather than clip. After the first
+expanded-editor visual pass exposed pale inherited text on native white list and
+selector surfaces, dedicated assignment-list resources were added: standard-theme
+title, description, and selected-row pairs are now mechanically held to at least
+7:1 contrast, while High Contrast routes through Windows system colors.
 
 The build above validates the current source tree. Source, documentation, and CI are
 authorized for the public repository. Clean-checkout CI and every local package run

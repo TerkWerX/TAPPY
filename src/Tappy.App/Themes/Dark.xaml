@@ -12,6 +12,11 @@
     <Color x:Key="BorderColor">#3A4654</Color>
     <Color x:Key="ComboBoxTextColor">#101318</Color>
     <Color x:Key="ComboBoxBackgroundColor">#F3F7FA</Color>
+    <Color x:Key="AssignmentListTextColor">#17202A</Color>
+    <Color x:Key="AssignmentListMutedTextColor">#40515F</Color>
+    <Color x:Key="AssignmentListBackgroundColor">#FFFFFF</Color>
+    <Color x:Key="AssignmentListSelectionColor">#D4EAF5</Color>
+    <Color x:Key="AssignmentListSelectionTextColor">#101820</Color>
     <Color x:Key="ButtonDisabledTextColor">#A8B3BE</Color>
     <Color x:Key="ButtonDisabledBackgroundColor">#2A313B</Color>
     <Color x:Key="ButtonDisabledBorderColor">#52606D</Color>
@@ -28,6 +33,11 @@
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
     <SolidColorBrush x:Key="ComboBoxTextBrush" Color="{StaticResource ComboBoxTextColor}" />
     <SolidColorBrush x:Key="ComboBoxBackgroundBrush" Color="{StaticResource ComboBoxBackgroundColor}" />
+    <SolidColorBrush x:Key="AssignmentListTextBrush" Color="{StaticResource AssignmentListTextColor}" />
+    <SolidColorBrush x:Key="AssignmentListMutedTextBrush" Color="{StaticResource AssignmentListMutedTextColor}" />
+    <SolidColorBrush x:Key="AssignmentListBackgroundBrush" Color="{StaticResource AssignmentListBackgroundColor}" />
+    <SolidColorBrush x:Key="AssignmentListSelectionBrush" Color="{StaticResource AssignmentListSelectionColor}" />
+    <SolidColorBrush x:Key="AssignmentListSelectionTextBrush" Color="{StaticResource AssignmentListSelectionTextColor}" />
     <SolidColorBrush x:Key="ButtonDisabledTextBrush" Color="{StaticResource ButtonDisabledTextColor}" />
     <SolidColorBrush x:Key="ButtonDisabledBackgroundBrush" Color="{StaticResource ButtonDisabledBackgroundColor}" />
     <SolidColorBrush x:Key="ButtonDisabledBorderBrush" Color="{StaticResource ButtonDisabledBorderColor}" />

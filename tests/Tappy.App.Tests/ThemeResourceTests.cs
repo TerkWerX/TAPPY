@@ -36,6 +36,21 @@ public sealed class ThemeResourceTests
         Assert.True(
             ContrastRatio(disabledForeground, disabledBackground) >= 4.5,
             $"{themeFile} disabled button labels must remain plainly readable.");
+
+        var assignmentForeground = ResourceValue(document, "Color", "AssignmentListTextColor");
+        var assignmentMuted = ResourceValue(document, "Color", "AssignmentListMutedTextColor");
+        var assignmentBackground = ResourceValue(document, "Color", "AssignmentListBackgroundColor");
+        var assignmentSelection = ResourceValue(document, "Color", "AssignmentListSelectionColor");
+        var assignmentSelectionText = ResourceValue(document, "Color", "AssignmentListSelectionTextColor");
+        Assert.True(
+            ContrastRatio(assignmentForeground, assignmentBackground) >= 7,
+            $"{themeFile} assignment titles must meet enhanced contrast on the native light list surface.");
+        Assert.True(
+            ContrastRatio(assignmentMuted, assignmentBackground) >= 7,
+            $"{themeFile} assignment descriptions must meet enhanced contrast on the native light list surface.");
+        Assert.True(
+            ContrastRatio(assignmentSelectionText, assignmentSelection) >= 7,
+            $"{themeFile} selected assignment text must meet enhanced contrast.");
         AssertComboBoxStyleUsesDedicatedBrushes(document);
     }
 
@@ -60,6 +75,18 @@ public sealed class ThemeResourceTests
         Assert.Contains(
             "SystemColors.ControlColorKey",
             ResourceValue(document, "SolidColorBrush", "ButtonDisabledBackgroundBrush"),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SystemColors.WindowTextColorKey",
+            ResourceValue(document, "SolidColorBrush", "AssignmentListTextBrush"),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SystemColors.WindowColorKey",
+            ResourceValue(document, "SolidColorBrush", "AssignmentListBackgroundBrush"),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SystemColors.HighlightTextColorKey",
+            ResourceValue(document, "SolidColorBrush", "AssignmentListSelectionTextBrush"),
             StringComparison.Ordinal);
         AssertComboBoxStyleUsesDedicatedBrushes(document);
     }
@@ -153,11 +180,20 @@ public sealed class ThemeResourceTests
             SourcePath("src", "Tappy.App", "KeyboardAssignmentWindow.xaml"));
 
         Assert.NotNull(NamedElement(document, "TextBox", "SearchBox"));
-        Assert.NotNull(NamedElement(document, "ComboBox", "CategoryBox"));
+        var category = NamedElement(document, "ComboBox", "CategoryBox");
+        Assert.Equal("{StaticResource AssignmentCategoryItemTemplate}", category.Attribute("ItemTemplate")?.Value);
         var behavior = NamedElement(document, "ComboBox", "TimingBox");
         Assert.Equal(3, behavior.Elements().Count(element => element.Name.LocalName == "ComboBoxItem"));
+        Assert.All(
+            behavior.Descendants().Where(element => element.Name.LocalName == "TextBlock"),
+            text => Assert.Equal(
+                "{DynamicResource ComboBoxTextBrush}",
+                text.Attribute("Foreground")?.Value));
 
         var list = NamedElement(document, "ListBox", "AssignmentList");
+        Assert.Equal("{DynamicResource AssignmentListBackgroundBrush}", list.Attribute("Background")?.Value);
+        Assert.Equal("{DynamicResource AssignmentListTextBrush}", list.Attribute("Foreground")?.Value);
+        Assert.Equal("{StaticResource AssignmentListItemStyle}", list.Attribute("ItemContainerStyle")?.Value);
         Assert.Equal("True", list.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
         Assert.Equal("Recycling", list.Attribute("VirtualizingPanel.VirtualizationMode")?.Value);
     }
