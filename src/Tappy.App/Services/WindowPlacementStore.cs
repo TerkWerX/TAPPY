@@ -44,6 +44,12 @@ public sealed class WindowPlacementStore
 
     public WindowPresentationMode CurrentMode { get; private set; } = WindowPresentationMode.Full;
 
+    public double ControllerPhotoPaneWidth
+    {
+        get => Math.Clamp(_document.ControllerPhotoPaneWidth, 240, 1200);
+        set => _document.ControllerPhotoPaneWidth = Math.Clamp(value, 240, 1200);
+    }
+
     public void Restore(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -168,6 +174,7 @@ public sealed class WindowPlacementStore
         public bool Maximized { get; set; }
         public string Monitor { get; set; } = string.Empty;
         public string LastMode { get; set; } = WindowPresentationMode.Full.ToString();
+        public double ControllerPhotoPaneWidth { get; set; } = 420;
         public Dictionary<string, WindowSize> Sizes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 

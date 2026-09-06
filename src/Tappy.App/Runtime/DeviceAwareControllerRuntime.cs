@@ -4,6 +4,7 @@ using Tappy.Core.Input;
 using Tappy.Core.Models;
 using Tappy.Core.Output;
 using Tappy.Core.Profiles;
+using Tappy.App.Services;
 using Tappy.Windows.Diagnostics;
 using Tappy.Windows.Input;
 using Tappy.Windows.Lifecycle;
@@ -13,15 +14,17 @@ using Tappy.Windows.Profiles;
 namespace Tappy.App.Runtime;
 
 /// <summary>
-/// Composes the keyboard and physical Logitech G13 Raw Input providers with the
-/// platform-neutral mapping engine. Identification events have a separate
-/// target-only path and can never execute a binding.
+/// Composes keyboard Raw Input, the physical Logitech G13 vendor HID provider,
+/// and Windows MIDI input with the platform-neutral mapping engine.
+/// Identification events have a separate target-only path and can never execute
+/// a binding.
 /// </summary>
 public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 {
     private const string DefaultProfileId = "default";
     private const string KeyboardProviderId = "raw-input";
     private const string LogitechG13ProviderId = "raw-hid-g13";
+    private const string MidiProviderId = WinMmMidiInputProvider.ProviderId;
     private const string OutputSafetyFailureStatus =
         "Needs attention: Windows rejected a Tappy output transition, so Tappy cannot confirm that every owned output is released. Mapping output is disarmed and source input remains fail-open pass-through; restart Tappy before rearming.";
     private const string OutputSafetyFailureMappingStatus =
@@ -29,10 +32,13 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     private readonly object _gate = new();
     private readonly RawInputKeyboardProvider _keyboardProvider;
     private readonly LogitechG13InputProvider? _logitechG13Provider;
+    private readonly WinMmMidiInputProvider? _midiProvider;
     private readonly IWindowsLifecycleSignalSource? _applicationLifecycleSource;
     private readonly AtomicProfileStore _profileStore;
     private readonly MappingEngine _engine;
     private readonly IControllerActionOutput _actionOutput;
+    private readonly WinMmMidiOutput? _controllerLedOutput;
+    private readonly ILogitechG13LightingOutput? _logitechG13LightingOutput;
     private readonly Action? _beforeEngineProcess;
     private readonly Action? _beforeDisposeGate;
     private readonly InputDiagnosticAggregate _diagnostics = new();
@@ -68,7 +74,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             outputs.Keyboard,
             profileStore,
             applicationLifecycleSource,
-            actionOutput: outputs.Actions)
+            actionOutput: outputs.Actions,
+            midiInputProvider: providers.Midi,
+            controllerLedOutput: outputs.ControllerLeds,
+            logitechG13LightingOutput: outputs.LogitechG13Lighting)
     {
     }
 
@@ -79,7 +88,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         IWindowsLifecycleSignalSource? applicationLifecycleSource = null,
         Action? beforeEngineProcess = null,
         Action? beforeDisposeGate = null,
-        IControllerActionOutput? actionOutput = null)
+        IControllerActionOutput? actionOutput = null,
+        WinMmMidiInputProvider? midiInputProvider = null,
+        WinMmMidiOutput? controllerLedOutput = null,
+        ILogitechG13LightingOutput? logitechG13LightingOutput = null)
         : this(
             provider,
             null,
@@ -88,7 +100,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             applicationLifecycleSource,
             beforeEngineProcess,
             beforeDisposeGate,
-            actionOutput)
+            actionOutput,
+            midiInputProvider,
+            controllerLedOutput,
+            logitechG13LightingOutput)
     {
     }
 
@@ -100,12 +115,18 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         IWindowsLifecycleSignalSource? applicationLifecycleSource = null,
         Action? beforeEngineProcess = null,
         Action? beforeDisposeGate = null,
-        IControllerActionOutput? actionOutput = null)
+        IControllerActionOutput? actionOutput = null,
+        WinMmMidiInputProvider? midiInputProvider = null,
+        WinMmMidiOutput? controllerLedOutput = null,
+        ILogitechG13LightingOutput? logitechG13LightingOutput = null)
     {
         _keyboardProvider = keyboardProvider ?? throw new ArgumentNullException(nameof(keyboardProvider));
         _logitechG13Provider = logitechG13Provider;
+        _midiProvider = midiInputProvider;
         _profileStore = profileStore ?? throw new ArgumentNullException(nameof(profileStore));
         _actionOutput = actionOutput ?? NullControllerActionOutput.Instance;
+        _controllerLedOutput = controllerLedOutput;
+        _logitechG13LightingOutput = logitechG13LightingOutput;
         _beforeEngineProcess = beforeEngineProcess;
         _beforeDisposeGate = beforeDisposeGate;
         _applicationLifecycleSource = ReferenceEquals(applicationLifecycleSource, keyboardProvider) ||
@@ -139,6 +160,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             // Production providers share the keyboard provider's native host. It is
             // the sole lifecycle/fault authority so one Windows message cannot
             // trigger cleanup twice.
+        }
+        if (_midiProvider is not null)
+        {
+            _midiProvider.IdentificationInputReceived += MidiProvider_OnIdentificationInputReceived;
+            _midiProvider.InputReceived += MidiProvider_OnInputReceived;
+            _midiProvider.Faulted += Provider_OnFaulted;
         }
         if (_applicationLifecycleSource is not null)
         {
@@ -270,6 +297,10 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
                 UpdateOptionalCapabilityWarningLocked();
             }
         }
+        if (_midiProvider is not null)
+        {
+            await _midiProvider.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         RefreshDevices();
         _initialized = true;
@@ -400,8 +431,9 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             else if (!SetCaptureTarget(descriptor))
             {
                 _candidate = null;
-                failure =
-                    "Nothing was armed. Release every keyboard and controller control, then try again with the mouse; refresh the device list if everything is already neutral.";
+                failure = descriptor.ProviderId == MidiProviderId
+                    ? "Nothing was armed because Windows could not open that MIDI input. Close any application that has exclusive use of the MIDI port, click Refresh, and try again."
+                    : "Nothing was armed. Release every keyboard and controller control, then try again with the mouse; refresh the device list if everything is already neutral.";
             }
             else
             {
@@ -466,18 +498,29 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
             _engine.Activation.Confirm();
             var identity = ToIdentity(descriptor);
-            controller = FindEditableController(descriptor.PersistentId) ??
-                         ControllerProfile.Create(
+            var midiModel = MidiControllerModelCatalog.Find(descriptor.ProviderId, descriptor.DisplayName);
+            var existingController = FindEditableController(descriptor.PersistentId);
+            controller = existingController ?? ControllerProfile.Create(
                              identity,
                              descriptor.ProviderId == LogitechG13ProviderId
                                  ? LogitechG13InputProvider.SupportedControls.Select(item => item.ControlId)
+                                 : midiModel is not null
+                                     ? midiModel.Controls.Select(item => item.ControlId)
                                  : null,
                              defaultLayerCount: 3);
             controller.Identity = identity;
             controller.DisplayName = descriptor.DisplayName;
             if (descriptor.ProviderId == LogitechG13ProviderId)
             {
-                controller.Layout = CreateLogitechG13Layout();
+                controller.Layout = MergeCodeDefinedLayout(
+                    controller.Layout,
+                    CreateLogitechG13Layout());
+            }
+            else if (midiModel is not null)
+            {
+                controller.Layout = MergeCodeDefinedLayout(
+                    controller.Layout,
+                    midiModel.Layout);
             }
             ApplyAvailableSourceMode(controller);
             if (!_editableProfile.Controllers.Contains(controller))
@@ -509,13 +552,17 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         PublishReleasedUpdates(restoredControls);
         RaiseState(
             identificationStatus: "Controller confirmed for this session. Only its events can reach mappings.",
-            status: controller.SourceMode.Effective == EffectiveSourceMode.PassThrough
+            status: descriptor.ProviderId == MidiProviderId
+                ? "MIDI controller ready. Its controls can run any Tappy assignment."
+                : controller.SourceMode.Effective == EffectiveSourceMode.PassThrough
                 ? "Controller ready in Device-aware pass-through."
                 : "Needs attention: the requested source backend is unavailable, so mappings remain disarmed and source input passes through.",
             activeControllerLabel: descriptor.DisplayName,
             activeLayerName: controller.Layers.First(layer => layer.Id == controller.ActiveLayerId).Name,
             sourceLabel: SourceLabel(controller));
-        return RuntimeOperation.Ok("Controller confirmed. Original input remains pass-through.");
+        return RuntimeOperation.Ok(descriptor.ProviderId == MidiProviderId
+            ? "MIDI controller confirmed. Its controls can now be assigned to any Tappy action."
+            : "Controller confirmed. Original input remains pass-through.");
     }
 
     public RuntimeOperation AssignMapping(string controlId, string outputKey)
@@ -621,6 +668,369 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         return RuntimeOperation.Ok(
             $"Mapped this control to {bindingName}. Rehearsal Mode currently {(IsRehearsal ? "suppresses" : "allows")} output.");
     }
+
+    public ControllerActionAssignment? GetControllerAction(string controlId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (string.IsNullOrWhiteSpace(controlId))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            if (_confirmed is null)
+            {
+                return null;
+            }
+
+            var controller = FindEditableController(_confirmed.PersistentId);
+            var layer = controller?.Layers.FirstOrDefault(item => item.Id == controller.ActiveLayerId);
+            var binding = layer?.Bindings.FirstOrDefault(item =>
+                item.Enabled && item.ControlId.Value == controlId);
+            if (binding is null)
+            {
+                return null;
+            }
+
+            var press = binding.PressSequence?.Clone() ?? new ControllerActionSequenceDefinition();
+            var release = binding.ReleaseSequence?.Clone() ?? new ControllerActionSequenceDefinition();
+            if (press.IsEmpty && binding.PressAction is { Mode: not KeyboardActionMode.None } pressAction)
+            {
+                press = KeyboardActionToSequence(binding.Name, pressAction);
+            }
+
+            if (release.IsEmpty && binding.ReleaseAction is { Mode: not KeyboardActionMode.None } releaseAction)
+            {
+                release = KeyboardActionToSequence(binding.Name, releaseAction);
+                release.Mode = ControllerActionSequenceMode.RunOnce;
+            }
+
+            if (press.IsEmpty && release.IsEmpty)
+            {
+                return null;
+            }
+
+            return new ControllerActionAssignment(binding.Name, press, release);
+        }
+    }
+
+    public RuntimeOperation ReorderControls(IReadOnlyList<string> orderedControlIds)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(orderedControlIds);
+        lock (_gate)
+        {
+            if (_confirmed is null)
+            {
+                return RuntimeOperation.Failed("Confirm a controller before rearranging its squares.");
+            }
+
+            var controller = FindEditableController(_confirmed.PersistentId);
+            if (controller is null)
+            {
+                return RuntimeOperation.Failed("The confirmed controller has no editable layout.");
+            }
+
+            var current = GetControlsInPresentationOrder(controller);
+            var requested = orderedControlIds
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => new ControlId(value))
+                .ToArray();
+            if (requested.Length != current.Count ||
+                requested.Distinct().Count() != requested.Length ||
+                !requested.ToHashSet().SetEquals(current))
+            {
+                return RuntimeOperation.Failed("The controller layout changed while the square was being moved. Refresh and try again.");
+            }
+
+            ApplyPresentationOrder(controller.Layout, requested);
+            controller.Normalize();
+            if (!RecordCleanupResultLocked(_engine.SetProfile(_editableProfile.CreateSnapshot())))
+            {
+                return RuntimeOperation.Failed(
+                    "The square order changed locally, but Tappy could not safely publish the updated profile. Restart before arming output.");
+            }
+
+            _engine.ConnectController(controller.Identity);
+        }
+
+        return RuntimeOperation.Ok("Controller square arrangement updated. Save the profile to keep it for this device.");
+    }
+
+    public ControllerLayoutWorkspace? GetControllerLayout()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_gate)
+        {
+            if (_confirmed is null || FindEditableController(_confirmed.PersistentId) is not { } controller)
+            {
+                return null;
+            }
+
+            var controls = controller.Layout.Rows
+                .SelectMany((row, rowIndex) => row.Controls.Select((control, columnIndex) =>
+                    (Control: control, Row: rowIndex, Column: columnIndex)))
+                .Where(item => item.Control.ControlId is not null)
+                .Select(item => new ControllerControlPlacement(
+                    item.Control.ControlId!.Value.Value,
+                    item.Row,
+                    item.Column,
+                    item.Control.X,
+                    item.Control.Y,
+                    item.Control.Width,
+                    item.Control.Height,
+                    item.Control.ColorKey,
+                    item.Control.AnalogRawAtMinimum,
+                    item.Control.AnalogRawAtMaximum,
+                    item.Control.AnalogRawAtCenter,
+                    item.Control.EncoderDegreesPerStep,
+                    item.Control.EncoderReversed))
+                .ToArray();
+            return new ControllerLayoutWorkspace(
+                controller.Layout.GridColumns,
+                controller.Layout.GridRows,
+                controller.Layout.SnapToGrid,
+                controls);
+        }
+    }
+
+    public RuntimeOperation UpdateControllerLayout(ControllerLayoutWorkspace workspace)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(workspace);
+        lock (_gate)
+        {
+            if (_confirmed is null || FindEditableController(_confirmed.PersistentId) is not { } controller)
+            {
+                return RuntimeOperation.Failed("Confirm a controller before changing its layout workspace.");
+            }
+
+            var definitions = controller.Layout.Rows
+                .SelectMany(row => row.Controls)
+                .Where(control => control.ControlId is not null)
+                .GroupBy(control => control.ControlId!.Value.Value, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
+            var requested = workspace.Controls
+                .Select(control => control.ControlId)
+                .ToArray();
+            if (requested.Length != definitions.Count ||
+                requested.Distinct(StringComparer.Ordinal).Count() != requested.Length ||
+                !requested.ToHashSet(StringComparer.Ordinal).SetEquals(definitions.Keys))
+            {
+                return RuntimeOperation.Failed(
+                    "The controller controls changed while its layout was being edited. Refresh and try again.");
+            }
+
+            controller.Layout.GridColumns = Math.Clamp(workspace.GridColumns, 1, 40);
+            controller.Layout.GridRows = Math.Clamp(workspace.GridRows, 1, 40);
+            controller.Layout.SnapToGrid = workspace.SnapToGrid;
+            foreach (var placement in workspace.Controls)
+            {
+                var definition = definitions[placement.ControlId];
+                definition.X = double.IsFinite(placement.X ?? double.NaN)
+                    ? Math.Max(0, placement.X!.Value)
+                    : null;
+                definition.Y = double.IsFinite(placement.Y ?? double.NaN)
+                    ? Math.Max(0, placement.Y!.Value)
+                    : null;
+                definition.Width = placement.Width;
+                definition.Height = placement.Height;
+                definition.ColorKey = placement.ColorKey;
+                definition.AnalogRawAtMinimum = placement.AnalogRawAtMinimum;
+                definition.AnalogRawAtMaximum = placement.AnalogRawAtMaximum;
+                definition.AnalogRawAtCenter = placement.AnalogRawAtCenter;
+                definition.EncoderDegreesPerStep = placement.EncoderDegreesPerStep;
+                definition.EncoderReversed = placement.EncoderReversed;
+            }
+
+            controller.Normalize();
+            if (!RecordCleanupResultLocked(_engine.SetProfile(_editableProfile.CreateSnapshot())))
+            {
+                return RuntimeOperation.Failed(
+                    "The layout changed locally, but Tappy could not safely publish the updated profile. Restart before arming output.");
+            }
+
+            _engine.ConnectController(controller.Identity);
+        }
+
+        return RuntimeOperation.Ok("Controller layout updated. Save the profile to retain its positions and sizes.");
+    }
+
+    public RuntimeOperation SyncControllerLedColors(IReadOnlyDictionary<string, string> colors)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(colors);
+        RuntimeInputDevice confirmed;
+        lock (_gate)
+        {
+            if (_confirmed is null)
+            {
+                return RuntimeOperation.Failed("Confirm a controller before synchronizing its lights.");
+            }
+
+            confirmed = _confirmed;
+        }
+
+        if (confirmed.ProviderId == LogitechG13ProviderId)
+        {
+            if (_logitechG13LightingOutput is null)
+            {
+                return RuntimeOperation.Failed("Logitech G13 lighting output is unavailable in this Tappy session.");
+            }
+
+            var requestedColors = colors.Values
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (requestedColors.Length > 1)
+            {
+                return RuntimeOperation.Failed(
+                    "The G13 has one whole-device RGB zone. Choose one color for the complete controller before syncing.");
+            }
+
+            var colorKey = requestedColors.SingleOrDefault() ?? "Default";
+            var (red, green, blue) = G13Rgb(colorKey);
+            try
+            {
+                _logitechG13LightingOutput.SetBacklightRgb(confirmed.PersistentId, red, green, blue);
+                return RuntimeOperation.Ok(
+                    $"Synchronized the G13 whole-device backlight to {G13ColorLabel(colorKey)}. Its keys share this one RGB color.");
+            }
+            catch (Exception exception)
+            {
+                return RuntimeOperation.Failed($"The confirmed Logitech G13 rejected lighting synchronization: {exception.Message}");
+            }
+        }
+
+        if (_controllerLedOutput is null)
+        {
+            return RuntimeOperation.Failed("Hardware LED output is unavailable in this Tappy session.");
+        }
+
+        if (MidiControllerModelCatalog.Find(confirmed.ProviderId, confirmed.DisplayName)?.Id !=
+            MidiControllerModelCatalog.AkaiApcMiniV1Id)
+        {
+            return RuntimeOperation.Failed(
+                "Tappy has no verified lighting protocol for this controller. Its square colors remain visual only.");
+        }
+
+        var outputs = WinMmMidiOutput.GetDevices(false)
+            .Where(device => MidiControllerModelCatalog.Find(MidiProviderId, device.Name)?.Id ==
+                             MidiControllerModelCatalog.AkaiApcMiniV1Id)
+            .ToArray();
+        if (outputs.Length != 1)
+        {
+            return RuntimeOperation.Failed(outputs.Length == 0
+                ? "The APC MINI MIDI output port is not available. Square colors were kept in Tappy."
+                : "More than one APC MINI output port is present, so Tappy refused to guess which unit to light.");
+        }
+
+        var messages = colors
+            .Select(item => (Note: TryParseApcMiniLedNote(item.Key), Color: item.Value))
+            .Where(item => item.Note is not null)
+            .OrderBy(item => item.Note)
+            .ToArray();
+        try
+        {
+            foreach (var item in messages)
+            {
+                _controllerLedOutput.Send(
+                    outputs[0].Name,
+                    MidiMessageParser.Create(
+                        MidiShortMessageKind.NoteOn,
+                        channel: 1,
+                        item.Note!.Value,
+                        ApcMiniVelocity(item.Color)));
+            }
+
+            return RuntimeOperation.Ok(
+                $"Synchronized {messages.Length} APC MINI lights. This model uses green, amber, red, or off; Tappy maps the visual palette to those verified colors.");
+        }
+        catch (Exception exception)
+        {
+            return RuntimeOperation.Failed($"The APC MINI rejected LED synchronization: {exception.Message}");
+        }
+    }
+
+    public ControllerLedColorCapability? GetControllerLedColorCapability()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_gate)
+        {
+            if (_confirmed is not null &&
+                MidiControllerModelCatalog.Find(_confirmed.ProviderId, _confirmed.DisplayName)?.Id ==
+                MidiControllerModelCatalog.AkaiApcMiniV1Id)
+            {
+                return new ControllerLedColorCapability(
+                    MidiControllerModelCatalog.AkaiApcMiniV1Id,
+                    "APC MINI v1 — off, green, red, and amber",
+                    ["Default", "Green", "Red", "Amber"],
+                    FindEditableController(_confirmed.PersistentId)?.Layout.Rows
+                        .SelectMany(row => row.Controls)
+                        .Where(control => control.ControlId is { } id &&
+                                          TryParseApcMiniLedNote(id.Value) is not null)
+                        .Select(control => control.ControlId!.Value.Value)
+                        .ToHashSet(StringComparer.Ordinal) ??
+                    new HashSet<string>(StringComparer.Ordinal));
+            }
+
+            if (_confirmed?.ProviderId == LogitechG13ProviderId)
+            {
+                return new ControllerLedColorCapability(
+                    "logitech-g13-global-rgb",
+                    "G13 lighting — one whole-device RGB zone; individual key colors are unavailable",
+                    ["Default", "Red", "Amber", "Yellow", "Green", "Teal", "Blue", "Purple", "Pink", "White"],
+                    new HashSet<string>(StringComparer.Ordinal),
+                    ControllerLightingTopology.Global);
+            }
+
+            return null;
+        }
+    }
+
+    internal static int? TryParseApcMiniLedNote(string controlId)
+    {
+        const string marker = ":note-";
+        var markerIndex = controlId.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0 ||
+            !int.TryParse(controlId.AsSpan(markerIndex + marker.Length), out var note))
+        {
+            return null;
+        }
+
+        return note is >= 0 and <= 71 or >= 82 and <= 89 ? note : null;
+    }
+
+    internal static int ApcMiniVelocity(string? colorKey) =>
+        colorKey?.Trim().ToLowerInvariant() switch
+        {
+            "green" or "teal" => 1,
+            "red" or "pink" => 3,
+            "amber" or "orange" or "yellow" or "white" => 5,
+            _ => 0,
+        };
+
+    internal static (byte Red, byte Green, byte Blue) G13Rgb(string? colorKey) =>
+        colorKey?.Trim().ToLowerInvariant() switch
+        {
+            "red" => (255, 0, 0),
+            "amber" => (255, 160, 0),
+            "yellow" => (255, 255, 0),
+            "green" => (0, 255, 0),
+            "teal" => (0, 255, 200),
+            "blue" => (0, 90, 255),
+            "purple" => (150, 0, 255),
+            "pink" => (255, 0, 150),
+            "white" => (255, 255, 255),
+            _ => (0, 0, 0),
+        };
+
+    private static string G13ColorLabel(string? colorKey) =>
+        string.IsNullOrWhiteSpace(colorKey) ||
+        string.Equals(colorKey, "Default", StringComparison.OrdinalIgnoreCase)
+            ? "off/default"
+            : colorKey.Trim();
 
     public RuntimeOperation AssignControllerAction(string controlId, ControllerActionAssignment assignment)
     {
@@ -798,6 +1208,12 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             _logitechG13Provider.DeviceChanged -= LogitechG13Provider_OnDeviceChanged;
             _logitechG13Provider.AvailabilityChanged -= LogitechG13Provider_OnAvailabilityChanged;
         }
+        if (_midiProvider is not null)
+        {
+            _midiProvider.IdentificationInputReceived -= MidiProvider_OnIdentificationInputReceived;
+            _midiProvider.InputReceived -= MidiProvider_OnInputReceived;
+            _midiProvider.Faulted -= Provider_OnFaulted;
+        }
 
         if (_applicationLifecycleSource is not null)
         {
@@ -807,11 +1223,20 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         {
             await _logitechG13Provider.DisposeAsync().ConfigureAwait(false);
         }
+        if (_midiProvider is not null)
+        {
+            await _midiProvider.DisposeAsync().ConfigureAwait(false);
+        }
 
         await _keyboardProvider.DisposeAsync().ConfigureAwait(false);
         if (_actionOutput is IDisposable disposableActionOutput)
         {
             disposableActionOutput.Dispose();
+        }
+        _controllerLedOutput?.Dispose();
+        if (_logitechG13LightingOutput is IDisposable disposableG13LightingOutput)
+        {
+            disposableG13LightingOutput.Dispose();
         }
     }
 
@@ -820,6 +1245,9 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
     private void LogitechG13Provider_OnIdentificationInputReceived(object? sender, LogitechG13InputReceivedEventArgs eventArgs) =>
         ProcessIdentificationInput(LogitechG13ProviderId, eventArgs.Input.Signal, eventArgs.Input.DisplayName);
+
+    private void MidiProvider_OnIdentificationInputReceived(object? sender, MidiInputReceivedEventArgs eventArgs) =>
+        ProcessIdentificationInput(MidiProviderId, eventArgs.Input.Signal, eventArgs.Input.DisplayName);
 
     private void ProcessIdentificationInput(string providerId, ControlSignal signal, string displayName)
     {
@@ -879,6 +1307,31 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             input.Signal);
     }
 
+    private void MidiProvider_OnInputReceived(object? sender, MidiInputReceivedEventArgs eventArgs)
+    {
+        var input = eventArgs.Input;
+        ProcessInput(
+            MidiProviderId,
+            input.PersistentDeviceId,
+            input.ControllerSessionId,
+            input.ControlId,
+            input.DisplayName,
+            input.Signal.Kind != ControlSignalKind.Release,
+            input.Signal.Kind == ControlSignalKind.Repeat,
+            input.Signal,
+            input.ControlKind is MidiInputControlKind.ControlIncrease or MidiInputControlKind.ControlDecrease
+                ? input.Value
+                : null,
+            input.Signal.Kind == ControlSignalKind.Press
+                ? input.ControlKind switch
+                {
+                    MidiInputControlKind.ControlIncrease => 1,
+                    MidiInputControlKind.ControlDecrease => -1,
+                    _ => null,
+                }
+                : null);
+    }
+
     private void ProcessInput(
         string providerId,
         string persistentDeviceId,
@@ -887,11 +1340,14 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         string displayName,
         bool isPressed,
         bool isRepeat,
-        ControlSignal signal)
+        ControlSignal signal,
+        int? analogRawValue = null,
+        double? analogDelta = null)
     {
         MappingResult result;
         long eventCount;
         string action;
+        string effectiveDisplayName;
         int simultaneous;
         lock (_gate)
         {
@@ -908,13 +1364,14 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             eventCount = Interlocked.Increment(ref _aggregateEventCount);
             var controller = FindEditableController(persistentDeviceId);
             action = controller is null ? "Unassigned" : BindingLabel(controller, controlId);
+            effectiveDisplayName = ResolveDisplayName(controller, controlId, displayName);
             if (controller is not null)
             {
                 var observed = _observedControls.Add(controlId);
                 var labelChanged = !_controlLabels.TryGetValue(controlId, out var oldLabel) ||
-                                   !string.Equals(oldLabel, displayName, StringComparison.Ordinal);
-                _controlLabels[controlId] = displayName;
-                if ((observed || labelChanged) && providerId != LogitechG13ProviderId)
+                                   !string.Equals(oldLabel, effectiveDisplayName, StringComparison.Ordinal);
+                _controlLabels[controlId] = effectiveDisplayName;
+                if ((observed || labelChanged) && !HasCodeDefinedLayout(controller))
                 {
                     RebuildObservedLayout(controller);
                 }
@@ -932,12 +1389,14 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         ControlChanged?.Invoke(this, new RuntimeControlUpdate(
             persistentDeviceId,
             controlId.Value,
-            displayName,
+            effectiveDisplayName,
             isPressed,
             isRepeat,
             action,
             simultaneous,
-            eventCount));
+            eventCount,
+            AnalogRawValue: analogRawValue,
+            AnalogDelta: analogDelta));
 
         if (result.Disposition is MappingDisposition.OutputFailed or
             MappingDisposition.RateLimited or
@@ -1154,7 +1613,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         if (releaseSucceeded)
         {
             RaiseState(
-                identificationStatus: "Raw Input is unavailable. Nothing is armed; re-identification is required after recovery.",
+                identificationStatus: "The selected input provider is unavailable. Nothing is armed; re-identification is required after recovery.",
                 mappingStatus: "The input backend failed; output is disabled, released, and Rehearsal Mode was restored.",
                 status: $"Needs attention: {PrivacyRedactor.SanitizeDiagnosticText(exception.Message)}",
                 activeControllerLabel: "No controller confirmed",
@@ -1163,7 +1622,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         else
         {
             RaiseOutputSafetyFailureState(
-                identificationStatus: "Raw Input failed and Windows rejected an owned-output release. Restart Tappy before rearming.",
+                identificationStatus: "The input provider failed and Windows rejected an owned-output release. Restart Tappy before rearming.",
                 activeControllerLabel: "No controller confirmed");
         }
     }
@@ -1328,12 +1787,110 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         return layer?.Bindings.FirstOrDefault(item => item.ControlId == controlId)?.Name ?? "Unassigned";
     }
 
+    private static ControllerActionSequenceDefinition KeyboardActionToSequence(
+        string name,
+        KeyboardActionDefinition action) => new()
+        {
+            Name = name,
+            Mode = action.Mode == KeyboardActionMode.HoldUntilRelease
+                ? ControllerActionSequenceMode.WhileHeld
+                : ControllerActionSequenceMode.RunOnce,
+            Steps =
+            [
+                new ControllerActionStepDefinition
+                {
+                    Type = ControllerActionStepType.KeyboardChord,
+                    Keys = action.Keys is null ? [] : [.. action.Keys],
+                },
+            ],
+        };
+
+    private static ControllerLayoutDefinition MergeCodeDefinedLayout(
+        ControllerLayoutDefinition current,
+        ControllerLayoutDefinition canonical)
+    {
+        var result = canonical.Clone();
+        var hasSavedWorkspace = !current.Id.Equals("generated-grid", StringComparison.OrdinalIgnoreCase) ||
+                                current.Rows.SelectMany(row => row.Controls)
+                                    .Any(control => control.X is not null || control.Y is not null);
+        if (hasSavedWorkspace)
+        {
+            result.GridColumns = current.GridColumns;
+            result.GridRows = current.GridRows;
+            result.SnapToGrid = current.SnapToGrid;
+        }
+        var canonicalControls = result.Rows
+            .SelectMany(row => row.Controls)
+            .Where(item => item.ControlId is not null)
+            .Select(item => item.ControlId!.Value)
+            .ToArray();
+        var canonicalSet = canonicalControls.ToHashSet();
+        var currentDefinitions = current.Rows
+            .SelectMany(row => row.Controls)
+            .Where(item => item.ControlId is not null && canonicalSet.Contains(item.ControlId.Value))
+            .GroupBy(item => item.ControlId!.Value)
+            .ToDictionary(group => group.Key, group => group.Last());
+        foreach (var definition in result.Rows.SelectMany(row => row.Controls))
+        {
+            if (definition.ControlId is not { } id || !currentDefinitions.TryGetValue(id, out var previous))
+            {
+                continue;
+            }
+
+            definition.X = previous.X;
+            definition.Y = previous.Y;
+            definition.Width = previous.Width;
+            definition.Height = previous.Height;
+            definition.ColorKey = previous.ColorKey;
+            definition.AnalogRawAtMinimum = previous.AnalogRawAtMinimum;
+            definition.AnalogRawAtMaximum = previous.AnalogRawAtMaximum;
+            definition.AnalogRawAtCenter = previous.AnalogRawAtCenter;
+            definition.EncoderDegreesPerStep = previous.EncoderDegreesPerStep;
+            definition.EncoderReversed = previous.EncoderReversed;
+        }
+
+        var existingOrder = current.Rows
+            .SelectMany(row => row.Controls)
+            .Where(item => item.ControlId is not null && canonicalSet.Contains(item.ControlId.Value))
+            .Select(item => item.ControlId!.Value)
+            .Distinct()
+            .ToList();
+        existingOrder.AddRange(canonicalControls.Where(control => !existingOrder.Contains(control)));
+        ApplyPresentationOrder(result, existingOrder);
+        return result;
+    }
+
+    private static void ApplyPresentationOrder(
+        ControllerLayoutDefinition layout,
+        IReadOnlyList<ControlId> orderedControls)
+    {
+        var definitions = layout.Rows
+            .SelectMany(row => row.Controls)
+            .Where(item => item.ControlId is not null)
+            .GroupBy(item => item.ControlId!.Value)
+            .ToDictionary(group => group.Key, group => group.Last().Clone());
+        var orderedIndex = 0;
+        foreach (var row in layout.Rows)
+        {
+            for (var index = 0; index < row.Controls.Count; index++)
+            {
+                if (row.Controls[index].ControlId is null)
+                {
+                    continue;
+                }
+
+                row.Controls[index] = definitions[orderedControls[orderedIndex++]];
+            }
+        }
+    }
+
     private void EnsureObservedLayout(ControllerProfile controller, ControlId controlId)
     {
         _observedControls.Add(controlId);
-        if (controller.Identity.ProviderId == LogitechG13ProviderId)
+        if (HasCodeDefinedLayout(controller))
         {
-            if (!controller.Layout.Rows.SelectMany(row => row.Controls)
+            if (controller.Identity.ProviderId == LogitechG13ProviderId &&
+                !controller.Layout.Rows.SelectMany(row => row.Controls)
                     .Any(item => item.ControlId == controlId))
             {
                 controller.Layout = CreateLogitechG13Layout();
@@ -1343,6 +1900,22 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         }
 
         RebuildObservedLayout(controller);
+    }
+
+    private static bool HasCodeDefinedLayout(ControllerProfile controller) =>
+        string.Equals(controller.Layout.Id, "logitech-g13-code-layout-v1", StringComparison.Ordinal) ||
+        string.Equals(controller.Layout.Id, MidiControllerModelCatalog.AkaiApcMiniV1LayoutId, StringComparison.Ordinal);
+
+    private static string ResolveDisplayName(
+        ControllerProfile? controller,
+        ControlId controlId,
+        string fallback)
+    {
+        var label = controller?.Layout.Rows
+            .SelectMany(row => row.Controls)
+            .FirstOrDefault(item => item.ControlId == controlId)
+            ?.Label;
+        return string.IsNullOrWhiteSpace(label) ? fallback : label;
     }
 
     private void RebuildObservedLayout(ControllerProfile controller)
@@ -1383,13 +1956,15 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     }
 
     private static string SourceLabel(ControllerProfile controller) =>
-        controller.SourceMode.Effective switch
-        {
-            EffectiveSourceMode.PassThrough => "Effective: Pass-through",
-            EffectiveSourceMode.GlobalBlock => "Effective: Global block",
-            EffectiveSourceMode.Exclusive => "Effective: Exclusive",
-            _ => "Effective: Needs attention (fail-open)"
-        };
+        controller.Identity.ProviderId == MidiProviderId
+            ? "Effective: MIDI input monitor"
+            : controller.SourceMode.Effective switch
+            {
+                EffectiveSourceMode.PassThrough => "Effective: Pass-through",
+                EffectiveSourceMode.GlobalBlock => "Effective: Global block",
+                EffectiveSourceMode.Exclusive => "Effective: Exclusive",
+                _ => "Effective: Needs attention (fail-open)"
+            };
 
     private IReadOnlyList<RuntimeInputDevice> EnumerateRuntimeDevices()
     {
@@ -1400,6 +1975,11 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         {
             devices.AddRange(_logitechG13Provider.EnumerateControllers()
                 .Select(descriptor => new RuntimeInputDevice(LogitechG13ProviderId, descriptor)));
+        }
+        if (_midiProvider is not null)
+        {
+            devices.AddRange(_midiProvider.EnumerateControllers()
+                .Select(descriptor => new RuntimeInputDevice(descriptor)));
         }
 
         return devices;
@@ -1416,6 +1996,7 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
     {
         _keyboardProvider.ClearCaptureTarget();
         _logitechG13Provider?.ClearCaptureTarget();
+        _midiProvider?.ClearCaptureTarget();
     }
 
     private bool SetCaptureTarget(RuntimeInputDevice device) =>
@@ -1424,6 +2005,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             KeyboardProviderId => _keyboardProvider.SetCaptureTarget(device.SessionHandle),
             LogitechG13ProviderId when _logitechG13Provider is not null =>
                 _logitechG13Provider.SetCaptureTarget(device.SessionHandle),
+            MidiProviderId when _midiProvider is not null && device.MidiDeviceId is { } midiDeviceId =>
+                _midiProvider.SetCaptureTarget(midiDeviceId),
             _ => false,
         };
 
@@ -1433,6 +2016,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             KeyboardProviderId => _keyboardProvider.SetConfirmedPersistentId(persistentId),
             LogitechG13ProviderId when _logitechG13Provider is not null =>
                 _logitechG13Provider.SetConfirmedPersistentId(persistentId),
+            MidiProviderId when _midiProvider is not null =>
+                _midiProvider.SetConfirmedPersistentId(persistentId),
             _ => false,
         };
 
@@ -1442,6 +2027,8 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
             KeyboardProviderId => _keyboardProvider.IsCaptureTargetNeutral,
             LogitechG13ProviderId when _logitechG13Provider is not null =>
                 _logitechG13Provider.IsCaptureTargetNeutral,
+            MidiProviderId when _midiProvider is not null =>
+                _midiProvider.IsCaptureTargetNeutral,
             _ => false,
         };
 
@@ -1505,39 +2092,38 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
         var host = new RawInputMessageHost();
         return new ProductionProviders(
             new RawInputKeyboardProvider(new NativeRawInputDeviceEnumerator(), host),
-            new LogitechG13InputProvider(new NativeLogitechG13DeviceEnumerator(), host));
+            new LogitechG13InputProvider(new NativeLogitechG13DeviceEnumerator(), host),
+            new WinMmMidiInputProvider());
     }
 
     private static ProductionOutputs CreateProductionOutputs()
     {
         var keyboard = new SendInputKeyboardOutput();
-        return new ProductionOutputs(keyboard, new WindowsControllerActionOutput(keyboard));
+        return new ProductionOutputs(
+            keyboard,
+            new WindowsControllerActionOutput(keyboard),
+            new WinMmMidiOutput(),
+            new NativeLogitechG13LightingOutput());
     }
 
     private static ControllerIdentity ToIdentity(RuntimeInputDevice descriptor) => new(
         new ControllerSessionId(descriptor.SessionId),
         new ControllerPersistentId(descriptor.PersistentId),
-        descriptor.ProviderId == LogitechG13ProviderId &&
-        descriptor.Descriptor.Grouping != PhysicalDeviceGrouping.WindowsContainerId
+        descriptor.IsAmbiguous
             ? ControllerIdentityConfidence.Ambiguous
             : ControllerIdentityConfidence.PortBound,
         descriptor.DisplayName,
         providerId: descriptor.ProviderId,
         descriptor.VendorId,
         descriptor.ProductId,
-        descriptor.UsagePage ?? (descriptor.ProviderId == LogitechG13ProviderId
-            ? LogitechG13Protocol.UsagePage
-            : (ushort)0x0001),
-        descriptor.Usage ?? (descriptor.ProviderId == LogitechG13ProviderId
-            ? LogitechG13Protocol.Usage
-            : (ushort)0x0006));
+        descriptor.UsagePage,
+        descriptor.Usage);
 
     private static ControllerChoice ToChoice(RuntimeInputDevice descriptor) => new(
         descriptor.SessionId,
         descriptor.PersistentId,
         descriptor.DisplayName,
-        (descriptor.ProviderId == LogitechG13ProviderId &&
-         descriptor.Descriptor.Grouping != PhysicalDeviceGrouping.WindowsContainerId
+        (descriptor.IsAmbiguous
             ? ControllerIdentityConfidence.Ambiguous
             : ControllerIdentityConfidence.PortBound).ToString(),
         descriptor.ProviderId,
@@ -1746,26 +2332,64 @@ public sealed class DeviceAwareControllerRuntime : IControllerRuntime
 
     private sealed record ProductionProviders(
         RawInputKeyboardProvider Keyboard,
-        LogitechG13InputProvider LogitechG13);
+        LogitechG13InputProvider LogitechG13,
+        WinMmMidiInputProvider Midi);
 
     private sealed record ProductionOutputs(
         SendInputKeyboardOutput Keyboard,
-        WindowsControllerActionOutput Actions);
+        WindowsControllerActionOutput Actions,
+        WinMmMidiOutput ControllerLeds,
+        NativeLogitechG13LightingOutput LogitechG13Lighting);
 
-    private sealed record RuntimeInputDevice(
-        string ProviderId,
-        SanitizedDeviceDescriptor Descriptor)
+    private sealed record RuntimeInputDevice
     {
-        internal nint SessionHandle => Descriptor.SessionHandle;
-        internal string SessionId => Descriptor.SessionId;
-        internal string PersistentId => Descriptor.PersistentId;
-        internal string DisplayName => Descriptor.DisplayName;
-        internal ushort? VendorId => Descriptor.VendorId;
-        internal ushort? ProductId => Descriptor.ProductId;
-        internal ushort? UsagePage => Descriptor.UsagePage;
-        internal ushort? Usage => Descriptor.Usage;
+        internal RuntimeInputDevice(string providerId, SanitizedDeviceDescriptor descriptor)
+        {
+            ProviderId = providerId;
+            SessionHandle = descriptor.SessionHandle;
+            SessionId = descriptor.SessionId;
+            PersistentId = descriptor.PersistentId;
+            DisplayName = descriptor.DisplayName;
+            VendorId = descriptor.VendorId;
+            ProductId = descriptor.ProductId;
+            UsagePage = descriptor.UsagePage ?? (providerId == LogitechG13ProviderId
+                ? LogitechG13Protocol.UsagePage
+                : (ushort)0x0001);
+            Usage = descriptor.Usage ?? (providerId == LogitechG13ProviderId
+                ? LogitechG13Protocol.Usage
+                : (ushort)0x0006);
+            IsAmbiguous = providerId == LogitechG13ProviderId &&
+                descriptor.Grouping != PhysicalDeviceGrouping.WindowsContainerId;
+        }
+
+        internal RuntimeInputDevice(MidiInputDeviceDescriptor descriptor)
+        {
+            ProviderId = MidiProviderId;
+            MidiDeviceId = descriptor.DeviceId;
+            SessionHandle = new nint(descriptor.DeviceId + 1);
+            SessionId = descriptor.SessionId;
+            PersistentId = descriptor.PersistentId;
+            DisplayName = descriptor.DisplayName;
+            VendorId = descriptor.ManufacturerId;
+            ProductId = descriptor.ProductId;
+            UsagePage = 0;
+            Usage = 0;
+            IsAmbiguous = descriptor.IsAmbiguous;
+        }
+
+        internal string ProviderId { get; }
+        internal nint SessionHandle { get; }
+        internal int? MidiDeviceId { get; }
+        internal string SessionId { get; }
+        internal string PersistentId { get; }
+        internal string DisplayName { get; }
+        internal ushort? VendorId { get; }
+        internal ushort? ProductId { get; }
+        internal ushort UsagePage { get; }
+        internal ushort Usage { get; }
+        internal bool IsAmbiguous { get; }
 
         internal bool HasSameLiveIdentity(RuntimeInputDevice other) =>
-            ProviderId == other.ProviderId && SessionHandle == other.SessionHandle;
+            ProviderId == other.ProviderId && SessionId == other.SessionId;
     }
 }

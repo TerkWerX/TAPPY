@@ -16,8 +16,12 @@ public partial class KeyboardAssignmentWindow : Window
 
     private readonly IReadOnlyList<KeyboardAssignmentOption> _allOptions;
     private readonly List<ControllerActionStepDefinition> _steps = [];
+    private ControllerActionSequenceDefinition _preservedReleaseSequence = new();
+    private int _editingStepIndex = -1;
 
-    public KeyboardAssignmentWindow(string controlLabel)
+    public KeyboardAssignmentWindow(
+        string controlLabel,
+        ControllerActionAssignment? existingAssignment = null)
     {
         _allOptions = KeyboardAssignmentCatalog.Create();
         InitializeComponent();
@@ -26,7 +30,15 @@ public partial class KeyboardAssignmentWindow : Window
         CategoryBox.SelectedIndex = 0;
         RefreshFilter();
         RefreshMidiDevices();
-        RefreshStepList();
+        if (existingAssignment is null)
+        {
+            RefreshStepList();
+        }
+        else
+        {
+            LoadExistingAssignment(existingAssignment);
+        }
+
         SearchBox.Focus();
     }
 
@@ -34,6 +46,32 @@ public partial class KeyboardAssignmentWindow : Window
     public KeyboardMappingAssignment? Result { get; private set; }
 
     public ControllerActionAssignment? ActionResult { get; private set; }
+
+    private void LoadExistingAssignment(ControllerActionAssignment assignment)
+    {
+        var press = assignment.PressSequence?.Clone() ?? new ControllerActionSequenceDefinition();
+        var release = assignment.ReleaseSequence?.Clone() ?? new ControllerActionSequenceDefinition();
+        var editRelease = press.IsEmpty && !release.IsEmpty;
+        var editable = editRelease ? release : press;
+        _steps.AddRange(editable.Steps.Select(step => step.Clone()));
+        _preservedReleaseSequence = !editRelease && !release.IsEmpty
+            ? release
+            : new ControllerActionSequenceDefinition();
+        TimingBox.SelectedIndex = editRelease
+            ? 3
+            : editable.Mode switch
+            {
+                ControllerActionSequenceMode.WhileHeld => 1,
+                ControllerActionSequenceMode.RepeatWhileHeld => 2,
+                _ => 0,
+            };
+        Title = "Edit Tappy assignment";
+        EditorHeading.Text = "Edit an assignment";
+        AssignButton.Content = "Save assignment changes";
+        RefreshStepList(_steps.Count > 0 ? 0 : -1);
+        ShowStatus(
+            "The existing assignment was loaded intact. Select a step and click Edit step (or double-click it), then apply and save your changes.");
+    }
 
     private void SearchBox_OnTextChanged(object sender, TextChangedEventArgs e) => RefreshFilter();
 
@@ -241,11 +279,20 @@ public partial class KeyboardAssignmentWindow : Window
         }
 
         var device = MidiDeviceBox.SelectedItem as WinMmMidiOutput.Device;
+        var target = device?.Name;
+        if (string.IsNullOrWhiteSpace(target) &&
+            _editingStepIndex >= 0 &&
+            _editingStepIndex < _steps.Count &&
+            _steps[_editingStepIndex].Type == ControllerActionStepType.Midi)
+        {
+            target = _steps[_editingStepIndex].Target;
+        }
+
         AddStep(new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.Midi,
             Value = description,
-            Target = device?.Name ?? string.Empty
+            Target = target ?? string.Empty
         }, $"MIDI step added: {description}.");
 
         if (kind == "note" && SelectedTag(TimingBox) == "PressOnce")
@@ -290,19 +337,231 @@ public partial class KeyboardAssignmentWindow : Window
 
     private void AddStep(ControllerActionStepDefinition step, string status)
     {
+        step.Normalize();
+        if (_editingStepIndex >= 0 && _editingStepIndex < _steps.Count)
+        {
+            var index = _editingStepIndex;
+            _steps[index] = step;
+            EndStepEdit();
+            RefreshStepList(index);
+            ShowStatus($"Step {index + 1:N0} updated. Save assignment changes when the sequence is ready.");
+            return;
+        }
+
         if (_steps.Count >= 500)
         {
             ShowError("An assignment is limited to 500 steps.");
             return;
         }
 
-        step.Normalize();
         _steps.Add(step);
         RefreshStepList(_steps.Count - 1);
         ShowStatus(status);
     }
 
     private void SequenceList_OnSelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateStepButtons();
+
+    private void SequenceList_OnMouseDoubleClick(object sender, MouseButtonEventArgs e) => BeginStepEdit();
+
+    private void EditStep_OnClick(object sender, RoutedEventArgs e) => BeginStepEdit();
+
+    private void BeginStepEdit()
+    {
+        var index = SequenceList.SelectedIndex;
+        if (index < 0 || index >= _steps.Count)
+        {
+            return;
+        }
+
+        if (!PopulateEditor(_steps[index]))
+        {
+            EndStepEdit();
+            return;
+        }
+
+        _editingStepIndex = index;
+        ApplyStepChangesButton.IsEnabled = true;
+        ShowStatus($"Editing step {index + 1:N0}. Change its fields, then click Apply changes. Nothing is saved until Save assignment changes is clicked.");
+    }
+
+    private void ApplyStepChanges_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_editingStepIndex < 0 || _editingStepIndex >= _steps.Count)
+        {
+            return;
+        }
+
+        switch (_steps[_editingStepIndex].Type)
+        {
+            case ControllerActionStepType.KeyboardChord:
+                AddKeyboardStep();
+                break;
+            case ControllerActionStepType.Text:
+                AddTextStep_OnClick(sender, e);
+                break;
+            case ControllerActionStepType.Delay:
+                AddDelayStep_OnClick(sender, e);
+                break;
+            case ControllerActionStepType.MouseButton:
+            case ControllerActionStepType.MouseMove:
+            case ControllerActionStepType.MouseWheel:
+                AddMouseStep_OnClick(sender, e);
+                break;
+            case ControllerActionStepType.LaunchProgram:
+                AddProgramStep_OnClick(sender, e);
+                break;
+            case ControllerActionStepType.PowerShellCommand:
+                AddPowerShellStep_OnClick(sender, e);
+                break;
+            case ControllerActionStepType.Midi:
+                AddMidiStep_OnClick(sender, e);
+                break;
+            case ControllerActionStepType.Osc:
+                AddOscStep_OnClick(sender, e);
+                break;
+            default:
+                ShowError("This low-level imported step can be moved or removed, but this editor cannot safely rewrite it yet.");
+                break;
+        }
+    }
+
+    private bool PopulateEditor(ControllerActionStepDefinition step)
+    {
+        switch (step.Type)
+        {
+            case ControllerActionStepType.KeyboardChord:
+                {
+                    ActionTabs.SelectedIndex = 0;
+                    var keys = step.Keys.Select(key => key.Value).ToArray();
+                    var option = _allOptions.FirstOrDefault(candidate =>
+                        candidate.Keys.SequenceEqual(keys, StringComparer.OrdinalIgnoreCase));
+                    if (option is null)
+                    {
+                        ShowError("This imported keyboard chord is not in the searchable catalog and cannot be rewritten safely yet.");
+                        return false;
+                    }
+
+                    CategoryBox.SelectedIndex = 0;
+                    SearchBox.Text = option.Shortcut;
+                    RefreshFilter();
+                    AssignmentList.SelectedItem = option;
+                    AssignmentList.ScrollIntoView(option);
+                    return true;
+                }
+            case ControllerActionStepType.Text:
+                ActionTabs.SelectedIndex = 1;
+                TextValueBox.Text = step.Value;
+                TextValueBox.Focus();
+                return true;
+            case ControllerActionStepType.Delay:
+                ActionTabs.SelectedIndex = 1;
+                DelayBox.Text = step.DurationMs.ToString();
+                DelayBox.Focus();
+                return true;
+            case ControllerActionStepType.MouseButton:
+                ActionTabs.SelectedIndex = 2;
+                SelectTag(MouseActionBox, step.Value);
+                return true;
+            case ControllerActionStepType.MouseMove:
+                ActionTabs.SelectedIndex = 2;
+                SelectTag(MouseActionBox, "Move");
+                MouseXBox.Text = step.X.ToString();
+                MouseYBox.Text = step.Y.ToString();
+                return true;
+            case ControllerActionStepType.MouseWheel:
+                ActionTabs.SelectedIndex = 2;
+                if (step.Value.Equals("horizontal", StringComparison.OrdinalIgnoreCase))
+                {
+                    SelectTag(MouseActionBox, "Horizontal wheel");
+                    MouseXBox.Text = step.Amount.ToString();
+                }
+                else
+                {
+                    SelectTag(MouseActionBox, "Vertical wheel");
+                    MouseYBox.Text = step.Amount.ToString();
+                }
+
+                return true;
+            case ControllerActionStepType.LaunchProgram:
+                ActionTabs.SelectedIndex = 3;
+                ProgramPathBox.Text = step.Value;
+                ProgramArgumentsBox.Text = step.Arguments;
+                ProgramWorkingDirectoryBox.Text = step.WorkingDirectory;
+                ProgramPathBox.Focus();
+                return true;
+            case ControllerActionStepType.PowerShellCommand:
+                ActionTabs.SelectedIndex = 4;
+                SelectTag(PowerShellHostBox, step.Target);
+                PowerShellCommandBox.Text = step.Value;
+                PowerShellWorkingDirectoryBox.Text = step.WorkingDirectory;
+                PowerShellCommandBox.Focus();
+                return true;
+            case ControllerActionStepType.Midi:
+                {
+                    ActionTabs.SelectedIndex = 5;
+                    MidiShortMessage message;
+                    try
+                    {
+                        message = MidiMessageParser.Parse(step.Value);
+                    }
+                    catch (ArgumentException exception)
+                    {
+                        ShowError($"The saved MIDI step could not be opened safely: {exception.Message}");
+                        return false;
+                    }
+
+                    SelectTag(MidiKindBox, message.Kind switch
+                    {
+                        MidiShortMessageKind.NoteOn => "note",
+                        MidiShortMessageKind.NoteOff => "noteoff",
+                        MidiShortMessageKind.ControlChange => "cc",
+                        _ => "pc",
+                    });
+                    MidiChannelBox.Text = message.Channel.ToString();
+                    MidiData1Box.Text = message.Data1.ToString();
+                    MidiData2Box.Text = message.Data2.ToString();
+                    SelectMidiDevice(step.Target);
+                    return true;
+                }
+            case ControllerActionStepType.Osc:
+                ActionTabs.SelectedIndex = 6;
+                OscHostBox.Text = step.Target;
+                OscPortBox.Text = step.Amount.ToString();
+                OscAddressBox.Text = step.Value;
+                OscValuesBox.Text = step.Arguments;
+                OscValuesBox.Focus();
+                return true;
+            default:
+                ShowError("This low-level imported step can be moved or removed, but this editor cannot safely rewrite it yet.");
+                return false;
+        }
+    }
+
+    private static void SelectTag(System.Windows.Controls.ComboBox comboBox, string tag)
+    {
+        comboBox.SelectedItem = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), tag, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void SelectMidiDevice(string target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            MidiDeviceBox.SelectedIndex = 0;
+            return;
+        }
+
+        MidiDeviceBox.SelectedItem = MidiDeviceBox.Items
+            .OfType<WinMmMidiOutput.Device>()
+            .FirstOrDefault(device => device.Name.Equals(target, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void EndStepEdit()
+    {
+        _editingStepIndex = -1;
+        ApplyStepChangesButton.IsEnabled = false;
+    }
 
     private void MoveStepUp_OnClick(object sender, RoutedEventArgs e)
     {
@@ -313,6 +572,7 @@ public partial class KeyboardAssignmentWindow : Window
         }
 
         (_steps[index - 1], _steps[index]) = (_steps[index], _steps[index - 1]);
+        EndStepEdit();
         RefreshStepList(index - 1);
     }
 
@@ -325,6 +585,7 @@ public partial class KeyboardAssignmentWindow : Window
         }
 
         (_steps[index + 1], _steps[index]) = (_steps[index], _steps[index + 1]);
+        EndStepEdit();
         RefreshStepList(index + 1);
     }
 
@@ -337,12 +598,14 @@ public partial class KeyboardAssignmentWindow : Window
         }
 
         _steps.RemoveAt(index);
+        EndStepEdit();
         RefreshStepList(Math.Min(index, _steps.Count - 1));
     }
 
     private void ClearSteps_OnClick(object sender, RoutedEventArgs e)
     {
         _steps.Clear();
+        EndStepEdit();
         RefreshStepList();
         ShowStatus("Assignment steps cleared.");
     }
@@ -362,6 +625,7 @@ public partial class KeyboardAssignmentWindow : Window
         MoveUpButton.IsEnabled = index > 0;
         MoveDownButton.IsEnabled = index >= 0 && index < _steps.Count - 1;
         RemoveStepButton.IsEnabled = index >= 0;
+        EditStepButton.IsEnabled = index >= 0;
     }
 
     private void ActionTabs_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -391,7 +655,8 @@ public partial class KeyboardAssignmentWindow : Window
         }
 
         // Preserve the established synchronous keyboard path for the common one-step case.
-        if (_steps.Count == 1 && _steps[0].Type == ControllerActionStepType.KeyboardChord &&
+        if (_preservedReleaseSequence.IsEmpty &&
+            _steps.Count == 1 && _steps[0].Type == ControllerActionStepType.KeyboardChord &&
             timing != "RepeatWhileHeld")
         {
             var keys = _steps[0].Keys.Select(key => key.Value).ToArray();
@@ -423,7 +688,7 @@ public partial class KeyboardAssignmentWindow : Window
         };
         ActionResult = timing == "ReleaseOnce"
             ? new ControllerActionAssignment(name, new ControllerActionSequenceDefinition(), sequence)
-            : new ControllerActionAssignment(name, sequence, new ControllerActionSequenceDefinition());
+            : new ControllerActionAssignment(name, sequence, _preservedReleaseSequence.Clone());
         DialogResult = true;
     }
 

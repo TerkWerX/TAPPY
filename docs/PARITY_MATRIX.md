@@ -5,9 +5,9 @@ Status values are `Implemented`, `First-slice`, `Code-supported`, `Planned`,
 provenance, not a runtime dependency; Tappy does not reference the Tippy working
 tree.
 
-Evidence snapshot: the Release solution build has zero warnings/errors and all 287
-current automated tests pass (Core 46, Windows 103, App 62, G13 HIL tool 23,
-Output Witness 53). The
+Evidence snapshot: the Release solution build has zero warnings/errors and all 393
+current automated tests pass (Core 58, Windows 134, App 109, Input Broker 16, G13
+HIL tool 23, Output Witness 53). The
 last clean-source portable checkpoint includes the K15/G13 provider additions and
 passes both published/extracted readiness audits; it predates the expanded keyboard
 assignment editor. Exact evidence boundaries are in [`TESTING.md`](TESTING.md).
@@ -56,9 +56,10 @@ procedure does not advance any hardware tier.
 | Raw keyboard provider | First-slice | Scan/E0/E1/device identity, dedicated message thread, and ContainerId grouping | Normalizer/provider contracts plus authoritative K15 four-interface and Tartarus two-interface grouping | Physical K15/Targus/Tartarus make-break, rollover, pass-through, reconnect, and cleanup |
 | Logitech G13 vendor-HID provider | Hardware evidence required | Exact `046D:C21C`, `FF00:0000` provider; `C232` excluded; fixed 39-control model, stable tile grid, and separate live photo locator | Decoder/provider/App tests, exact 39-hotspot catalog and shared-state tests, plus 23 finite-verifier tests; attended operator report that every control responds visually | Complete the finite armed input record and broader Passport/output/pass-through HIL; the operator report alone is not a promotion pass |
 | Learned raw-HID provider | Planned | Core has a discrete provider seam with no fixed 32-control cap; current App composition is explicitly keyboard plus model-specific G13 | Interface and G13-specific composition only | Generic identity, selection/UI integration, learner, report schema, and real-device tests |
-| MIDI/encoder/joystick triggers | Planned | Discrete Core seam; G13 has provider-specific raw X/Y and fixed-threshold directions, not a generic analog profile model | Interface plus model-specific G13 direction tests | Add generic analog values/threshold/deadzone schemas, integrate new providers, and hardware-test |
-| Data-driven controller layouts | First-slice | Generic grid/registry plus a code-defined 39-control G13 model; selectable tiles stay separate from an exact-identity photo locator | Profile tests round-trip more than 100 controls; App tests cover G13 model/grid/photo shared state and all 39 bounded hotspots | Row/cluster-aware WPF projection, designer/templates, and additional reviewed device art |
+| MIDI/encoder/joystick triggers | First-slice | WinMM notes, program changes, and balanced CC directions enter the ordinary assignment engine; G13 also has provider-specific raw X/Y threshold directions | Provider/runtime tests plus attended APC MINI note-input spot check | Finite all-control APC run; generic analog values/threshold/deadzone schemas; SysEx/clock and additional providers |
+| Data-driven controller layouts | First-slice | Generic learned grid/registry plus code-defined 39-control G13 and exact-name 99-direction APC MINI v1 models; selectable tiles stay separate from photo locators | Profile tests round-trip more than 100 controls; App tests cover fixed models, identity isolation, shared selection/press state, and bounded hotspots | Row/cluster-aware WPF projection, designer/templates, reviewed art and hardware passports for additional candidates |
 | Batch/drag/compare/learn-all/search | Planned | Tappy-specific mapping workflows | None | Implement |
 | Source behavior/rollover/conflict pages | First-slice | Pass-through truth and live simultaneous state | State/repeat/simultaneous tests | Dedicated rollover/conflict screens and HIL |
+| Signed per-device keyboard suppression | Planned | Owner-approved optional KMDF filter plus restricted LocalSystem broker; protected primary remains pass-through; fail-open watchdog | 12 Core policy, 20 Windows driver-wire/grouped-coordinator, and 16 status-only broker/IPC cases; unsigned driver and broker builds only | Stable device binding, signed-client verification, broker control commands, primary-keyboard UI, dedicated destructive test host, HVCI/Verifier/HLK, Microsoft signing, recovery and anti-cheat matrices |
 | Usage heatmaps | Deferred | Local-only ControlId counts, disabled by default | None | Privacy review and opt-in UI |
 | Tappy branding/artwork | First-slice | Three owner-approved brand images; tattooed `T` hand is the application/tray icon; one approved owner-photo G13 functional locator | Exact PNG hashes/dimensions, multi-size ICO structure, embedded-resource and placement tests; unrelated `PAD IMAGES` remain excluded | Manual visual review at supported DPI/theme settings; provenance/approval for any additional device art |

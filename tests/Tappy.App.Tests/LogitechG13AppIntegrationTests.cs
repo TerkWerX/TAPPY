@@ -3,6 +3,7 @@ using Tappy.Core.Input;
 using Tappy.Core.Output;
 using Tappy.Windows.Input;
 using Tappy.Windows.Lifecycle;
+using Tappy.Windows.Output;
 using Tappy.Windows.Profiles;
 
 namespace Tappy.App.Tests;
@@ -400,6 +401,87 @@ public sealed class LogitechG13AppIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task Confirmed_G13_syncs_one_global_rgb_color_to_its_exact_persistent_identity()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var host = new FakeDualMessageHost();
+            var descriptor = G13Descriptor(
+                new nint(451),
+                "g13-lighting-session",
+                "raw-hid-g13:verified-lighting-controller");
+            var lighting = new RecordingG13LightingOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                new RawInputKeyboardProvider(
+                    new FakeKeyboardEnumerator(),
+                    host,
+                    keyboardIsNeutral: static () => true),
+                new LogitechG13InputProvider(new FakeG13Enumerator(descriptor), host),
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                logitechG13LightingOutput: lighting);
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirmG13(runtime, host, descriptor.SessionHandle);
+
+            var capability = Assert.IsType<ControllerLedColorCapability>(
+                runtime.GetControllerLedColorCapability());
+            Assert.Equal(ControllerLightingTopology.Global, capability.Topology);
+            Assert.Contains("Purple", capability.SupportedColorKeys);
+
+            var result = runtime.SyncControllerLedColors(
+                new Dictionary<string, string> { ["whole-device"] = "Purple" });
+
+            Assert.True(result.Succeeded, result.Message);
+            Assert.Equal(descriptor.PersistentId, lighting.PersistentId);
+            Assert.Equal((Red: (byte)150, Green: (byte)0, Blue: (byte)255), lighting.Color);
+            Assert.Contains("whole-device", result.Message);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task G13_sync_refuses_multiple_colors_because_its_backlight_is_one_zone()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var host = new FakeDualMessageHost();
+            var descriptor = G13Descriptor(
+                new nint(452),
+                "g13-one-zone-session",
+                "raw-hid-g13:one-zone-controller");
+            var lighting = new RecordingG13LightingOutput();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                new RawInputKeyboardProvider(
+                    new FakeKeyboardEnumerator(),
+                    host,
+                    keyboardIsNeutral: static () => true),
+                new LogitechG13InputProvider(new FakeG13Enumerator(descriptor), host),
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                logitechG13LightingOutput: lighting);
+
+            await runtime.InitializeAsync();
+            IdentifyAndConfirmG13(runtime, host, descriptor.SessionHandle);
+            var result = runtime.SyncControllerLedColors(
+                new Dictionary<string, string> { ["g1"] = "Red", ["g2"] = "Blue" });
+
+            Assert.False(result.Succeeded);
+            Assert.Null(lighting.PersistentId);
+            Assert.Contains("one whole-device RGB zone", result.Message);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static DeviceAwareControllerRuntime CreateRuntime(
         string root,
         FakeDualMessageHost host,
@@ -564,5 +646,17 @@ public sealed class LogitechG13AppIntegrationTests
 
         public void KeyDown(KeyboardOutputRequest request) => Down.Add(request);
         public void KeyUp(KeyboardOutputRequest request) => Up.Add(request);
+    }
+
+    private sealed class RecordingG13LightingOutput : ILogitechG13LightingOutput
+    {
+        public string? PersistentId { get; private set; }
+        public (byte Red, byte Green, byte Blue) Color { get; private set; }
+
+        public void SetBacklightRgb(string controllerPersistentId, byte red, byte green, byte blue)
+        {
+            PersistentId = controllerPersistentId;
+            Color = (red, green, blue);
+        }
     }
 }

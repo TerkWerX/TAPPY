@@ -4,21 +4,22 @@ This record separates deterministic software evidence from packaged-artifact and
 physical-hardware evidence. Passing automated tests does not certify a controller,
 prove 6KRO/NKRO behavior, or establish physical latency.
 
-## 2026-09-03 source-tree verification
+## 2026-09-06 source-tree verification
 
-Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.303`; product projects
+Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.400`; product projects
 target .NET 8. The verification was run in Release configuration.
 
 | Check | Result | Evidence boundary |
 |---|---:|---|
 | `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
-| `Tappy.Core.Tests` | 46 passed, 0 failed | Deterministic platform-neutral behavior, including explicit cleanup-dispatch results, immutable action sequences, profile round-trip, MIDI parsing, OSC encoding, and action-output press/release/Rehearsal routing |
-| `Tappy.Windows.Tests` | 103 passed, 0 failed | Keyboard/G13 packet parsing, ContainerId grouping, capability-isolated registration faults, bounded message-host shutdown routing, provider contracts, pre-arm neutrality, complete advertised-key output translation, output tagging, bounded action scheduling, PowerShell policy, storage, redaction, identity, and lifecycle seams using deterministic/native-boundary fixtures |
-| `Tappy.App.Tests` | 72 passed, 0 failed | Keyboard/G13 selection, ordered/deferred UI state projection, quick-tap illumination, bounded visual compaction, exact G13 photo identity and all 39 hotspots, owner-approved brand PNG/hash/dimension preservation, multi-size application-icon structure and header/splash/About placement, shared grid/physical photo state, expanded keyboard catalog and chord assignment, multi-step MIDI/OSC assignment routing, mapping/profile round-trip, Rehearsal Mode, truthful cleanup-failure and unclean-session handling, serialized input/disposal, persistent recovery warnings, lifecycle/fault cleanup, readable dropdown/disabled-button/control-label themes, explicit assignment-tab header rendering across interaction/theme states, assignment-editor accessibility, and unplug handling with fake providers/output |
+| `Tappy.Core.Tests` | 58 passed, 0 failed | Deterministic platform-neutral behavior, including exclusive-input safety policy, explicit cleanup-dispatch results, immutable action sequences, profile/layout round-trip, MIDI parsing, OSC encoding, and action-output press/release/Rehearsal routing |
+| `Tappy.Windows.Tests` | 134 passed, 0 failed | Keyboard/G13/MIDI packet parsing and providers, exact G13 lighting isolation, ContainerId grouping, output and lifecycle seams, plus 20 filter-protocol, device-session, and grouped two-phase coordinator cases using deterministic/native-boundary fixtures |
+| `Tappy.App.Tests` | 109 passed, 0 failed | Keyboard/G13/MIDI selection and routing, persistent freeform controller layouts, group selection/coloring, model-aware lighting palettes and photo locators, assignment editing, theme readability, profile round-trip, and lifecycle/fault cleanup with fake providers/output |
+| `Tappy.InputBroker.Tests` | 16 passed, 0 failed | Bootstrap SID/key refusal, protected pipe ACL, bounded HMAC framing, modification/key/replay/reserved/size rejection, real local named-pipe handshake, and status-only command boundary |
 | `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
 | `Tappy.OutputWitness.Tests` | 53 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break and output state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
-| Current automated total | 297 passed, 0 failed | Core 46 + Windows 103 + App 72 + G13 HIL tool 23 + Output Witness 53 |
-| `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 12 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
+| Current automated total | 393 passed, 0 failed | Core 58 + Windows 134 + App 109 + Input Broker 16 + G13 HIL tool 23 + Output Witness 53 |
+| `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 14 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
 The automated slice covers explicit neutral-state gating plus
@@ -163,6 +164,28 @@ An owner-authorized internal donor audit found no reusable G13 or SpacePilot
 implementation. No donor code, repository history, or logs were copied. The Tappy
 G13 path was independently implemented from the public sources recorded in
 [`LOGITECH_G13.md`](LOGITECH_G13.md) and project-owned design.
+
+## Optional exclusive-input evidence boundary
+
+Twelve deterministic Core cases currently prove the accepted activation policy:
+primary and secondary roles must be distinct and unambiguous; recovery paths,
+administrator consent, HVCI, production trust, normal boot configuration, current
+heartbeat, and both driver acknowledgements are mandatory; protected-application
+activity refuses activation. Twenty Windows cases freeze unique read/write
+buffered control codes, watchdog bounds, protocol versioning, wire layout, two-phase
+multi-interface role acknowledgement, and ordered bounded event-batch rules. Sixteen broker cases
+exercise user/key validation, pipe ACLs, HMAC/replay/size rejection, a real local
+pipe exchange, and the status-only command boundary.
+
+Those tests are contracts, not runtime driver evidence. An unsigned SYS/INF/CAT lab
+scaffold now builds with WDK code analysis clean, but it has never been installed or
+loaded. A status-only broker executable builds and self-tests, but no service,
+installer feature, or exclusive-input UI is installed. No
+test-signing, Driver Verifier, HVCI, HLK, anti-cheat, upgrade/rollback, Safe Mode, or
+watchdog-kill physical run has occurred. The effective mode therefore remains
+pass-through. The complete gates are in
+[`EXCLUSIVE_KEYBOARD_INPUT.md`](EXCLUSIVE_KEYBOARD_INPUT.md) and
+[`DRIVER_SIGNING_AND_RELEASE.md`](DRIVER_SIGNING_AND_RELEASE.md).
 
 ## Next milestone
 

@@ -1,6 +1,7 @@
 # Logitech G13 support boundary
 
-> Status: code-supported with an attended all-control visual-response report; formal finite HIL evidence pending
+> Status: code-supported with attended all-control visual response and exact-target
+> RGB lighting spot checks; formal finite HIL evidence pending
 >
 > Exact physical identity: USB `046D:C21C`, Raw Input `RIM_TYPEHID`, usage
 > page/usage `FF00:0000`
@@ -29,8 +30,11 @@ code-rendered tile grid:
 - four discrete stick directions derived from X/Y with conservative hysteresis.
 
 The raw X/Y state remains provider-specific; profiles currently map the four
-direction controls, not arbitrary analog values. Tappy does not send G13 feature or
-output reports and does not control its LCD, backlight, or memory LEDs.
+direction controls, not arbitrary analog values. Tappy controls only the G13's one
+whole-device RGB backlight zone through a direct five-byte `0x07, R, G, B, 0`
+feature report sent to the confirmed physical `046D:C21C` interface. Report `0x05`
+belongs to the M-key indicators. Tappy does not provide per-key RGB, LCD control, or
+memory-indicator programming.
 
 The G13 follows the same explicit-selection safety contract as keyboard controllers:
 enumeration never arms it; selection must observe a well-formed neutral frame plus a
@@ -53,6 +57,14 @@ run record preserves the statement and screenshot. This is useful attended evide
 but it is not the finite verifier: no aggregate verifier record, mapped-output run,
 pass-through witness, unplug-while-held run, or completed HIL record exists, so the
 device is not Functional or Verified.
+
+On 2026-09-04 an initial broad Logitech lighting path was rejected after it changed
+the owner's protected G910 rather than the G13. Tappy removed that path. The owner
+then confirmed that the exact-interface `0x07` implementation changed the physical
+G13 to purple and left the G910 under its normal lighting control. This proves the
+targeting correction and single-zone RGB report on the attached unit, but does not
+replace the remaining finite input/output, reconnect, cleanup, and pass-through
+evidence.
 
 The finite verifier and its safeguards are described in
 [`HARDWARE_TEST_STATION.md`](HARDWARE_TEST_STATION.md). It must be explicitly armed;

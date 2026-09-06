@@ -14,9 +14,9 @@ types, or Windows key classes. Platform services implement narrow interfaces and
 WPF application is only a composition and presentation layer.
 
 ```text
-Raw Input message-only window (dedicated native thread)
-    -> keyboard packets OR exact Logitech G13 vendor-HID reports
-    -> authoritative ContainerId grouping + sanitized device descriptor
+Raw Input message-only window OR selected WinMM MIDI input port
+    -> keyboard packets, exact Logitech G13 vendor-HID reports, or MIDI short messages
+    -> authoritative ContainerId grouping or sanitized provider identity
     -> provider-native physical control signal
     -> selected-controller/identification gate
     -> state tracker (press, release, repeat, simultaneous set)
@@ -33,6 +33,32 @@ all converge on the same owner-release path. Failure is fail-open with respect t
 physical keyboard: Tappy stops output and releases owned state; it never claims that
 the original key was blocked.
 
+### Optional exclusive-keyboard boundary
+
+The owner approved a separate signed-driver track on 2026-09-04. It is not part of the
+current runtime or installer. The accepted design uses a KMDF upper device filter to
+copy scan packets from one exact secondary keyboard into a bounded nonpaged ring and,
+only while a short kernel watchdog lease is healthy, omit those packets from the
+KbdClass callback. A distinct exact primary keyboard is always passed through. An
+authenticated LocalSystem broker owns the restricted device handle and forwards
+sanitized events to the non-administrative WPF process over local IPC.
+
+The kernel defaults to pass-through and restores it without WPF cooperation on stale
+heartbeat, broker/app exit, invalid protocol data, overflow, PnP/power change, or any
+role mismatch. Production activation additionally requires an HLK-certified
+Microsoft-signed build, HVCI evidence, normal boot configuration, mouse/tray and
+primary-keyboard recovery, and no protected application. The deterministic gate,
+matching native/managed protocol, unsigned KMDF lab scaffold, and LocalSystem-capable
+broker scaffold compile today. The broker accepts only a locally ACL-authorized,
+HMAC-authenticated status client and has no suppression command. The driver and
+service are not installed or loaded, stable filter-to-Raw-Input device binding and
+signed-client verification are unfinished, and no activation UI is claimed.
+The managed coordinator already treats a multi-interface ContainerId group as one
+physical role: every primary interface must acknowledge pass-through before any
+secondary interface may suppress, and shutdown fails open the entire secondary group
+first.
+See [exclusive keyboard input](EXCLUSIVE_KEYBOARD_INPUT.md).
+
 ## Projects
 
 ### `Tappy.Core`
@@ -44,7 +70,8 @@ Contains immutable/snapshot-oriented models and deterministic engines:
 - `ControlSignal` carries controller session, provider-native `ControlId`,
   press/release/repeat kind, injection metadata, and a monotonic timestamp. Keyboard
   `ControlId` values encode scan code and E0/E1; G13 values encode report/button or
-  thresholded stick-direction identity.
+  thresholded stick-direction identity; MIDI values encode channel plus note,
+  program, or CC direction.
 - `ControllerInputStateTracker` keeps independent sets for every session and derives a
   repeat only when a second make arrives while the same control is down.
 - `ControllerActivationGate` requires an explicit target, a clean released state, a
@@ -67,6 +94,7 @@ Contains immutable/snapshot-oriented models and deterministic engines:
   message-only window. It registers Generic Desktop/Keyboard with
   `RIDEV_INPUTSINK | RIDEV_DEVNOTIFY`, enumerates keyboard handles, parses
   `WM_INPUT`, and emits hot-plug removal.
+
 - Raw device paths exist only inside this process boundary. A SHA-256-based
   persistent instance fingerprint and a short display fingerprint are exposed;
   profiles and diagnostics never receive the path.
@@ -83,6 +111,11 @@ Contains immutable/snapshot-oriented models and deterministic engines:
   vendor-HID collection. It validates the eight-byte report, exposes 39 code-defined
   controls, and excludes the `046D:C232` G HUB virtual keyboard. See the
   [G13 support boundary](LOGITECH_G13.md).
+- `WinMmMidiInputProvider` enumerates Windows MIDI input ports without a third-party
+  dependency and opens only the explicitly selected port. Note-on/note-off become
+  ordinary held controls. Note-on with velocity zero becomes note-off. Program
+  changes and CC increase/decrease movements become balanced press/release pulses,
+  so a fader cannot remain stuck in the keyboard state tracker.
 - `SendInputKeyboardOutput` tags every `SendInput` record with a process-specific
   Tappy marker and balances every owned press with a release.
 - `WindowsControllerActionOutput` runs bounded sequences away from the Raw Input
@@ -95,9 +128,20 @@ Contains immutable/snapshot-oriented models and deterministic engines:
   last-known-good copy, and quarantines corrupt input.
 - Windows lifecycle and hotkey adapters call the engine's single cleanup API.
 
+### `Tappy.InputBroker`
+
+- Hosts the future privileged boundary using the supported .NET Windows-service
+  lifetime. Its pipe admits only LocalSystem and one installer-selected user SID,
+  rejects remote computers, accepts one client at a time, and uses a bounded,
+  versioned HMAC frame with strict per-direction sequences.
+- The current command surface is intentionally status-only. It reports that stable
+  device association and signed-client verification are incomplete; no message can
+  open a filter endpoint, assign keyboard roles, heartbeat suppression, or forward
+  captured events.
+
 ### `Tappy.App`
 
-The WPF shell explicitly composes the keyboard and G13 providers, displays source
+The WPF shell explicitly composes the keyboard, G13, and MIDI providers, displays source
 truth prominently, lets the user choose/identify/confirm one device, renders a
 data-driven key grid, drains visual transitions in order, provides
 mapping and Rehearsal controls, and preserves mouse-accessible emergency recovery.
@@ -106,11 +150,13 @@ PowerShell, MIDI, and OSC steps without producing output while it is open.
 The visual buffer preserves press/release ordering, compacts only after a bounded
 backlog, and keeps physical `IsPressed` state separate from a minimum-duration
 illumination pulse so a quick tap is visible without delaying input or output.
-For the exact G13 identity, each photo hotspot references the same
-`ControlTileViewModel` used by the assignment grid. Grid selection and physical
-press illumination therefore cannot drift, while the photo remains non-interactive
-and simultaneous held controls can glow together. Unknown identities receive no
-photo rather than guessed artwork.
+For the exact G13 identity and exact-name APC MINI v1 model, each photo hotspot
+references the same `ControlTileViewModel` used by the assignment grid. Grid
+selection and physical input illumination therefore cannot drift, while each photo
+remains non-interactive and simultaneous held controls can glow together. The G13
+uses its verified cropped owner photograph coordinate space; the APC visual uses a
+separate square coordinate space selected dynamically with the model. Unknown
+identities receive no photo rather than guessed artwork.
 During identification it marks WPF key events handled so the candidate press cannot
 activate Tappy's own focused controls; this is local UI protection, not system-wide
 suppression of the original key.
@@ -174,14 +220,17 @@ p99-under-5-ms are targets, not claims until physical evidence is captured.
 
 `IInputDeviceProvider` is a real Core seam for discrete press/release/repeat signals
 with provider-native `ControlId` values. The application now explicitly composes
-`RawInputKeyboardProvider` and the model-specific `LogitechG13InputProvider`; that is
+`RawInputKeyboardProvider`, the model-specific `LogitechG13InputProvider`, and
+`WinMmMidiInputProvider`; that is
 not yet a general plug-in or cross-provider composite-identity system. The G13
 provider publishes raw X/Y through a provider-specific event and maps conservative
 thresholds to four discrete direction controls. Generic analog profile values,
 deadzones, and user-configurable thresholds remain future schema work. Generic
-learned raw-HID buttons, MIDI, encoders, and joystick providers still require their
-own identity, selection, UI, and test integration. Support packs remain data-only and
-never load code.
+learned raw-HID buttons, generic encoders, and joystick providers still require their
+own identity, selection, UI, and test integration. MIDI absolute-value transforms,
+velocity thresholds, SysEx, clock, and device LED feedback require a future profile
+schema; the current CC direction controls intentionally preserve discrete mapping
+semantics. Support packs remain data-only and never load code.
 
 ## Reuse provenance
 

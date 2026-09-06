@@ -67,6 +67,12 @@ public sealed class ProfileSnapshotTests
         controller.SourceMode.Effective = EffectiveSourceMode.NeedsAttention;
         controller.SourceMode.Status = "Exclusive backend unavailable; failed open";
         controller.Layout = ControllerLayoutDefinition.CreateGrid(controls, columns: 12);
+        var calibrated = controller.Layout.Rows[0].Controls[0];
+        calibrated.AnalogRawAtMinimum = 11;
+        calibrated.AnalogRawAtMaximum = 119;
+        calibrated.AnalogRawAtCenter = 63;
+        calibrated.EncoderDegreesPerStep = 7.5;
+        calibrated.EncoderReversed = true;
         controller.Layers[0].Bindings.AddRange(controls.Select((control, index) => new ControlBindingDefinition
         {
             ControlId = control,
@@ -87,6 +93,12 @@ public sealed class ProfileSnapshotTests
         Assert.Equal(EffectiveSourceMode.NeedsAttention, loadedController.SourceMode.Effective);
         Assert.Equal(controller.Identity.PersistentId, loadedController.Identity.PersistentId);
         Assert.Equal(controller.Identity.Confidence, loadedController.Identity.Confidence);
+        var loadedCalibration = loadedController.Layout.Rows[0].Controls[0];
+        Assert.Equal(11, loadedCalibration.AnalogRawAtMinimum);
+        Assert.Equal(119, loadedCalibration.AnalogRawAtMaximum);
+        Assert.Equal(63, loadedCalibration.AnalogRawAtCenter);
+        Assert.Equal(7.5, loadedCalibration.EncoderDegreesPerStep);
+        Assert.True(loadedCalibration.EncoderReversed);
         var reconnectedIdentity = new ControllerIdentity(
             new ControllerSessionId("session-after-replug"),
             controller.Identity.PersistentId,

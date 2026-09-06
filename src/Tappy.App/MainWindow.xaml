@@ -21,11 +21,6 @@
             <Setter Property="CornerRadius" Value="13" />
             <Setter Property="Padding" Value="16" />
         </Style>
-        <CroppedBitmap x:Key="LogitechG13ControllerPhoto" SourceRect="0,240,853,1275">
-            <CroppedBitmap.Source>
-                <BitmapImage UriSource="/Tappy;component/Assets/Controllers/logitech-g13-user-photo.png" />
-            </CroppedBitmap.Source>
-        </CroppedBitmap>
     </Window.Resources>
     <Grid Background="{DynamicResource WindowBrush}" Margin="16">
         <Grid.RowDefinitions>
@@ -139,9 +134,44 @@
                         <TextBlock Text="Press a confirmed controller key or click its tile. Then search named Windows actions or choose from thousands of supported key combinations."
                                    TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}" Margin="0,6,0,10" />
                         <TextBlock Text="{Binding SelectedControlLabel, StringFormat=Selected: {0}}" FontWeight="SemiBold" />
-                        <Button Content="Build an assignment…" Click="OpenAssignmentEditor_OnClick"
+                        <Button Content="{Binding AssignmentEditorButtonLabel}" Click="OpenAssignmentEditor_OnClick"
                                 IsEnabled="{Binding CanAssignSelectedControl}" Margin="0,8,0,10"
-                                AutomationProperties.Name="Open the searchable keyboard assignment editor" />
+                                AutomationProperties.Name="Build or edit the selected control assignment" />
+                        <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1" CornerRadius="7" Padding="8" Margin="0,0,0,10"
+                                Visibility="{Binding CanCalibrateSelectedControl, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="POSITION CALIBRATION" FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource MutedTextBrush}" />
+                                <TextBlock Text="{Binding SelectedAnalogValueText}" FontWeight="SemiBold" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding SelectedAnalogCalibrationText}" FontSize="10"
+                                           Foreground="{DynamicResource MutedTextBrush}" />
+                                <TextBlock Text="Move the physical control, then capture its beginning, optional middle, and end. Reversed raw ranges are supported."
+                                           TextWrapping="Wrap" FontSize="10" Margin="0,4,0,5"
+                                           Foreground="{DynamicResource MutedTextBrush}" />
+                                <WrapPanel>
+                                    <Button Content="Beginning" Click="CaptureAnalogMinimum_OnClick" />
+                                    <Button Content="Middle" Click="CaptureAnalogCenter_OnClick" />
+                                    <Button Content="End" Click="CaptureAnalogMaximum_OnClick" />
+                                    <Button Content="Reset" Click="ResetAnalogCalibration_OnClick" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1" CornerRadius="7" Padding="8" Margin="0,0,0,10"
+                                Visibility="{Binding CanTuneSelectedEncoder, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="ENDLESS ENCODER CALIBRATION" FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource MutedTextBrush}" />
+                                <TextBlock Text="{Binding SelectedEncoderCalibrationText}" Margin="0,3,0,5" />
+                                <WrapPanel>
+                                    <Button Content="Slower" Click="SlowEncoder_OnClick" />
+                                    <Button Content="Faster" Click="FastEncoder_OnClick" />
+                                    <Button Content="Reverse" Click="ReverseEncoder_OnClick" />
+                                    <Button Content="Zero line" Click="ResetEncoderAngle_OnClick" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
                         <CheckBox IsChecked="{Binding IsRehearsal, Mode=TwoWay}" Margin="0,0,0,9"
                                   AutomationProperties.Name="Rehearsal Mode">
                             <TextBlock Text="Rehearsal Mode — recognize and illuminate; suppress all output"
@@ -160,6 +190,7 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
@@ -177,30 +208,117 @@
                             <TextBlock Text="{Binding ActiveLayerName}" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
                     </Grid>
-                    <Grid Grid.Row="1">
+                    <Border Grid.Row="1" Background="{DynamicResource RaisedBrush}" CornerRadius="8"
+                            Padding="8" Margin="4,0,4,10">
+                        <WrapPanel VerticalAlignment="Center">
+                            <TextBlock Text="Workspace columns" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="LayoutColumnsBox" Width="64"
+                                      ItemsSource="{Binding LayoutGridChoices}"
+                                      SelectedItem="{Binding LayoutColumns, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" Foreground="{DynamicResource ComboBoxTextBrush}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Text="Rows" VerticalAlignment="Center" Margin="12,0,6,0" />
+                            <ComboBox x:Name="LayoutRowsBox" Width="64"
+                                      ItemsSource="{Binding LayoutGridChoices}"
+                                      SelectedItem="{Binding LayoutRows, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" Foreground="{DynamicResource ComboBoxTextBrush}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <CheckBox IsChecked="{Binding SnapLayoutToGrid, Mode=TwoWay}"
+                                      Content="Snap to grid and neighbors" VerticalAlignment="Center"
+                                      Margin="14,0,8,0" />
+                            <Button Content="Apply workspace" Click="ApplyLayoutWorkspace_OnClick" />
+                            <Button Content="Arrange all as grid" Click="ArrangeLayoutAsGrid_OnClick" />
+                            <Button Content="Select all" Click="SelectAllTiles_OnClick" Margin="12,2,2,2" />
+                            <Button Content="Clear selection" Click="ClearTileSelection_OnClick" />
+                            <TextBlock Text="{Binding GroupSelectionLabel}" VerticalAlignment="Center" Margin="8,0" />
+                            <ComboBox Width="112" ItemsSource="{Binding TileColorChoices}"
+                                      SelectedItem="{Binding SelectedTileColor, Mode=TwoWay}"
+                                      IsEnabled="{Binding HasSupportedTileColors}"
+                                      AutomationProperties.Name="Square color">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Width="14" Height="14" CornerRadius="3" Margin="0,0,6,0"
+                                                    Background="{Binding Background}" BorderBrush="#687386" BorderThickness="1" />
+                                            <TextBlock Text="{Binding Label}" Foreground="{DynamicResource ComboBoxTextBrush}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Content="{Binding TileColorApplyButtonLabel}" Click="ApplyTileColor_OnClick"
+                                    IsEnabled="{Binding HasSupportedTileColors}" />
+                            <Button Content="{Binding TileColorSyncButtonLabel}" Click="SyncTileColorsToHardware_OnClick"
+                                    IsEnabled="{Binding HasSupportedTileColors}"
+                                    ToolTip="{Binding TileColorSyncToolTip}" />
+                            <TextBlock Text="{Binding TileColorAvailabilityLabel}"
+                                       Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"
+                                       Margin="8,0" />
+                            <TextBlock Text="Drag empty space to select a group; drag any checked square to move the group."
+                                       Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"
+                                       Margin="12,0,0,0" />
+                        </WrapPanel>
+                    </Border>
+                    <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" MinWidth="120" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition x:Name="ControllerPhotoColumn" Width="0" MinWidth="0" MaxWidth="1200" />
                         </Grid.ColumnDefinitions>
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                        <ScrollViewer x:Name="ControllerLayoutViewport"
+                                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                      HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                      SizeChanged="ControllerLayoutViewport_OnSizeChanged"
                                       PanningMode="Both" Focusable="False" AutomationProperties.Name="Controller control grid">
-                            <ItemsControl ItemsSource="{Binding Controls}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1" CornerRadius="8" Padding="8"
+                                    HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <Grid x:Name="ControllerWorkspaceHost" Background="Transparent"
+                                  MinWidth="{Binding LayoutSurfaceWidth}" MinHeight="{Binding LayoutSurfaceHeight}"
+                                  PreviewMouseLeftButtonDown="ControllerWorkspace_OnPreviewMouseLeftButtonDown"
+                                  PreviewMouseMove="ControllerWorkspace_OnPreviewMouseMove"
+                                  PreviewMouseLeftButtonUp="ControllerWorkspace_OnPreviewMouseLeftButtonUp">
+                            <ItemsControl x:Name="ControllerLayoutCanvas" ItemsSource="{Binding Controls}"
+                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <WrapPanel IsItemsHost="True" ItemWidth="144" ItemHeight="116" MaxWidth="760" />
+                                        <Canvas IsItemsHost="True" />
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:ControlTileViewModel}">
-                                        <Button Click="ControlTile_OnClick" Tag="{Binding}" Margin="5" Padding="5"
+                                        <Grid Width="{Binding TileWidth}" Height="{Binding TileHeight}">
+                                        <Button Click="ControlTile_OnClick" Tag="{Binding}" Margin="0" Padding="5"
+                                                Cursor="SizeAll"
+                                                PreviewMouseLeftButtonDown="ControlTile_OnPreviewMouseLeftButtonDown"
+                                                PreviewMouseMove="ControlTile_OnPreviewMouseMove"
+                                                PreviewMouseLeftButtonUp="ControlTile_OnPreviewMouseLeftButtonUp"
                                                 AutomationProperties.Name="{Binding AutomationName}"
-                                                AutomationProperties.HelpText="Pressing the physical control selects and illuminates this tile">
+                                                AutomationProperties.HelpText="Click to select this control, or drag it anywhere in the controller workspace">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                    <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
+                                                    <Setter Property="Background" Value="{Binding TileBackground}" />
+                                                    <Setter Property="Foreground" Value="{Binding TileForeground}" />
                                                     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
                                                     <Setter Property="BorderThickness" Value="1" />
                                                     <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsGroupSelected}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#F2C14E" />
+                                                            <Setter Property="BorderThickness" Value="3" />
+                                                        </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                                                             <Setter Property="BorderThickness" Value="3" />
@@ -215,7 +333,7 @@
                                             <StackPanel>
                                                 <TextBlock Text="{Binding Label}" FontWeight="Bold" FontSize="13"
                                                            TextWrapping="Wrap" TextTrimming="None" TextAlignment="Center"
-                                                           LineHeight="15" MaxWidth="122" HorizontalAlignment="Center"
+                                                           LineHeight="15" HorizontalAlignment="Center"
                                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                                                 <TextBlock Text="{Binding Action}" TextWrapping="Wrap" TextAlignment="Center" FontSize="11"
                                                            MaxWidth="94" Margin="0,5,0,0"
@@ -224,12 +342,53 @@
                                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Margin="0,3,0,0" />
                                             </StackPanel>
                                         </Button>
+                                        <CheckBox Width="16" Height="16" Margin="4" Padding="0"
+                                                  HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                  Panel.ZIndex="3" ToolTip="Include this square in the movable group"
+                                                  IsChecked="{Binding IsGroupSelected, Mode=OneWay}"
+                                                  Checked="TileGroupCheckBox_OnChecked"
+                                                  Unchecked="TileGroupCheckBox_OnUnchecked"
+                                                  AutomationProperties.Name="Select square for group movement" />
+                                        <Thumb Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                               Cursor="SizeNWSE" Background="{DynamicResource ControllerPhotoGlowBrush}"
+                                               BorderBrush="{DynamicResource PressedTextBrush}" BorderThickness="1"
+                                               DragStarted="ResizeTile_OnDragStarted"
+                                               DragDelta="ResizeTile_OnDragDelta"
+                                               DragCompleted="ResizeTile_OnDragCompleted"
+                                               AutomationProperties.Name="Resize selected controller square">
+                                            <Thumb.Style>
+                                                <Style TargetType="Thumb">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Thumb.Style>
+                                        </Thumb>
+                                        </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <Canvas IsHitTestVisible="False" Panel.ZIndex="10">
+                                <Border x:Name="SelectionMarquee" Visibility="Collapsed"
+                                        Background="#3358B9FF" BorderBrush="#78C8FF"
+                                        BorderThickness="2" CornerRadius="3" />
+                            </Canvas>
+                            </Grid>
+                            </Border>
                         </ScrollViewer>
 
-                        <Border Grid.Column="1" Width="300" Margin="12,0,0,0" Padding="10"
+                        <GridSplitter x:Name="ControllerPhotoSplitter" Grid.Column="1" Width="8" Margin="6,0"
+                                      HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                                      ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                                      Background="{DynamicResource BorderBrush}" ShowsPreview="True"
+                                      DragCompleted="ControllerPhotoSplitter_OnDragCompleted"
+                                      Visibility="{Binding HasControllerPhoto, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                      AutomationProperties.Name="Resize controller photo" />
+
+                        <Border Grid.Column="2" Margin="0" Padding="10"
                                 Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="10"
                                 Visibility="{Binding HasControllerPhoto, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -241,21 +400,25 @@
                                 </Grid.RowDefinitions>
                                 <StackPanel Margin="0,0,0,8">
                                     <TextBlock Text="Visual locator" FontWeight="SemiBold" FontSize="15" />
-                                    <TextBlock Text="A selected square or physical press lights the matching control. The photo is not another button grid."
+                                    <TextBlock Text="Saved supported colors remain visible and brighten on a matching physical press. Non-addressable controls keep their photographed appearance."
                                                Foreground="{DynamicResource MutedTextBrush}" FontSize="10"
                                                TextWrapping="Wrap" />
                                 </StackPanel>
                                 <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="Both"
                                          HorizontalAlignment="Center" VerticalAlignment="Center"
-                                         AutomationProperties.Name="Logitech G13 photo with live control illumination">
-                                    <Grid Width="853" Height="1275" IsHitTestVisible="False">
-                                        <Image Source="{StaticResource LogitechG13ControllerPhoto}" Stretch="Fill"
-                                               AutomationProperties.Name="User-provided Logitech G13 controller photo" />
+                                         AutomationProperties.Name="{Binding ControllerPhotoName}">
+                                    <Grid Width="{Binding ControllerPhotoWidth}"
+                                          Height="{Binding ControllerPhotoHeight}"
+                                          IsHitTestVisible="False">
+                                        <Image Source="{Binding ControllerPhotoSource}" Stretch="Fill"
+                                               AutomationProperties.Name="{Binding ControllerPhotoName}" />
                                         <ItemsControl x:Name="ControllerPhotoHotspots"
                                                       ItemsSource="{Binding ControllerPhotoHotspots}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
-                                                    <Canvas IsItemsHost="True" Width="853" Height="1275" />
+                                                    <Canvas IsItemsHost="True"
+                                                            Width="{Binding DataContext.ControllerPhotoWidth, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            Height="{Binding DataContext.ControllerPhotoHeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemContainerStyle>
@@ -266,25 +429,105 @@
                                             </ItemsControl.ItemContainerStyle>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="{x:Type vm:ControllerPhotoHotspotViewModel}">
-                                                    <Border Width="{Binding Width}" Height="{Binding Height}"
-                                                            CornerRadius="{Binding CornerRadius}"
-                                                            Background="{DynamicResource ControllerPhotoGlowBrush}"
-                                                            BorderBrush="{DynamicResource ControllerPhotoGlowBrush}"
-                                                            BorderThickness="4">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Opacity" Value="0" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding Tile.IsSelected}" Value="True">
-                                                                        <Setter Property="Opacity" Value="0.82" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding Tile.IsIlluminated}" Value="True">
-                                                                        <Setter Property="Opacity" Value="0.82" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                    </Border>
+                                                    <Grid Width="{Binding Width}" Height="{Binding Height}">
+                                                        <Border Width="{Binding Width}" Height="{Binding Height}"
+                                                                CornerRadius="{Binding CornerRadius}"
+                                                                BorderThickness="4"
+                                                                Visibility="{Binding IsButton, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="{DynamicResource ControllerPhotoGlowBrush}" />
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource ControllerPhotoGlowBrush}" />
+                                                                    <Setter Property="Opacity" Value="0" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Tile.HasCustomColor}" Value="True">
+                                                                            <Setter Property="Background" Value="{Binding Tile.TileBackground}" />
+                                                                            <Setter Property="BorderBrush" Value="{Binding Tile.TileBackground}" />
+                                                                            <Setter Property="Opacity" Value="0.58" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Tile.IsSelected}" Value="True">
+                                                                            <Setter Property="Opacity" Value="0.82" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Tile.IsIlluminated}" Value="True">
+                                                                            <Setter Property="Opacity" Value="1" />
+                                                                            <Setter Property="BorderThickness" Value="7" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                        </Border>
+
+                                                        <Grid Visibility="{Binding IsLinear, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                            <!-- The opaque, neutral channel hides the photographed cap. Only the
+                                                                 movable cap receives selection/motion illumination. -->
+                                                            <Border Background="#EC171B21" BorderBrush="#707985" BorderThickness="2"
+                                                                    CornerRadius="7" />
+                                                            <Border Width="8" Margin="0,8" HorizontalAlignment="Center"
+                                                                    Background="#090B0E" BorderBrush="#444B54" BorderThickness="1"
+                                                                    CornerRadius="4"
+                                                                    Visibility="{Binding IsVertical, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                            <Border Height="8" Margin="8,0" VerticalAlignment="Center"
+                                                                    Background="#090B0E" BorderBrush="#444B54" BorderThickness="1"
+                                                                    CornerRadius="4"
+                                                                    Visibility="{Binding IsHorizontal, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                            <Canvas>
+                                                                <Border Canvas.Left="{Binding IndicatorLeft}" Canvas.Top="{Binding IndicatorTop}"
+                                                                        Width="{Binding IndicatorWidth}" Height="{Binding IndicatorHeight}"
+                                                                        CornerRadius="5" BorderThickness="3">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Background" Value="#3A4049" />
+                                                                            <Setter Property="BorderBrush" Value="#AAB1BA" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding IsIlluminated}" Value="True">
+                                                                                    <Setter Property="Background" Value="{DynamicResource PressedBrush}" />
+                                                                                    <Setter Property="BorderBrush" Value="{DynamicResource PressedTextBrush}" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
+                                                                    <Grid>
+                                                                        <Border Height="5" Margin="7,0" VerticalAlignment="Center"
+                                                                                Background="#E8EDF2" CornerRadius="2"
+                                                                                Visibility="{Binding IsVertical, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                        <Border Width="5" Margin="0,7" HorizontalAlignment="Center"
+                                                                                Background="#E8EDF2" CornerRadius="2"
+                                                                                Visibility="{Binding IsHorizontal, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                    </Grid>
+                                                                </Border>
+                                                            </Canvas>
+                                                        </Grid>
+
+                                                        <Grid Visibility="{Binding IsRotary, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                            <Ellipse Fill="#C5222730" Stroke="#9AA4B1" StrokeThickness="3" />
+                                                            <Line X1="{Binding RotationCenterX}" Y1="{Binding RotationCenterY}"
+                                                                  X2="{Binding RotationCenterX}" Y2="{Binding RotaryLineEndY}"
+                                                                  StrokeThickness="6" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                                                                <Line.RenderTransform>
+                                                                    <RotateTransform Angle="{Binding IndicatorAngle}"
+                                                                                     CenterX="{Binding RotationCenterX}"
+                                                                                     CenterY="{Binding RotationCenterY}" />
+                                                                </Line.RenderTransform>
+                                                                <Line.Style>
+                                                                    <Style TargetType="Line">
+                                                                        <Setter Property="Stroke" Value="#F0F4F8" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsIlluminated}" Value="True">
+                                                                                <Setter Property="Stroke" Value="{DynamicResource PressedBrush}" />
+                                                                                <Setter Property="StrokeThickness" Value="9" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Line.Style>
+                                                            </Line>
+                                                        </Grid>
+                                                    </Grid>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -293,7 +536,7 @@
                             </Grid>
                         </Border>
                     </Grid>
-                    <Border Grid.Row="2" Background="{DynamicResource RaisedBrush}" CornerRadius="8" Padding="9" Margin="4,10,4,0">
+                    <Border Grid.Row="3" Background="{DynamicResource RaisedBrush}" CornerRadius="8" Padding="9" Margin="4,10,4,0">
                         <WrapPanel>
                             <TextBlock Text="{Binding PressedSummary, StringFormat=Down: {0}}" Margin="0,0,18,0" />
                             <TextBlock Text="{Binding EventSummary}" Foreground="{DynamicResource MutedTextBrush}" />

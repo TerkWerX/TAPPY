@@ -138,6 +138,14 @@ card displays **Pass-through**, **Global block**, **Exclusive**, or **Needs
 attention**. If a backend fails, Tappy fails open and never pretends blocking is
 active.
 
+**2026-09-04 owner-approved implementation track:** Build the optional subsystem as
+the separately installed KMDF filter and authenticated broker defined in
+[`EXCLUSIVE_KEYBOARD_INPUT.md`](EXCLUSIVE_KEYBOARD_INPUT.md). A distinct physically
+verified primary keyboard must remain pass-through. Production exclusive mode
+requires the deterministic activation policy, kernel watchdog, recovery paths,
+HVCI/Verifier/HLK evidence, Microsoft-signed package, and protected-application gate.
+Until all of those exist, the effective mode remains pass-through.
+
 ### Feedback-loop prevention
 
 Tappy's own `SendInput` output must never re-trigger Tappy macros. Tag injected

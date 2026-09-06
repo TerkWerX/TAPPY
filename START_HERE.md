@@ -27,8 +27,8 @@ website synchronization folder.
 
 The local repository, architecture, decision record, test projects, Raw Input
 keyboard slice, K15 ContainerId grouping, and dedicated G13 provider are established.
-The current Release verification is 174 passing tests (Core 30, Windows 90, App 31,
-G13 HIL tool 23).
+The current Release verification is 393 passing tests (Core 58, Windows 134, App 109,
+Input Broker 16, G13 HIL tool 23, Output Witness 53).
 The schema-3 descriptor probe observes the K15 and physical G13 as separate logical
 controllers without capturing input. Physical control/HIL evidence remains pending;
 keep `F:\TIPPY` read-only and consult the living docs before changing scope.
@@ -36,4 +36,9 @@ keep `F:\TIPPY` read-only and consult the living docs before changing scope.
 The prompt deliberately treats per-device keyboard suppression as a separate,
 security-sensitive engineering decision. Device-specific Raw Input can identify a
 keyboard, but it cannot by itself prevent that keyboard's original keystrokes from
-reaching every other application. Tappy must never pretend otherwise.
+reaching every other application. The owner approved the optional signed-filter track
+on 2026-09-04. Its deterministic activation gate, versioned protocol, unsigned KMDF
+lab scaffold, tested managed wire client, and status-only broker service scaffold are
+present. The driver and service have never been installed or loaded; no installer
+feature or exclusive UI is enabled, and the broker has no command that can arm
+suppression. Tappy must never pretend otherwise.

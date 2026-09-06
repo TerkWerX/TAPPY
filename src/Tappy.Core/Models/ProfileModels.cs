@@ -178,15 +178,34 @@ public sealed class LayoutControlDefinition
     public ControlId? ControlId { get; set; }
     public LayoutControlKind Kind { get; set; } = LayoutControlKind.Key;
     public string Label { get; set; } = string.Empty;
+    public double? X { get; set; }
+    public double? Y { get; set; }
     public double Width { get; set; } = 1;
     public double Height { get; set; } = 1;
     public double GapBefore { get; set; }
     public string Cluster { get; set; } = string.Empty;
+    public string ColorKey { get; set; } = "Default";
+    public int AnalogRawAtMinimum { get; set; }
+    public int AnalogRawAtMaximum { get; set; } = 127;
+    public int? AnalogRawAtCenter { get; set; }
+    public double EncoderDegreesPerStep { get; set; } = 15;
+    public bool EncoderReversed { get; set; }
 
     public void Normalize()
     {
         Label = Label?.Trim() ?? string.Empty;
         Cluster = Cluster?.Trim() ?? string.Empty;
+        ColorKey = string.IsNullOrWhiteSpace(ColorKey) ? "Default" : ColorKey.Trim();
+        AnalogRawAtMinimum = Math.Clamp(AnalogRawAtMinimum, -1_000_000, 1_000_000);
+        AnalogRawAtMaximum = Math.Clamp(AnalogRawAtMaximum, -1_000_000, 1_000_000);
+        AnalogRawAtCenter = AnalogRawAtCenter is { } center
+            ? Math.Clamp(center, -1_000_000, 1_000_000)
+            : null;
+        EncoderDegreesPerStep = double.IsFinite(EncoderDegreesPerStep)
+            ? Math.Clamp(EncoderDegreesPerStep, 0.25, 180)
+            : 15;
+        X = X is { } x && double.IsFinite(x) ? Math.Clamp(x, 0, 100_000) : null;
+        Y = Y is { } y && double.IsFinite(y) ? Math.Clamp(y, 0, 100_000) : null;
         Width = double.IsFinite(Width) ? Math.Clamp(Width, 0.25, 20) : 1;
         Height = double.IsFinite(Height) ? Math.Clamp(Height, 0.25, 20) : 1;
         GapBefore = double.IsFinite(GapBefore) ? Math.Clamp(GapBefore, 0, 20) : 0;
@@ -201,10 +220,18 @@ public sealed class LayoutControlDefinition
         ControlId = ControlId,
         Kind = Kind,
         Label = Label,
+        X = X,
+        Y = Y,
         Width = Width,
         Height = Height,
         GapBefore = GapBefore,
-        Cluster = Cluster
+        Cluster = Cluster,
+        ColorKey = ColorKey,
+        AnalogRawAtMinimum = AnalogRawAtMinimum,
+        AnalogRawAtMaximum = AnalogRawAtMaximum,
+        AnalogRawAtCenter = AnalogRawAtCenter,
+        EncoderDegreesPerStep = EncoderDegreesPerStep,
+        EncoderReversed = EncoderReversed
     };
 }
 
@@ -235,6 +262,9 @@ public sealed class ControllerLayoutDefinition
     public string Id { get; set; } = "generated-grid";
     public string Name { get; set; } = "Generated key grid";
     public ControllerLayoutOrientation Orientation { get; set; }
+    public int GridColumns { get; set; }
+    public int GridRows { get; set; }
+    public bool SnapToGrid { get; set; } = true;
     public List<LayoutRowDefinition> Rows { get; set; } = [];
 
     public static ControllerLayoutDefinition CreateGrid(IEnumerable<ControlId> controls, int columns = 6)
@@ -266,6 +296,10 @@ public sealed class ControllerLayoutDefinition
         {
             Rows[index].Normalize(index);
         }
+
+        var naturalColumns = Rows.Count == 0 ? 1 : Rows.Max(row => row.Controls.Count);
+        GridColumns = GridColumns <= 0 ? naturalColumns : Math.Clamp(GridColumns, 1, 40);
+        GridRows = GridRows <= 0 ? Math.Max(1, Rows.Count) : Math.Clamp(GridRows, 1, 40);
     }
 
     public ControllerLayoutDefinition Clone() => new()
@@ -273,6 +307,9 @@ public sealed class ControllerLayoutDefinition
         Id = Id,
         Name = Name,
         Orientation = Orientation,
+        GridColumns = GridColumns,
+        GridRows = GridRows,
+        SnapToGrid = SnapToGrid,
         Rows = Rows?.Select(row => row.Clone()).ToList() ?? []
     };
 }
@@ -369,7 +406,7 @@ public sealed class ControllerProfile
 
 public sealed class TappyProfile
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string Name { get; set; } = "Default";

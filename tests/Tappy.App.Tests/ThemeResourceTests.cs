@@ -52,6 +52,8 @@ public sealed class ThemeResourceTests
             ContrastRatio(assignmentSelectionText, assignmentSelection) >= 7,
             $"{themeFile} selected assignment text must meet enhanced contrast.");
         AssertComboBoxStyleUsesDedicatedBrushes(document);
+        AssertLightSurfaceControlStyles(document);
+        AssertToolTipUsesReadableThemeBrushes(document);
     }
 
     [Fact]
@@ -89,6 +91,8 @@ public sealed class ThemeResourceTests
             ResourceValue(document, "SolidColorBrush", "AssignmentListSelectionTextBrush"),
             StringComparison.Ordinal);
         AssertComboBoxStyleUsesDedicatedBrushes(document);
+        AssertLightSurfaceControlStyles(document);
+        AssertToolTipUsesReadableThemeBrushes(document);
     }
 
     [Fact]
@@ -140,24 +144,64 @@ public sealed class ThemeResourceTests
             .Descendants()
             .Single(element =>
                 element.Name.LocalName == "Button" &&
-                element.Attribute("Content")?.Value == "Build an assignment…");
+                element.Attribute("Content")?.Value == "{Binding AssignmentEditorButtonLabel}");
         Assert.Equal("{Binding CanAssignSelectedControl}", assignmentButton.Attribute("IsEnabled")?.Value);
         Assert.Equal("OpenAssignmentEditor_OnClick", assignmentButton.Attribute("Click")?.Value);
 
-        var tilePanel = document
-            .Descendants()
-            .Single(element =>
-                element.Name.LocalName == "WrapPanel" &&
-                element.Attribute("IsItemsHost")?.Value == "True");
-        Assert.Equal("144", tilePanel.Attribute("ItemWidth")?.Value);
-        Assert.Equal("116", tilePanel.Attribute("ItemHeight")?.Value);
-        Assert.Equal("760", tilePanel.Attribute("MaxWidth")?.Value);
+        var photoSplitter = NamedElement(document, "GridSplitter", "ControllerPhotoSplitter");
+        Assert.Equal("ControllerPhotoSplitter_OnDragCompleted", photoSplitter.Attribute("DragCompleted")?.Value);
+        Assert.Equal("PreviousAndNext", photoSplitter.Attribute("ResizeBehavior")?.Value);
+
+        var tileButton = document.Descendants().Single(element =>
+            element.Name.LocalName == "Button" &&
+            element.Attribute("PreviewMouseLeftButtonUp")?.Value ==
+            "ControlTile_OnPreviewMouseLeftButtonUp");
+        Assert.Equal("ControlTile_OnPreviewMouseMove", tileButton.Attribute("PreviewMouseMove")?.Value);
+
+        var layoutCanvas = NamedElement(document, "ItemsControl", "ControllerLayoutCanvas");
+        var workspaceHost = NamedElement(document, "Grid", "ControllerWorkspaceHost");
+        Assert.Equal("{Binding LayoutSurfaceWidth}", workspaceHost.Attribute("MinWidth")?.Value);
+        Assert.Equal("{Binding LayoutSurfaceHeight}", workspaceHost.Attribute("MinHeight")?.Value);
+        Assert.Equal("ControllerWorkspace_OnPreviewMouseLeftButtonDown",
+            workspaceHost.Attribute("PreviewMouseLeftButtonDown")?.Value);
+        Assert.Equal("ControllerWorkspace_OnPreviewMouseMove", workspaceHost.Attribute("PreviewMouseMove")?.Value);
+        Assert.Equal("ControllerWorkspace_OnPreviewMouseLeftButtonUp",
+            workspaceHost.Attribute("PreviewMouseLeftButtonUp")?.Value);
+        Assert.NotNull(NamedElement(document, "Border", "SelectionMarquee"));
+        var layoutViewport = NamedElement(document, "ScrollViewer", "ControllerLayoutViewport");
+        Assert.Equal("Stretch", layoutViewport.Attribute("HorizontalContentAlignment")?.Value);
+        Assert.Equal("Stretch", layoutViewport.Attribute("VerticalContentAlignment")?.Value);
+        Assert.Equal("ControllerLayoutViewport_OnSizeChanged", layoutViewport.Attribute("SizeChanged")?.Value);
+        Assert.Contains(layoutCanvas.Descendants(), element =>
+            element.Name.LocalName == "Canvas" &&
+            element.Attribute("IsItemsHost")?.Value == "True");
+        foreach (var comboName in new[] { "LayoutColumnsBox", "LayoutRowsBox" })
+        {
+            var combo = NamedElement(document, "ComboBox", comboName);
+            var text = combo.Descendants().Single(element => element.Name.LocalName == "TextBlock");
+            Assert.Equal("{DynamicResource ComboBoxTextBrush}", text.Attribute("Foreground")?.Value);
+        }
+        var resizeThumb = document.Descendants().Single(element =>
+            element.Name.LocalName == "Thumb" &&
+            element.Attribute("DragDelta")?.Value == "ResizeTile_OnDragDelta");
+        Assert.Equal("ResizeTile_OnDragCompleted", resizeThumb.Attribute("DragCompleted")?.Value);
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "CheckBox" &&
+            element.Attribute("Checked")?.Value == "TileGroupCheckBox_OnChecked");
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Button" &&
+            element.Attribute("Click")?.Value == "ApplyTileColor_OnClick");
+        var colorPicker = document.Descendants().Single(element =>
+            element.Name.LocalName == "ComboBox" &&
+            element.Attribute("AutomationProperties.Name")?.Value == "Square color");
+        Assert.Equal("{Binding HasSupportedTileColors}", colorPicker.Attribute("IsEnabled")?.Value);
 
         var tileLabel = document
             .Descendants()
             .Single(element =>
                 element.Name.LocalName == "TextBlock" &&
-                element.Attribute("Text")?.Value == "{Binding Label}");
+                element.Attribute("Text")?.Value == "{Binding Label}" &&
+                element.Attribute("FontSize")?.Value == "13");
         Assert.Equal("13", tileLabel.Attribute("FontSize")?.Value);
         Assert.Equal("Wrap", tileLabel.Attribute("TextWrapping")?.Value);
         Assert.Equal("None", tileLabel.Attribute("TextTrimming")?.Value);
@@ -167,9 +211,8 @@ public sealed class ThemeResourceTests
         Assert.Equal("{Binding ControllerPhotoHotspots}", photoHotspots.Attribute("ItemsSource")?.Value);
         var photo = document.Descendants().Single(element =>
             element.Name.LocalName == "Image" &&
-            element.Attribute("AutomationProperties.Name")?.Value ==
-            "User-provided Logitech G13 controller photo");
-        Assert.Equal("{StaticResource LogitechG13ControllerPhoto}", photo.Attribute("Source")?.Value);
+            element.Attribute("AutomationProperties.Name")?.Value == "{Binding ControllerPhotoName}");
+        Assert.Equal("{Binding ControllerPhotoSource}", photo.Attribute("Source")?.Value);
         Assert.DoesNotContain(photo.Ancestors(), element => element.Name.LocalName == "Button");
         var photoTriggers = photoHotspots.Descendants()
             .Where(element => element.Name.LocalName == "DataTrigger")
@@ -177,6 +220,7 @@ public sealed class ThemeResourceTests
             .ToArray();
         Assert.Contains("{Binding Tile.IsSelected}", photoTriggers);
         Assert.Contains("{Binding Tile.IsIlluminated}", photoTriggers);
+        Assert.Contains("{Binding Tile.HasCustomColor}", photoTriggers);
 
         var rehearsalLabel = document
             .Descendants()
@@ -197,6 +241,28 @@ public sealed class ThemeResourceTests
         Assert.NotNull(NamedElement(document, "TextBox", "SearchBox"));
         var category = NamedElement(document, "ComboBox", "CategoryBox");
         Assert.Equal("{StaticResource AssignmentCategoryItemTemplate}", category.Attribute("ItemTemplate")?.Value);
+        AssertReadableTemplate(document, "MidiDeviceItemTemplate", "{Binding DisplayName}");
+        var midiDevice = NamedElement(document, "ComboBox", "MidiDeviceBox");
+        Assert.Equal("{StaticResource MidiDeviceItemTemplate}", midiDevice.Attribute("ItemTemplate")?.Value);
+
+        var sequence = NamedElement(document, "ListBox", "SequenceList");
+        Assert.Equal("SequenceList_OnMouseDoubleClick", sequence.Attribute("MouseDoubleClick")?.Value);
+        Assert.NotNull(NamedElement(document, "Button", "EditStepButton"));
+        Assert.NotNull(NamedElement(document, "Button", "ApplyStepChangesButton"));
+
+        foreach (var comboBoxName in new[] { "MouseActionBox", "PowerShellHostBox", "MidiKindBox", "TimingBox" })
+        {
+            var comboBox = NamedElement(document, "ComboBox", comboBoxName);
+            var items = comboBox.Elements().Where(element => element.Name.LocalName == "ComboBoxItem").ToArray();
+            Assert.NotEmpty(items);
+            Assert.All(items, item =>
+            {
+                var label = item.Elements().Single(element => element.Name.LocalName == "TextBlock");
+                Assert.False(string.IsNullOrWhiteSpace(label.Attribute("Text")?.Value));
+                Assert.Equal("{DynamicResource ComboBoxTextBrush}", label.Attribute("Foreground")?.Value);
+            });
+        }
+
         var behavior = NamedElement(document, "ComboBox", "TimingBox");
         Assert.Equal(4, behavior.Elements().Count(element => element.Name.LocalName == "ComboBoxItem"));
         Assert.All(
@@ -261,7 +327,69 @@ public sealed class ThemeResourceTests
         var sequenceList = NamedElement(document, "ListBox", "SequenceList");
         Assert.Equal("{DynamicResource AssignmentListBackgroundBrush}", sequenceList.Attribute("Background")?.Value);
         Assert.Equal("{DynamicResource AssignmentListTextBrush}", sequenceList.Attribute("Foreground")?.Value);
+        Assert.Null(sequenceList.Attribute("DisplayMemberPath"));
+        var summary = sequenceList.Descendants().Single(element =>
+            element.Name.LocalName == "TextBlock" &&
+            element.Attribute("Text")?.Value == "{Binding Summary}");
+        Assert.Equal(
+            "{StaticResource AssignmentPrimaryTextStyle}",
+            summary.Attribute("Style")?.Value);
         Assert.NotNull(NamedElement(document, "Button", "AssignButton"));
+    }
+
+    private static void AssertLightSurfaceControlStyles(XDocument document)
+    {
+        AssertStyleUsesBrushes(
+            document,
+            "TextBox",
+            "{DynamicResource ComboBoxTextBrush}",
+            "{DynamicResource ComboBoxBackgroundBrush}");
+        AssertStyleUsesBrushes(
+            document,
+            "ComboBoxItem",
+            "{DynamicResource ComboBoxTextBrush}",
+            "{DynamicResource ComboBoxBackgroundBrush}");
+        AssertStyleUsesBrushes(
+            document,
+            "ListBox",
+            "{DynamicResource AssignmentListTextBrush}",
+            "{DynamicResource AssignmentListBackgroundBrush}");
+
+        var listItemStyle = document.Descendants().Single(element =>
+            element.Name.LocalName == "Style" &&
+            element.Attribute("TargetType")?.Value == "ListBoxItem");
+        var selectedTrigger = listItemStyle.Descendants().Single(element =>
+            element.Name.LocalName == "Trigger" &&
+            element.Attribute("Property")?.Value == "IsSelected" &&
+            element.Attribute("Value")?.Value == "True");
+        var setters = selectedTrigger.Elements()
+            .Where(element => element.Name.LocalName == "Setter")
+            .ToArray();
+        Assert.Contains(setters, setter =>
+            setter.Attribute("Property")?.Value == "Foreground" &&
+            setter.Attribute("Value")?.Value == "{DynamicResource AssignmentListSelectionTextBrush}");
+        Assert.Contains(setters, setter =>
+            setter.Attribute("Property")?.Value == "Background" &&
+            setter.Attribute("Value")?.Value == "{DynamicResource AssignmentListSelectionBrush}");
+    }
+
+    private static void AssertStyleUsesBrushes(
+        XDocument document,
+        string targetType,
+        string foreground,
+        string background)
+    {
+        var style = document.Descendants().Single(element =>
+            element.Name.LocalName == "Style" &&
+            element.Attribute("TargetType")?.Value == targetType);
+        var setters = style.Elements()
+            .Where(element => element.Name.LocalName == "Setter")
+            .ToDictionary(
+                element => element.Attribute("Property")!.Value,
+                element => element.Attribute("Value")!.Value,
+                StringComparer.Ordinal);
+        Assert.Equal(foreground, setters["Foreground"]);
+        Assert.Equal(background, setters["Background"]);
     }
 
     private static void AssertComboBoxStyleUsesDedicatedBrushes(XDocument document)
@@ -281,6 +409,23 @@ public sealed class ThemeResourceTests
 
         Assert.Equal("{DynamicResource ComboBoxTextBrush}", setters["Foreground"]);
         Assert.Equal("{DynamicResource ComboBoxBackgroundBrush}", setters["Background"]);
+    }
+
+    private static void AssertToolTipUsesReadableThemeBrushes(XDocument document)
+    {
+        var style = document.Descendants().Single(element =>
+            element.Name.LocalName == "Style" &&
+            element.Attribute("TargetType")?.Value == "ToolTip");
+        var setters = style.Elements()
+            .Where(element => element.Name.LocalName == "Setter")
+            .ToDictionary(
+                element => element.Attribute("Property")!.Value,
+                element => element.Attribute("Value")!.Value,
+                StringComparer.Ordinal);
+
+        Assert.Equal("{DynamicResource TextBrush}", setters["Foreground"]);
+        Assert.Equal("{DynamicResource RaisedBrush}", setters["Background"]);
+        Assert.Equal("{DynamicResource BorderBrush}", setters["BorderBrush"]);
     }
 
     private static void AssertReadableTemplate(

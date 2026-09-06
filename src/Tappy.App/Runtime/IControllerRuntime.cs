@@ -24,6 +24,41 @@ public sealed record ControllerActionAssignment(
     ControllerActionSequenceDefinition PressSequence,
     ControllerActionSequenceDefinition ReleaseSequence);
 
+public sealed record ControllerControlPlacement(
+    string ControlId,
+    int NaturalRow,
+    int NaturalColumn,
+    double? X,
+    double? Y,
+    double Width,
+    double Height,
+    string ColorKey = "Default",
+    int AnalogRawAtMinimum = 0,
+    int AnalogRawAtMaximum = 127,
+    int? AnalogRawAtCenter = null,
+    double EncoderDegreesPerStep = 15,
+    bool EncoderReversed = false);
+
+public sealed record ControllerLayoutWorkspace(
+    int GridColumns,
+    int GridRows,
+    bool SnapToGrid,
+    IReadOnlyList<ControllerControlPlacement> Controls);
+
+public enum ControllerLightingTopology
+{
+    PerControl,
+    Zoned,
+    Global
+}
+
+public sealed record ControllerLedColorCapability(
+    string ModelId,
+    string DisplayName,
+    IReadOnlyList<string> SupportedColorKeys,
+    IReadOnlySet<string> ColorAddressableControlIds,
+    ControllerLightingTopology Topology = ControllerLightingTopology.PerControl);
+
 public sealed record ControllerChoice(
     string SessionId,
     string PersistentId,
@@ -42,7 +77,9 @@ public sealed record RuntimeControlUpdate(
     string AssignedAction,
     int SimultaneousCount,
     long AggregateEventCount,
-    bool IsSnapshot = false);
+    bool IsSnapshot = false,
+    int? AnalogRawValue = null,
+    double? AnalogDelta = null);
 
 public sealed record RuntimeState(
     bool IsConfirmed,
@@ -84,6 +121,15 @@ public interface IControllerRuntime : IAsyncDisposable
     RuntimeOperation AssignKeyboardMapping(string controlId, KeyboardMappingAssignment assignment);
     RuntimeOperation AssignControllerAction(string controlId, ControllerActionAssignment assignment) =>
         RuntimeOperation.Failed("This runtime does not support multi-action controller assignments.");
+    ControllerActionAssignment? GetControllerAction(string controlId) => null;
+    RuntimeOperation ReorderControls(IReadOnlyList<string> orderedControlIds) =>
+        RuntimeOperation.Failed("This runtime does not support custom controller layouts.");
+    ControllerLayoutWorkspace? GetControllerLayout() => null;
+    RuntimeOperation UpdateControllerLayout(ControllerLayoutWorkspace workspace) =>
+        RuntimeOperation.Failed("This runtime does not support freeform controller layouts.");
+    RuntimeOperation SyncControllerLedColors(IReadOnlyDictionary<string, string> colors) =>
+        RuntimeOperation.Failed("This controller does not expose a verified hardware-lighting protocol to Tappy.");
+    ControllerLedColorCapability? GetControllerLedColorCapability() => null;
     Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default);
     RuntimeOperation EmergencyStop(string reason);
 }

@@ -87,9 +87,9 @@ approved runtime controller image; it does not approve any other derivative.
 - Protected original: `PAD IMAGES/originals/Logitech G13 user photo 20260903_124613.jpg`
   (ignored, preserved locally), SHA-256
   `25A49B84273170E3E2D8CFDC21F97B3B34DC47977DE9BC54E6F29FCE7BF10F30`.
-- Runtime derivative: `src/Tappy.App/Assets/Controllers/logitech-g13-user-photo.png`,
-  `853 x 1844` RGBA PNG, SHA-256
-  `67F74F1A9F7BF295E46BF4FBCA357E185D010CFB6448AAAF39F9632233511D83`.
+- Original runtime derivative retained: `src/Tappy.App/Assets/Controllers/logitech-g13-user-photo.png`.
+- Tight neutral runtime derivative: `src/Tappy.App/Assets/Controllers/logitech-g13-tight-neutral.png`,
+  `1174 x 1339` RGBA PNG.
 - Ownership/permission: owner-created and owner-submitted; explicitly requested for
   the Tappy controller-photo UI in this project.
 - Processing: the built-in image editor removed the tabletop, surrounding objects,
@@ -138,3 +138,12 @@ generates it from `tappy-hand-t.png`; its SHA-256 is
 `0BE7C9CFF3A2E4C308912AD37A2826CB5D2B19353BC5149E7EB3B2D746961587`.
 Approval covers Tappy product identity and app surfaces; it does not change the
 software-license, signing, or binary-release status.
+
+## 2026-09-03 MIDI controller image candidates
+
+Twenty-nine additional Akai, Native Instruments, and Novation controller images
+were supplied locally under `docs/images` and remain ignored/untracked. Their exact inventory and review state are in
+[CONTROLLER_IMAGE_CANDIDATES.md](CONTROLLER_IMAGE_CANDIDATES.md). The original
+APC MINI v1 image is the first locally integrated model derivative; the others
+remain visual candidates until exact protocol, hotspot, hardware, and rights gates
+are completed.

@@ -13,11 +13,11 @@
     <Color x:Key="BorderColor">#3A4654</Color>
     <Color x:Key="ComboBoxTextColor">#101318</Color>
     <Color x:Key="ComboBoxBackgroundColor">#F3F7FA</Color>
-    <Color x:Key="AssignmentListTextColor">#17202A</Color>
-    <Color x:Key="AssignmentListMutedTextColor">#40515F</Color>
+    <Color x:Key="AssignmentListTextColor">#0B1016</Color>
+    <Color x:Key="AssignmentListMutedTextColor">#263746</Color>
     <Color x:Key="AssignmentListBackgroundColor">#FFFFFF</Color>
     <Color x:Key="AssignmentListSelectionColor">#D4EAF5</Color>
-    <Color x:Key="AssignmentListSelectionTextColor">#101820</Color>
+    <Color x:Key="AssignmentListSelectionTextColor">#081018</Color>
     <Color x:Key="ButtonDisabledTextColor">#A8B3BE</Color>
     <Color x:Key="ButtonDisabledBackgroundColor">#2A313B</Color>
     <Color x:Key="ButtonDisabledBorderColor">#52606D</Color>
@@ -54,11 +54,65 @@
     <Style TargetType="Label">
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
+    <Style TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="MaxWidth" Value="520" />
+    </Style>
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
         <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundBrush}" />
         <Setter Property="Padding" Value="7,5" />
         <Setter Property="MinHeight" Value="34" />
+    </Style>
+    <Style TargetType="ComboBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundBrush}" />
+        <Setter Property="Padding" Value="7,5" />
+        <Style.Resources>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
+            </Style>
+        </Style.Resources>
+        <Style.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
+                <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
+                <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style TargetType="TextBox">
+        <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource ComboBoxTextBrush}" />
+    </Style>
+    <Style TargetType="ListBox">
+        <Setter Property="Foreground" Value="{DynamicResource AssignmentListTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AssignmentListBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    </Style>
+    <Style TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource AssignmentListTextBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Style.Resources>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource AssignmentListTextBrush}" />
+            </Style>
+        </Style.Resources>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
+                <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
     <Style TargetType="CheckBox">
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />

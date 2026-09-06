@@ -15,6 +15,10 @@ public static class LogitechG13Protocol
     public const ushort Usage = 0x0000;
     public const byte InputReportId = 0x01;
     public const int InputReportSize = 8;
+    // G13 report 0x05 controls the M1/M2/M3/MR indicator LEDs. The single
+    // whole-keyboard RGB backlight is feature report 0x07.
+    public const byte BacklightFeatureReportId = 0x07;
+    public const int BacklightFeatureReportSize = 5;
 
     internal const ushort VirtualKeyboardProductId = 0xC232;
 

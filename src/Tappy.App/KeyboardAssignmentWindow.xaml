@@ -9,9 +9,9 @@
         <DataTemplate x:Key="AssignmentCategoryItemTemplate">
             <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource ComboBoxTextBrush}" />
         </DataTemplate>
-        <Style TargetType="ComboBoxItem">
-            <Setter Property="Foreground" Value="{DynamicResource ComboBoxTextBrush}" />
-        </Style>
+        <DataTemplate x:Key="MidiDeviceItemTemplate">
+            <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource ComboBoxTextBrush}" />
+        </DataTemplate>
         <Style x:Key="AssignmentTabItemStyle" TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
@@ -82,7 +82,8 @@
         <Style x:Key="AssignmentMutedTextStyle" TargetType="TextBlock" BasedOn="{StaticResource AssignmentPrimaryTextStyle}">
             <Setter Property="Foreground" Value="{DynamicResource AssignmentListMutedTextBrush}" />
         </Style>
-        <Style x:Key="AssignmentListItemStyle" TargetType="ListBoxItem">
+        <Style x:Key="AssignmentListItemStyle" TargetType="ListBoxItem"
+               BasedOn="{StaticResource {x:Type ListBoxItem}}">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="0" />
             <Style.Triggers>
@@ -103,7 +104,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel>
-            <TextBlock Text="Build an assignment" FontSize="23" FontWeight="SemiBold" />
+            <TextBlock x:Name="EditorHeading" Text="Build an assignment" FontSize="23" FontWeight="SemiBold" />
             <TextBlock x:Name="ControlLabelText" Margin="0,3,0,0" Foreground="{DynamicResource MutedTextBrush}" />
         </StackPanel>
 
@@ -210,14 +211,14 @@
                     <StackPanel Margin="14">
                         <TextBlock Text="MOUSE ACTION" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
                         <ComboBox x:Name="MouseActionBox" SelectedIndex="0">
-                            <ComboBoxItem Tag="Left click">Left click</ComboBoxItem>
-                            <ComboBoxItem Tag="Right click">Right click</ComboBoxItem>
-                            <ComboBoxItem Tag="Middle click">Middle click</ComboBoxItem>
-                            <ComboBoxItem Tag="X1 click">X1 click</ComboBoxItem>
-                            <ComboBoxItem Tag="X2 click">X2 click</ComboBoxItem>
-                            <ComboBoxItem Tag="Move">Relative move</ComboBoxItem>
-                            <ComboBoxItem Tag="Vertical wheel">Vertical scroll</ComboBoxItem>
-                            <ComboBoxItem Tag="Horizontal wheel">Horizontal scroll</ComboBoxItem>
+                            <ComboBoxItem Tag="Left click"><TextBlock Text="Left click" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="Right click"><TextBlock Text="Right click" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="Middle click"><TextBlock Text="Middle click" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="X1 click"><TextBlock Text="X1 click" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="X2 click"><TextBlock Text="X2 click" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="Move"><TextBlock Text="Relative move" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="Vertical wheel"><TextBlock Text="Vertical scroll" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="Horizontal wheel"><TextBlock Text="Horizontal scroll" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
                         </ComboBox>
                         <TextBlock Text="X / HORIZONTAL AMOUNT" Style="{StaticResource FormLabel}" />
                         <TextBox x:Name="MouseXBox" Text="0" Padding="8" />
@@ -245,8 +246,8 @@
                     <StackPanel Margin="14">
                         <TextBlock Text="POWERSHELL HOST" Style="{StaticResource FormLabel}" Margin="0,0,0,5" />
                         <ComboBox x:Name="PowerShellHostBox" SelectedIndex="0">
-                            <ComboBoxItem Tag="Windows PowerShell 5.1">Windows PowerShell 5.1 (built in)</ComboBoxItem>
-                            <ComboBoxItem Tag="PowerShell 7">PowerShell 7 (pwsh, if installed)</ComboBoxItem>
+                            <ComboBoxItem Tag="Windows PowerShell 5.1"><TextBlock Text="Windows PowerShell 5.1 (built in)" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="PowerShell 7"><TextBlock Text="PowerShell 7 (pwsh, if installed)" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
                         </ComboBox>
                         <TextBlock Text="COMMAND" Style="{StaticResource FormLabel}" />
                         <TextBox x:Name="PowerShellCommandBox" Height="190" AcceptsReturn="True"
@@ -264,14 +265,14 @@
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Refresh" Margin="8,0,0,0"
                                     Click="RefreshMidi_OnClick" />
-                            <ComboBox x:Name="MidiDeviceBox" DisplayMemberPath="DisplayName" />
+                            <ComboBox x:Name="MidiDeviceBox" ItemTemplate="{StaticResource MidiDeviceItemTemplate}" />
                         </DockPanel>
                         <TextBlock Text="MESSAGE" Style="{StaticResource FormLabel}" />
                         <ComboBox x:Name="MidiKindBox" SelectedIndex="0">
-                            <ComboBoxItem Tag="note">Note on</ComboBoxItem>
-                            <ComboBoxItem Tag="noteoff">Note off</ComboBoxItem>
-                            <ComboBoxItem Tag="cc">Control change</ComboBoxItem>
-                            <ComboBoxItem Tag="pc">Program change</ComboBoxItem>
+                            <ComboBoxItem Tag="note"><TextBlock Text="Note on" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="noteoff"><TextBlock Text="Note off" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="cc"><TextBlock Text="Control change" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
+                            <ComboBoxItem Tag="pc"><TextBlock Text="Program change" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
                         </ComboBox>
                         <TextBlock Text="CHANNEL (1–16)" Style="{StaticResource FormLabel}" />
                         <TextBox x:Name="MidiChannelBox" Text="1" Padding="8" />
@@ -317,11 +318,22 @@
                              Background="{DynamicResource AssignmentListBackgroundBrush}"
                              Foreground="{DynamicResource AssignmentListTextBrush}"
                              ItemContainerStyle="{StaticResource AssignmentListItemStyle}"
-                             DisplayMemberPath="Summary" SelectionChanged="SequenceList_OnSelectionChanged" />
+                             SelectionChanged="SequenceList_OnSelectionChanged"
+                             MouseDoubleClick="SequenceList_OnMouseDoubleClick">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Summary}"
+                                           Style="{StaticResource AssignmentPrimaryTextStyle}"
+                                           TextWrapping="Wrap" Padding="5,3" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                     <StackPanel Grid.Row="2">
                         <WrapPanel>
                             <Button x:Name="MoveUpButton" Content="Up" Click="MoveStepUp_OnClick" IsEnabled="False" />
                             <Button x:Name="MoveDownButton" Content="Down" Click="MoveStepDown_OnClick" IsEnabled="False" Margin="6,0,0,0" />
+                            <Button x:Name="EditStepButton" Content="Edit step" Click="EditStep_OnClick" IsEnabled="False" Margin="6,0,0,0" />
+                            <Button x:Name="ApplyStepChangesButton" Content="Apply changes" Click="ApplyStepChanges_OnClick" IsEnabled="False" Margin="6,0,0,0" />
                             <Button x:Name="RemoveStepButton" Content="Remove" Click="RemoveStep_OnClick" IsEnabled="False" Margin="6,0,0,0" />
                             <Button Content="Clear" Click="ClearSteps_OnClick" Margin="6,0,0,0" />
                         </WrapPanel>

@@ -3,10 +3,12 @@
 **/obj/
 TestResults/
 artifacts/
+.artifacts/
 dist/
 staging/
 coverage/
 tmp/
+.tmp/
 *.trx
 *.coverage
 *.coveragexml
@@ -70,6 +72,21 @@ host-sync/
 # Raw and separately managed controller artwork is protected reference material.
 # Preserve it on disk, but do not commit or package it until provenance is reviewed.
 PAD IMAGES/
+
+# Locally supplied controller-photo references remain outside the public repository
+# until provenance, usage rights, exact-model identity, and runtime approval are
+# recorded. Approved application derivatives belong under src/Tappy.App/Assets.
+docs/images/*.jpg
+docs/images/*.jpeg
+docs/images/*.jpe
+docs/images/*.webp
+docs/images/*.png
+!docs/images/TAPPY_hand.png
+!docs/images/TAPPY_hand_T.png
+!docs/images/TAPPY_logo.png
+
+# Rejected/intermediate controller render retained locally for comparison only.
+src/Tappy.App/Assets/Controllers/akai-apc-mini-v1-dark.png
 
 # OS noise
 Thumbs.db

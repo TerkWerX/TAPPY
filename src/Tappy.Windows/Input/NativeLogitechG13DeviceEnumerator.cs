@@ -26,6 +26,9 @@ public sealed class NativeLogitechG13DeviceEnumerator : ILogitechG13DeviceEnumer
     }
 
     public IReadOnlyList<SanitizedDeviceDescriptor> EnumerateControllers()
+        => CreateDescriptors(EnumerateRawControllers());
+
+    internal IReadOnlyList<RawLogitechG13DeviceCandidate> EnumerateRawControllers()
     {
         var structureSize = checked((uint)Marshal.SizeOf<RawInputNativeMethods.RawInputDeviceList>());
         uint count = 0;
@@ -37,7 +40,7 @@ public sealed class NativeLogitechG13DeviceEnumerator : ILogitechG13DeviceEnumer
 
         if (count == 0)
         {
-            return Array.Empty<SanitizedDeviceDescriptor>();
+            return Array.Empty<RawLogitechG13DeviceCandidate>();
         }
 
         var capacity = count;
@@ -77,7 +80,7 @@ public sealed class NativeLogitechG13DeviceEnumerator : ILogitechG13DeviceEnumer
                     _containerIdResolver.Resolve(rawPath)));
             }
 
-            return CreateDescriptors(candidates);
+            return candidates;
         }
         finally
         {

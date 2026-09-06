@@ -13,7 +13,8 @@ keyboard-native architecture rather than pedal concepts renamed.
 
 Version `0.1.0` is a public-source bootstrap, not a public packaged/binary release.
 The source now implements the safe vertical slice for ContainerId-grouped Raw Input
-keyboards plus a dedicated Logitech G13 vendor-HID provider. Both require deliberate
+keyboards, a dedicated Logitech G13 vendor-HID provider, and a native Windows MIDI
+input provider. All require deliberate
 selection, press/release identification, neutral state, and explicit confirmation
 before input can reach mapping. The UI shows press/release/repeat and simultaneous
 state. Its searchable keyboard editor offers named Windows actions, direct keys,
@@ -21,11 +22,13 @@ media/browser keys, and more than 1,500 Ctrl/Alt/Shift/Win combinations with tap
 hold-until-release, or release-trigger behavior. A new bounded sequence editor can
 combine keyboard chords, Unicode text, delays, mouse clicks/movement/scrolling,
 program or document launch, non-interactive Windows PowerShell 5.1 or PowerShell 7,
-Windows MIDI short messages, and typed OSC/UDP messages. Assignments can run once
+Windows MIDI short messages, and typed OSC/UDP messages. The same complete assignment
+builder is used whether the selected source is a keyboard key, G13 control, or MIDI
+note/pad/CC direction/program change. Assignments can run once
 on press or release, remain owned until release, or repeat while held. The milestone witness still uses
 the deliberately harmless F24 mapping. The Release solution build passes with zero
-warnings or errors; 297 current automated tests pass
-(Core 46, Windows 103, App 72, G13 HIL tool 23, Output Witness 53). Exact package and
+warnings or errors; 393 current automated tests pass
+(Core 58, Windows 134, App 109, Input Broker 16, G13 HIL tool 23, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its
@@ -47,11 +50,26 @@ devices; all remain below Functional/Verified. The G13 has operator-reported vis
 control response but still requires the finite armed record. See the
 [G13 support boundary](docs/LOGITECH_G13.md).
 
+Windows currently enumerates the attached APC MINI through Tappy's native WinMM
+provider and successfully opens its input port. An attended spot check showed real
+physical APC MINI note events selecting and illuminating persistent Tappy squares.
+The exact `APC MINI` name now receives a fixed 99-direction assignment surface and
+a separate live photo locator immediately on confirmation. MIDI note on/off,
+note-on velocity zero, CC direction pulses, program-change pulses, port-open
+failure, model-name isolation, and full action-pipeline routing are covered by
+deterministic tests. The spot check is not a finite all-control HIL record, so the
+device remains below Functional/Verified. See the
+[APC MINI v1 support boundary](docs/AKAI_APC_MINI_V1.md).
+
 The owner has authorized the source, documentation, and CI configuration for the
 public `TerkWerX/TAPPY` repository and approved the supplied tattooed-hand Tappy
 brand set for the application header, splash, About surface, application icon, and
-tray identity. Those decisions do not authorize a packaged software release,
-signing, website publication, or production hosting. No public software license has been selected or granted;
+tray identity. On 2026-09-04 the owner also authorized engineering and certification
+work for the optional signed exclusive-input subsystem. An unsigned KMDF lab scaffold,
+managed wire client, and deliberately status-only LocalSystem broker scaffold now
+build locally. The driver and service have never been signed, installed, loaded, or
+approved for distribution, and this does not yet authorize a
+packaged software release, website publication, or production hosting. No public software license has been selected or granted;
 all rights are reserved. Source visibility does not imply permission to use,
 redistribute, or create derivative works from Tappy code or binaries. External
 contributions should not be submitted or merged until the owner defines contribution
@@ -61,8 +79,11 @@ Tappy's initial source behavior is **Device-aware pass-through**. Windows Raw In
 can identify which physical source produced an event, but Tappy does not suppress
 the source's ordinary Windows or vendor-software behavior. For keyboard-class
 controllers, a mapped key may therefore run while the original key also reaches the
-focused program. Tappy does not install a keyboard hook or filter driver and does
-not claim exclusive per-device remapping.
+focused program. Tappy does not currently install a keyboard hook or filter driver
+and does not yet claim exclusive per-device remapping. An owner-approved, separately
+installed signed-filter track is now under development; its fail-open architecture,
+release gates, and anti-cheat posture are documented in
+[exclusive keyboard input](docs/EXCLUSIVE_KEYBOARD_INPUT.md).
 
 ## Safety and privacy
 
@@ -121,7 +142,8 @@ artifact. The script does not publish a release, push source, or change a websit
 
 ```text
 src/Tappy.Core/          Platform-neutral input, profiles, layers, safety, layouts
-src/Tappy.Windows/       Raw Input keyboard/G13 providers, SendInput, storage, lifecycle
+src/Tappy.Windows/       Keyboard/G13/MIDI providers, SendInput, storage, lifecycle
+src/Tappy.InputBroker/   Status-only privileged-service and authenticated IPC scaffold
 src/Tappy.App/           WPF interface and composition root
 tests/                   Deterministic core, Windows, app, and finite-witness tests
 tools/                   Device probe, focused output/G13 witnesses, pack signer, portable audit
@@ -140,8 +162,9 @@ as an application resource, and matched only to exact G13 identity.
 ## Non-goals for this milestone
 
 Global blocking, per-device exclusive input, generic learned raw-HID support beyond
-the dedicated G13 provider, arbitrary analog input mappings, MIDI/joystick input
-providers, virtual-gamepad output, variables, gesture/toggle/layer actions, G13
-LCD/lighting output, complete Tippy parity, controller support packs, polished brand
+the dedicated G13 provider, absolute analog MIDI value mappings, MIDI SysEx input and
+feedback, joystick input providers, virtual-gamepad output, variables,
+gesture/toggle/layer actions, G13 LCD/per-key lighting output, complete Tippy parity,
+controller support packs, polished brand
 artwork, and public packaged/binary distribution remain future work. Their extension
 boundaries are documented; the UI and README do not advertise them as complete.

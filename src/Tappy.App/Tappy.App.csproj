@@ -21,7 +21,11 @@
   </ItemGroup>
   <ItemGroup>
     <None Remove="Assets\Controllers\logitech-g13-user-photo.png" />
+    <None Remove="Assets\Controllers\akai-apc-mini-v1-neutral.png" />
+    <None Remove="Assets\Controllers\logitech-g13-tight-neutral.png" />
     <Resource Include="Assets\Controllers\logitech-g13-user-photo.png" />
+    <Resource Include="Assets\Controllers\akai-apc-mini-v1-neutral.png" />
+    <Resource Include="Assets\Controllers\logitech-g13-tight-neutral.png" />
     <Resource Include="Assets\Branding\*.png" />
     <Resource Include="Assets\Icons\tappy.ico" />
   </ItemGroup>

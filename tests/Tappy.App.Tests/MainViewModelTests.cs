@@ -1,6 +1,7 @@
 using Tappy.App.Runtime;
 using Tappy.App.Services;
 using Tappy.App.ViewModels;
+using Tappy.Core.Models;
 using Tappy.Windows.Input;
 
 namespace Tappy.App.Tests;
@@ -200,6 +201,314 @@ public sealed class MainViewModelTests
         Assert.True(g1Hotspot.Tile.IsSelected);
         Assert.True(g1Hotspot.Tile.IsIlluminated);
         Assert.True(g2Hotspot.Tile.IsIlluminated);
+    }
+
+    [Fact]
+    public async Task Apc_fader_directions_share_one_moving_cap_and_calibration_is_saved()
+    {
+        const string increase = "winmm-midi:channel-1:cc-48:increase";
+        const string decrease = "winmm-midi:channel-1:cc-48:decrease";
+        var runtime = new FakeRuntime
+        {
+            ExistingLayout = new ControllerLayoutWorkspace(
+                2, 1, SnapToGrid: true,
+                [
+                    new ControllerControlPlacement(increase, 0, 0, 0, 0, 1, 1),
+                    new ControllerControlPlacement(decrease, 0, 1, 144, 0, 1, 1),
+                ]),
+        };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        runtime.EmitState(new RuntimeState(
+            true, false, "Confirmed", "MIDI: APC MINI", "Layer 1", "Ready", "Ready",
+            ActiveControllerProviderId: WinMmMidiInputProvider.ProviderId));
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "apc", increase, "Fader 1 ↑", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "apc", decrease, "Fader 1 ↓", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+
+        var hotspot = Assert.Single(viewModel.ControllerPhotoHotspots);
+        Assert.True(hotspot.IsLinear);
+
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "apc", increase, "Fader 1 ↑", true, false, "Unassigned", 1, 1,
+            AnalogRawValue: 0, AnalogDelta: 1));
+        var bottom = hotspot.IndicatorTop;
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "apc", increase, "Fader 1 ↑", true, false, "Unassigned", 1, 2,
+            AnalogRawValue: 127, AnalogDelta: 1));
+        var top = hotspot.IndicatorTop;
+
+        Assert.True(top < bottom);
+        Assert.Equal(8, top);
+        Assert.Equal(202, bottom);
+
+        var tile = viewModel.Controls.Single(item => item.ControlId == increase);
+        viewModel.SelectControl(tile);
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "apc", increase, "Fader 1 ↑", true, false, "Unassigned", 1, 3,
+            AnalogRawValue: 11, AnalogDelta: 1));
+        await viewModel.CaptureSelectedAnalogMinimumAsync();
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "apc", increase, "Fader 1 ↑", true, false, "Unassigned", 1, 4,
+            AnalogRawValue: 63, AnalogDelta: 1));
+        await viewModel.CaptureSelectedAnalogCenterAsync();
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "apc", increase, "Fader 1 ↑", true, false, "Unassigned", 1, 5,
+            AnalogRawValue: 119, AnalogDelta: 1));
+        await viewModel.CaptureSelectedAnalogMaximumAsync();
+
+        var saved = Assert.IsType<ControllerLayoutWorkspace>(runtime.UpdatedLayout);
+        Assert.All(saved.Controls, placement =>
+        {
+            Assert.Equal(11, placement.AnalogRawAtMinimum);
+            Assert.Equal(63, placement.AnalogRawAtCenter);
+            Assert.Equal(119, placement.AnalogRawAtMaximum);
+        });
+    }
+
+    [Fact]
+    public async Task Assigned_square_opens_existing_action_and_drag_swap_is_saved()
+    {
+        var existing = new ControllerActionAssignment(
+            "A long macro",
+            ControllerActionSequenceDefinition.Once(
+                "A long macro",
+                new ControllerActionStepDefinition
+                {
+                    Type = ControllerActionStepType.Text,
+                    Value = "keep every character",
+                }),
+            new ControllerActionSequenceDefinition());
+        var runtime = new FakeRuntime { ExistingAction = existing };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "a", "A", false, false, "A long macro", 0, 0, IsSnapshot: true));
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "b", "B", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "c", "C", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+
+        var source = viewModel.Controls[0];
+        var target = viewModel.Controls[2];
+        viewModel.SelectControl(source);
+
+        Assert.True(viewModel.SelectedControlHasAssignment);
+        Assert.Equal("Edit assignment…", viewModel.AssignmentEditorButtonLabel);
+        Assert.Same(existing, viewModel.GetSelectedControllerAction());
+
+        await viewModel.ReorderControlsAsync(source, target);
+
+        Assert.Equal(["c", "b", "a"], viewModel.Controls.Select(tile => tile.ControlId));
+        Assert.Equal(["c", "b", "a"], runtime.LastReorderedControls);
+        Assert.Equal(1, runtime.SaveCalls);
+        Assert.Contains("saved", viewModel.MappingStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Freeform_positions_sizes_and_workspace_settings_are_saved()
+    {
+        var runtime = new FakeRuntime
+        {
+            ExistingLayout = new ControllerLayoutWorkspace(
+                8,
+                6,
+                SnapToGrid: false,
+                [
+                    new ControllerControlPlacement("a", 0, 0, 25, 35, 1, 1),
+                    new ControllerControlPlacement("b", 0, 1, null, null, 1, 1),
+                ]),
+        };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "a", "A", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "b", "B", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitState(new RuntimeState(
+            true, false, "Confirmed", "Test controller", "Layer 1", "Ready", "Ready"));
+
+        var tile = viewModel.Controls[0];
+        Assert.Equal(25, tile.X);
+        Assert.Equal(35, tile.Y);
+        viewModel.MoveControl(tile, 1403, 917);
+        viewModel.ResizeControl(tile, -44, -38);
+        viewModel.LayoutColumns = 11;
+        viewModel.LayoutRows = 9;
+
+        await viewModel.SaveControllerLayoutAsync();
+
+        var saved = Assert.IsType<ControllerLayoutWorkspace>(runtime.UpdatedLayout);
+        Assert.Equal(11, saved.GridColumns);
+        Assert.Equal(9, saved.GridRows);
+        var placement = saved.Controls.Single(control => control.ControlId == "a");
+        Assert.Equal(1403, placement.X);
+        Assert.Equal(917, placement.Y);
+        Assert.True(viewModel.LayoutSurfaceWidth > 1403);
+        Assert.True(viewModel.LayoutSurfaceHeight > 917);
+        Assert.True(placement.Width < 1);
+        Assert.True(placement.Height < 1);
+        Assert.Equal(1, runtime.SaveCalls);
+    }
+
+    [Fact]
+    public async Task Selected_squares_move_as_a_group_and_marquee_selection_is_exact()
+    {
+        var runtime = new FakeRuntime
+        {
+            ExistingLayout = new ControllerLayoutWorkspace(
+                8, 6, SnapToGrid: false,
+                [
+                    new ControllerControlPlacement("a", 0, 0, 20, 30, 1, 1),
+                    new ControllerControlPlacement("b", 0, 1, 180, 30, 1, 1),
+                    new ControllerControlPlacement("c", 1, 0, 20, 180, 1, 1),
+                ]),
+        };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        foreach (var id in new[] { "a", "b", "c" })
+        {
+            runtime.EmitControl(new RuntimeControlUpdate(
+                "controller", id, id.ToUpperInvariant(), false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        }
+        runtime.EmitState(new RuntimeState(
+            true, false, "Confirmed", "Test controller", "Layer 1", "Ready", "Ready"));
+
+        viewModel.SelectControlsInArea(0, 0, 400, 150);
+        Assert.Equal(2, viewModel.GroupSelectedCount);
+        Assert.True(viewModel.Controls[0].IsGroupSelected);
+        Assert.True(viewModel.Controls[1].IsGroupSelected);
+        Assert.False(viewModel.Controls[2].IsGroupSelected);
+
+        var anchor = viewModel.Controls[0];
+        var moving = viewModel.PrepareGroupDrag(anchor);
+        var origins = moving.ToDictionary(tile => tile.ControlId, tile => (tile.X, tile.Y));
+        viewModel.MoveControlGroup(anchor, 100, 110, origins);
+
+        Assert.Equal(100, viewModel.Controls[0].X);
+        Assert.Equal(110, viewModel.Controls[0].Y);
+        Assert.Equal(260, viewModel.Controls[1].X);
+        Assert.Equal(110, viewModel.Controls[1].Y);
+        Assert.Equal(20, viewModel.Controls[2].X);
+        Assert.Equal(180, viewModel.Controls[2].Y);
+
+        viewModel.SelectControlsInArea(0, 230, 170, 320);
+        Assert.Equal(["c"], viewModel.Controls.Where(tile => tile.IsGroupSelected).Select(tile => tile.ControlId));
+    }
+
+    [Fact]
+    public async Task Square_colors_apply_only_to_addressable_controls_and_persist_in_the_layout()
+    {
+        var runtime = new FakeRuntime
+        {
+            LedCapability = new ControllerLedColorCapability(
+                "test-rgb", "Test RGB", ["Default", "Red", "Purple"],
+                new HashSet<string>(["a"], StringComparer.Ordinal)),
+            ExistingLayout = new ControllerLayoutWorkspace(
+                8, 6, SnapToGrid: false,
+                [
+                    new ControllerControlPlacement("a", 0, 0, 20, 30, 1, 1),
+                    new ControllerControlPlacement("b", 0, 1, 180, 30, 1, 1),
+                ]),
+        };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        foreach (var id in new[] { "a", "b" })
+        {
+            runtime.EmitControl(new RuntimeControlUpdate(
+                "controller", id, id.ToUpperInvariant(), false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        }
+        runtime.EmitState(new RuntimeState(
+            true, false, "Confirmed", "Test controller", "Layer 1", "Ready", "Ready"));
+        viewModel.SelectAllControls();
+        viewModel.SelectedTileColor = viewModel.TileColorChoices.Single(color => color.Key == "Purple");
+
+        await viewModel.ApplySelectedTileColorAsync();
+
+        Assert.Equal("Purple", viewModel.Controls.Single(tile => tile.ControlId == "a").ColorKey);
+        Assert.Equal("Default", viewModel.Controls.Single(tile => tile.ControlId == "b").ColorKey);
+        var saved = Assert.IsType<ControllerLayoutWorkspace>(runtime.UpdatedLayout);
+        Assert.Equal("Purple", saved.Controls.Single(placement => placement.ControlId == "a").ColorKey);
+        Assert.Equal("Default", saved.Controls.Single(placement => placement.ControlId == "b").ColorKey);
+        Assert.Contains("Kept 1 non-addressable control unchanged", viewModel.MappingStatus);
+        Assert.Equal(1, runtime.SaveCalls);
+    }
+
+    [Fact]
+    public async Task Color_picker_contains_only_the_confirmed_models_verified_palette()
+    {
+        var runtime = new FakeRuntime
+        {
+            LedCapability = new ControllerLedColorCapability(
+                MidiControllerModelCatalog.AkaiApcMiniV1Id,
+                "APC MINI v1 — off, green, red, and amber",
+                ["Default", "Green", "Red", "Amber"],
+                new HashSet<string>(["a"], StringComparer.Ordinal)),
+            ExistingLayout = new ControllerLayoutWorkspace(
+                8, 6, SnapToGrid: false,
+                [new ControllerControlPlacement("a", 0, 0, 20, 30, 1, 1, "Blue")]),
+        };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "a", "A", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitState(new RuntimeState(
+            true, false, "Confirmed", "MIDI: APC MINI", "Layer 1", "Ready", "Ready"));
+
+        Assert.True(viewModel.HasSupportedTileColors);
+        Assert.Equal(["Default", "Green", "Red", "Amber"],
+            viewModel.TileColorChoices.Select(color => color.Key));
+        Assert.DoesNotContain(viewModel.TileColorChoices, color => color.Key == "Blue");
+        Assert.Equal("Default", Assert.Single(viewModel.Controls).ColorKey);
+    }
+
+    [Fact]
+    public async Task Global_lighting_device_offers_one_palette_and_applies_one_color_to_the_whole_device()
+    {
+        var runtime = new FakeRuntime
+        {
+            LedCapability = new ControllerLedColorCapability(
+                "logitech-g13-global-rgb",
+                "G13 lighting — one whole-device RGB zone; individual key colors are unavailable",
+                ["Default", "Red", "Green", "Blue"],
+                new HashSet<string>(StringComparer.Ordinal),
+                ControllerLightingTopology.Global),
+            ExistingLayout = new ControllerLayoutWorkspace(
+                8, 6, SnapToGrid: false,
+                [
+                    new ControllerControlPlacement("a", 0, 0, 20, 30, 1, 1, "Blue"),
+                    new ControllerControlPlacement("b", 0, 1, 180, 30, 1, 1, "Blue"),
+                ]),
+        };
+        await using var viewModel = new MainViewModel(runtime, action => action());
+        await viewModel.InitializeAsync();
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "a", "A", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitControl(new RuntimeControlUpdate(
+            "controller", "b", "B", false, false, "Unassigned", 0, 0, IsSnapshot: true));
+        runtime.EmitState(new RuntimeState(
+            true, false, "Confirmed", "Logitech G13", "Layer 1", "Ready", "Ready"));
+
+        Assert.True(viewModel.HasSupportedTileColors);
+        Assert.True(viewModel.UsesGlobalTileColor);
+        Assert.Equal(["Default", "Red", "Green", "Blue"],
+            viewModel.TileColorChoices.Select(color => color.Key));
+        Assert.Contains("whole-device RGB zone", viewModel.TileColorAvailabilityLabel);
+        Assert.Equal("Preview whole device", viewModel.TileColorApplyButtonLabel);
+        Assert.Equal("Sync G13 lighting", viewModel.TileColorSyncButtonLabel);
+        Assert.Contains("only to the confirmed Logitech G13", viewModel.TileColorSyncToolTip);
+        Assert.All(viewModel.Controls, tile => Assert.Equal("Blue", tile.ColorKey));
+
+        viewModel.SelectedTileColor = viewModel.TileColorChoices.Single(color => color.Key == "Red");
+        await viewModel.ApplySelectedTileColorAsync();
+        Assert.All(viewModel.Controls, tile => Assert.Equal("Red", tile.ColorKey));
+        Assert.All(Assert.IsType<ControllerLayoutWorkspace>(runtime.UpdatedLayout).Controls,
+            placement => Assert.Equal("Red", placement.ColorKey));
+
+        viewModel.SyncTileColorsToHardware();
+        Assert.Equal("Red", Assert.Single(runtime.LastLedColors).Value);
+        Assert.Contains("whole G13", viewModel.MappingStatus);
     }
 
     [Fact]
@@ -547,6 +856,14 @@ public sealed class MainViewModelTests
         public (string Control, string Output) LastAssignment { get; private set; }
         public int KeyboardAssignCalls { get; private set; }
         public (string Control, KeyboardMappingAssignment? Assignment) LastKeyboardAssignment { get; private set; }
+        public ControllerActionAssignment? ExistingAction { get; init; }
+        public ControllerLayoutWorkspace? ExistingLayout { get; init; }
+        public ControllerLedColorCapability? LedCapability { get; init; }
+        public ControllerLayoutWorkspace? UpdatedLayout { get; private set; }
+        public IReadOnlyDictionary<string, string> LastLedColors { get; private set; } =
+            new Dictionary<string, string>(StringComparer.Ordinal);
+        public IReadOnlyList<string> LastReorderedControls { get; private set; } = [];
+        public int SaveCalls { get; private set; }
         public RuntimeOperation EmergencyResult { get; init; } = RuntimeOperation.Ok("Emergency stop completed.");
 
         public Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -591,8 +908,35 @@ public sealed class MainViewModelTests
             return RuntimeOperation.Ok($"Mapped to {assignment.Name}.");
         }
 
-        public Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(RuntimeOperation.Ok("Saved."));
+        public ControllerActionAssignment? GetControllerAction(string controlId) => ExistingAction;
+
+        public RuntimeOperation ReorderControls(IReadOnlyList<string> orderedControlIds)
+        {
+            LastReorderedControls = orderedControlIds.ToArray();
+            return RuntimeOperation.Ok("Reordered.");
+        }
+
+        public ControllerLayoutWorkspace? GetControllerLayout() => ExistingLayout;
+
+        public ControllerLedColorCapability? GetControllerLedColorCapability() => LedCapability;
+
+        public RuntimeOperation SyncControllerLedColors(IReadOnlyDictionary<string, string> colors)
+        {
+            LastLedColors = new Dictionary<string, string>(colors, StringComparer.Ordinal);
+            return RuntimeOperation.Ok("Synchronized the whole G13.");
+        }
+
+        public RuntimeOperation UpdateControllerLayout(ControllerLayoutWorkspace workspace)
+        {
+            UpdatedLayout = workspace;
+            return RuntimeOperation.Ok("Layout updated.");
+        }
+
+        public Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default)
+        {
+            SaveCalls++;
+            return Task.FromResult(RuntimeOperation.Ok("Saved."));
+        }
 
         public RuntimeOperation EmergencyStop(string reason)
         {

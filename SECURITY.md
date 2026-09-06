@@ -52,9 +52,20 @@ disclosure of raw device identity or captured input, recursion/output storms,
 stranded held keys, unsafe profile or pack parsing, path traversal, signature/trust
 bypass, and package contents outside the documented allowlist.
 
-The project does not install a filter driver, keyboard hook, or suppression backend.
-Any proposal that introduces one requires explicit user consent, fail-open recovery,
-driver signing, Windows and anti-cheat review, and a separate threat model.
+The project does not currently install a filter driver, keyboard hook, broker service,
+or suppression backend. The broker source currently exposes authenticated status only
+and has no suppression command. Development of a separate optional Tappy filter is
+authorized, but no development binary may be silently installed or enabled. Its production gate requires
+explicit administrator consent, a distinct protected primary keyboard, kernel-local
+fail-open recovery, a restricted broker interface, HVCI and Driver Verifier evidence,
+HLK certification, Microsoft signing, a separate threat model, and the versioned
+anti-cheat matrix in [docs/ANTI_CHEAT_COMPATIBILITY.md](docs/ANTI_CHEAT_COMPATIBILITY.md).
+
+Driver-specific high-priority reports include any way to suppress the protected
+primary keyboard, keep suppression active after heartbeat loss, address a different
+device instance than the one acknowledged, bypass the broker ACL, overflow or reorder
+captured make/break events without returning to pass-through, or activate exclusive
+mode under a disallowed signing, boot, HVCI, or protected-application state.
 
 ## Disclosure and response
 

@@ -166,20 +166,36 @@ public sealed record LayoutControlSnapshot(
     ControlId? ControlId,
     LayoutControlKind Kind,
     string Label,
+    double? X,
+    double? Y,
     double Width,
     double Height,
     double GapBefore,
-    string Cluster)
+    string Cluster,
+    string ColorKey,
+    int AnalogRawAtMinimum,
+    int AnalogRawAtMaximum,
+    int? AnalogRawAtCenter,
+    double EncoderDegreesPerStep,
+    bool EncoderReversed)
 {
     internal LayoutControlDefinition ToEditable() => new()
     {
         ControlId = ControlId,
         Kind = Kind,
         Label = Label,
+        X = X,
+        Y = Y,
         Width = Width,
         Height = Height,
         GapBefore = GapBefore,
-        Cluster = Cluster
+        Cluster = Cluster,
+        ColorKey = ColorKey,
+        AnalogRawAtMinimum = AnalogRawAtMinimum,
+        AnalogRawAtMaximum = AnalogRawAtMaximum,
+        AnalogRawAtCenter = AnalogRawAtCenter,
+        EncoderDegreesPerStep = EncoderDegreesPerStep,
+        EncoderReversed = EncoderReversed
     };
 }
 
@@ -191,8 +207,11 @@ public sealed class LayoutRowSnapshot
     {
         Id = source.Id;
         _controls = source.Controls.Select(control => new LayoutControlSnapshot(
-            control.ControlId, control.Kind, control.Label, control.Width, control.Height,
-            control.GapBefore, control.Cluster)).ToArray();
+            control.ControlId, control.Kind, control.Label, control.X, control.Y, control.Width, control.Height,
+            control.GapBefore, control.Cluster, control.ColorKey,
+            control.AnalogRawAtMinimum, control.AnalogRawAtMaximum,
+            control.AnalogRawAtCenter, control.EncoderDegreesPerStep,
+            control.EncoderReversed)).ToArray();
         Controls = Array.AsReadOnly(_controls);
     }
 
@@ -215,6 +234,9 @@ public sealed class ControllerLayoutSnapshot
         Id = source.Id;
         Name = source.Name;
         Orientation = source.Orientation;
+        GridColumns = source.GridColumns;
+        GridRows = source.GridRows;
+        SnapToGrid = source.SnapToGrid;
         _rows = source.Rows.Select(row => new LayoutRowSnapshot(row)).ToArray();
         Rows = Array.AsReadOnly(_rows);
     }
@@ -222,6 +244,9 @@ public sealed class ControllerLayoutSnapshot
     public string Id { get; }
     public string Name { get; }
     public ControllerLayoutOrientation Orientation { get; }
+    public int GridColumns { get; }
+    public int GridRows { get; }
+    public bool SnapToGrid { get; }
     public IReadOnlyList<LayoutRowSnapshot> Rows { get; }
 
     internal ControllerLayoutDefinition ToEditable() => new()
@@ -229,6 +254,9 @@ public sealed class ControllerLayoutSnapshot
         Id = Id,
         Name = Name,
         Orientation = Orientation,
+        GridColumns = GridColumns,
+        GridRows = GridRows,
+        SnapToGrid = SnapToGrid,
         Rows = _rows.Select(row => row.ToEditable()).ToList()
     };
 }

@@ -87,10 +87,27 @@ delivery, and reject downgrades. No pack may introduce executable code.
 ## Exclusive input
 
 No filter driver, global keyboard hook, HidHide, Interception, or comparable system
-component is installed or enabled. True per-device suppression is a separate future
-design requiring a valid signed fail-open driver or vendor mechanism, administrator
-consent, recovery instructions, legal/security review, and anti-cheat compatibility
-review. It cannot be silently added as an implementation detail.
+component is currently installed or enabled. The owner approved development of a
+separate opt-in Tappy filter subsystem on 2026-09-04; approval to develop it is not
+approval to silently install or enable a development build.
+
+The accepted activation policy is implemented as a deterministic Core gate before
+driver work begins. It requires a distinct stable primary keyboard that remains
+pass-through, a stable selected secondary keyboard, authenticated broker and driver
+role acknowledgements, a current fail-open heartbeat, mouse/tray and primary-keyboard
+recovery, explicit administrator consent, HVCI evidence, and the required signing
+trust. Production mode rejects test-signing, kernel debugging, protected-application
+activity, attestation-only builds, ambiguous identities, stale heartbeats, and every
+partial configuration. The driver must independently revert to pass-through when the
+heartbeat expires; it cannot rely on WPF cleanup for recovery.
+
+The binary protocol uses bounded fixed-purpose operations and batches, not arbitrary
+kernel memory access or executable payloads. Only the service identity may open its
+control interface. Captured input remains local, is forwarded only for the explicitly
+armed secondary instance, and is subject to the same no-text/no-chronology diagnostic
+rules as Raw Input. See [exclusive keyboard input](EXCLUSIVE_KEYBOARD_INPUT.md),
+[driver signing and release](DRIVER_SIGNING_AND_RELEASE.md), and
+[anti-cheat compatibility](ANTI_CHEAT_COMPATIBILITY.md).
 
 ## Vulnerability posture for 0.1.0
 

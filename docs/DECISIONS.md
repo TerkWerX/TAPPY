@@ -116,10 +116,16 @@ owner-approved single-letter tattooed-hand artwork.
 The owner authorized publishing Tappy source, documentation, and CI configuration to
 the public `https://github.com/TerkWerX/TAPPY` repository. Public software license,
 verified device list, signing
-certificate, driver-based exclusivity, packaged software release, website
+certificate acquisition, packaged software release, website
 publication, and production hosting remain open or deferred and are not implied by
 source-publication authorization. Until license and contribution terms are selected,
 all rights are reserved and external contributions must not be submitted or merged.
+
+**2026-09-04 driver amendment:** The owner authorized full engineering,
+certification, signing-preparation, and anti-cheat review for an optional Tappy
+exclusive-input driver. This does not assert that a certificate or Partner Center
+account exists, does not authorize silent installation of development code, and does
+not by itself approve a public binary release. D-017 controls that subsystem.
 
 **2026-09-03 branding amendment:** The owner approved the supplied `TAPPY_hand_T`,
 `TAPPY_hand`, and `TAPPY_logo` images for Tappy application use, requested the same
@@ -144,17 +150,24 @@ devices.
 
 ## D-013 — Logitech G13 support is exact and model-specific
 
-**Status:** Accepted; physical HIL pending.
+**Status:** Accepted; attended input and lighting spot checks complete, formal HIL pending.
 
 **Decision:** The dedicated G13 provider accepts only the physical `046D:C21C`,
 `RIM_TYPEHID`, `FF00:0000` collection, validates its fixed eight-byte input report,
 and exposes 39 code-defined controls. `046D:C232` is the G HUB virtual keyboard and
-is never G13 identity. Tappy sends no G13 output reports and does not claim generic
-Logitech, learned-HID, LCD, lighting, or memory-mode support.
+is never G13 identity. The one G13 RGB backlight zone is written only through the
+confirmed physical controller's exact persistent `046D:C21C` interface, using its
+model-specific five-byte `0x07` feature report. Report `0x05` controls the separate
+M1/M2/M3/MR indicator LEDs and must never be mistaken for RGB. Tappy does not claim per-key G13
+RGB, generic Logitech, learned-HID, LCD, or memory-mode support.
 
 **Reason:** Exact matching and strict decoding keep a model-specific protocol from
-becoming a misleading generic-HID claim. Deterministic tests support the code; the
-attached device remains below Functional/Verified until a physical run succeeds.
+becoming a misleading generic-HID claim. Targeting the confirmed persistent identity
+also avoids a broad Logitech SDK call that could recolor another Logitech device.
+Deterministic tests support the code. On 2026-09-04 the owner confirmed that a direct
+`0x07` purple report changed the attached G13 while the G910 remained under its normal
+lighting control. That narrowly verifies the target and RGB report; the G13 remains
+below Functional/Verified until the complete finite HIL run succeeds.
 
 ## D-014 — External implementation provenance stays clean-room
 
@@ -168,3 +181,81 @@ documentation and project-owned design.
 
 **Reason:** This preserves an auditable public-source boundary without implying
 protocol compatibility between the G13 and SpacePilot Pro.
+
+## D-015 — MIDI input is a first-class controller provider
+
+**Status:** Accepted; physical APC MINI spot check observed, finite all-control run pending.
+
+**Decision:** A selected WinMM MIDI input port enters the same identify-confirm-map
+pipeline as a Raw Input keyboard or G13. Notes have held press/release semantics,
+note-on velocity zero is release, and program changes plus CC increase/decrease are
+balanced pulses. Once normalized, a MIDI control may use every ordinary Tappy output
+step, including keyboard, text, mouse, program, PowerShell, MIDI, and OSC.
+
+WinMM identity is deliberately marked Ambiguous because its legacy capabilities do
+not expose a stable serial or physical-port identifier. Velocity gates, SysEx, and
+clock remain deferred. Exact-model analog visuals use the original CC value in
+addition to the balanced directional mapping pulse.
+
+**Reason:** Input transport and output action are orthogonal. Reusing the mapping
+engine gives a MIDI pad full Tappy functionality while balanced directional pulses
+keep faders and knobs from becoming stuck key state. The implementation is native
+and project-owned; installed commercial applications were treated only as behavior
+references and no proprietary code was copied.
+
+## D-016 — Continuous photo controls are typed and calibrated
+
+**Status:** Accepted; APC MINI v1 fader implementation complete, additional exact-model definitions pending.
+
+**Decision:** Controller-photo hotspots distinguish buttons, faders, bounded
+potentiometers, and endless rotary encoders. A fader replaces the photographed
+track region with a neutral channel and moves only its cap. A bounded pot uses a
+position line over a reviewed physical sweep. An endless encoder accumulates a
+wrapping line and exposes saved direction and sensitivity controls. Directional
+mapping IDs that describe one physical analog control share a single visual.
+
+Beginning, optional center, and end raw values are stored in profile schema 3 for
+bounded controls; descending ranges intentionally represent reversed hardware.
+Encoder degrees-per-event and direction are stored beside them. No photo-series
+candidate receives analog behavior until its exact MIDI/HID semantics and geometry
+are reviewed.
+
+**Reason:** Live position feedback makes the photo an accurate instrument status
+display without confusing the assignment grid or falsely implying a controller
+capability. Per-device calibration handles truncated, reversed, and off-center
+hardware ranges and remains portable with community profiles.
+
+## D-017 — Exclusive keyboard input is an optional signed subsystem
+
+**Status:** Architecture and activation policy accepted 2026-09-04; unsigned KMDF
+lab scaffold, managed wire client, and status-only broker/IPC scaffold built, but
+never signed, installed, loaded, or enabled.
+
+**Decision:** Tappy may add a separate KMDF keyboard filter and least-privilege broker
+so a physically verified secondary keyboard can be copied into Tappy and suppressed
+before it reaches ordinary Windows applications. The user must first choose and
+physically verify a different primary keyboard that is always passed through.
+
+Exclusive activation requires all of the following at the same time: exact stable
+identity for both devices, explicit administrator installation and consent, an
+authenticated broker, driver acknowledgement of both roles, a 250–2,000 ms kernel
+fail-open watchdog with a current heartbeat, a working mouse/tray path, an emergency
+stop on the protected primary keyboard, HVCI compatibility, and an acceptable signed
+package. Production Tappy requires a Microsoft-signed HLK-certified package. It will
+not arm exclusive input during test-signing, kernel debugging, or a detected protected
+application. Any missing or stale condition atomically returns every keyboard to
+pass-through.
+
+The driver will not inject input, inspect processes, patch code, conceal itself,
+communicate over a network, or offer a general-purpose privileged IOCTL. The WPF app
+remains non-administrative; only the installed broker may open the driver control
+interface. Driver installation, enablement, and removal remain explicit operations
+with a documented recovery path. No compatibility claim is made for an anti-cheat
+product or game until its exact current version has passed the release matrix and,
+where necessary, vendor review.
+
+**Reason:** Raw Input can attribute but cannot suppress one keyboard. A kernel filter
+can perform true per-device suppression, but a mistake can remove the user's only
+typing path or conflict with security software. The stronger release gate is a
+deliberate product policy, not a claim that every Windows client installation
+technically requires HLK certification.

@@ -94,21 +94,52 @@ Notable changes to Tappy are documented here.
   Tappy hand on the splash and About surfaces.
 - A reproducible multi-size Windows icon generated from the tattooed `T` hand now
   identifies the executable, application windows, taskbar, and notification area.
+- Exact Logitech G13 lighting now writes the physical `046D:C21C` interface's
+  five-byte `0x07` RGB feature report. The broad Logitech SDK path was removed after
+  it recolored the protected G910; the owner then confirmed a purple G13 change while
+  the G910 remained normal.
+- The optional per-device exclusive-keyboard track now has a reproducible, unsigned
+  x64 KMDF lab build using Microsoft's pinned WDK/SDK NuGet packages. Its SYSTEM-only
+  single-client control child, authenticated lease, monotonically increasing policy,
+  bounded packet ring, overflow/close/emergency fail-open paths, and 250–2,000 ms
+  kernel watchdog compile with WDK code analysis clean. Matching managed wire-codec
+  tests pass; nothing is installed, loaded, or enabled in the app.
+- The owner-approved optional exclusive-keyboard track now has a deterministic
+  fail-open activation policy, a frozen bounded version-1 driver/broker protocol,
+  driver signing and recovery gates, an anti-cheat compatibility matrix, and a
+  repeatable read-only toolchain audit. No driver or broker is installed or enabled.
+- A LocalSystem-capable input-broker scaffold now accepts only one explicitly
+  configured Windows user over a protected, local-computer-only named pipe. Bounded
+  HMAC-authenticated frames reject modification, wrong keys, replay/order errors,
+  invalid types, and oversized data. Its only command is status: stable device
+  binding and signed-client verification must be completed before any suppression
+  control is added. The broker self-test and a real local pipe exchange pass without
+  installing or starting a service.
+- The broker coordinator now treats every keyboard interface in a physically verified
+  ContainerId group as one role. Every protected-primary interface must acknowledge
+  pass-through before any secondary interface may suppress, all secondary leases are
+  heartbeated, reads remain globally bounded, and stop releases every secondary
+  before touching the protected group.
+- Current deterministic results: Core 58, Windows 134, App 109, Input Broker 16,
+  G13 HIL tool 23, and Output Witness 53 tests pass (393 total) in Release.
 
 ### Known limitations
 
 - No physical controller is called verified until real Controller Passport and HIL
   evidence is captured.
 - Windows cannot selectively suppress one keyboard through Raw Input; original keys
-  remain pass-through.
+  remain pass-through until the optional KMDF filter, broker, certification, signing,
+  recovery, and protected-application gates are completed.
 - The attached G13 is descriptor-enumerated and code-supported, with operator-reported
   visual response for all controls, but no finite HIL/output/pass-through run has
   completed; it is not Functional or Verified.
 - Virtual gamepad, variables, layer-control actions, gesture triggers, reusable MIDI/
   OSC preset managers, and full independent press/release sequence editing remain.
-- Public license, signing, packaged release, and website decisions remain open.
+- Public license, packaged release, and website decisions remain open. Driver
+  engineering/certification work is authorized, but certificate acquisition,
+  Microsoft signing, distribution, and installation are not complete.
 - Other processed controller images remain excluded pending provenance, usage
   rights, exact-model/protocol evidence, processing records, and explicit approval.
 - Source/docs/CI publication and the supplied in-app brand set are authorized for the
-  existing public `TerkWerX/TAPPY` repository; a packaged release, signing, website,
-  or hosting is not authorized or implied.
+  existing public `TerkWerX/TAPPY` repository; a packaged release, website, or hosting
+  is not authorized or implied.

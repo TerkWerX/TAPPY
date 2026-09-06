@@ -9,6 +9,231 @@ namespace Tappy.App.Tests;
 
 public sealed class DeviceAwareControllerRuntimeTests
 {
+    [Theory]
+    [InlineData("winmm-midi:channel-1:note-0", 0)]
+    [InlineData("winmm-midi:channel-1:note-71", 71)]
+    [InlineData("winmm-midi:channel-1:note-82", 82)]
+    [InlineData("winmm-midi:channel-1:note-89", 89)]
+    [InlineData("winmm-midi:channel-1:note-72", null)]
+    [InlineData("winmm-midi:channel-1:note-98", null)]
+    [InlineData("winmm-midi:channel-1:cc-48:increase", null)]
+    public void Apc_mini_led_sync_accepts_only_verified_lighted_notes(string controlId, int? expected) =>
+        Assert.Equal(expected, DeviceAwareControllerRuntime.TryParseApcMiniLedNote(controlId));
+
+    [Theory]
+    [InlineData("Default", 0)]
+    [InlineData("Green", 1)]
+    [InlineData("Teal", 1)]
+    [InlineData("Red", 3)]
+    [InlineData("Pink", 3)]
+    [InlineData("Orange", 5)]
+    [InlineData("Amber", 5)]
+    [InlineData("Yellow", 5)]
+    [InlineData("White", 5)]
+    [InlineData("Blue", 0)]
+    [InlineData("Purple", 0)]
+    public void Apc_mini_visual_colors_map_to_its_verified_bicolor_palette(string color, int expected) =>
+        Assert.Equal(expected, DeviceAwareControllerRuntime.ApcMiniVelocity(color));
+
+    [Fact]
+    public async Task Midi_pad_uses_the_same_full_assignment_pipeline_as_keyboard_controllers()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var keyboardHost = new FakeMessageHost();
+            var keyboardProvider = new RawInputKeyboardProvider(
+                new FakeEnumerator(),
+                keyboardHost,
+                keyboardIsNeutral: static () => true);
+            using var midiBackend = new FakeMidiBackend(
+                new WinMmMidiInputDevice(0, "APC MINI", 1, 2, 3));
+            var midiProvider = new WinMmMidiInputProvider(midiBackend);
+            var keyboardOutput = new RecordingOutput();
+            var actionOutput = new RecordingActionOutput();
+            var controlUpdates = new List<RuntimeControlUpdate>();
+            await using var runtime = new DeviceAwareControllerRuntime(
+                keyboardProvider,
+                logitechG13Provider: null,
+                keyboardOutput,
+                new AtomicProfileStore(root),
+                actionOutput: actionOutput,
+                midiInputProvider: midiProvider);
+            runtime.ControlChanged += (_, update) => controlUpdates.Add(update);
+
+            await runtime.InitializeAsync();
+            var device = Assert.Single(runtime.Devices);
+            Assert.Equal(WinMmMidiInputProvider.ProviderId, device.ProviderId);
+            Assert.True(runtime.BeginIdentification(device).Succeeded);
+            midiBackend.Publish(PackMidi(0x90, 36, 127));
+            midiBackend.Publish(PackMidi(0x80, 36, 0));
+            Assert.True(runtime.ConfirmController().Succeeded);
+            var ledCapability = Assert.IsType<ControllerLedColorCapability>(
+                runtime.GetControllerLedColorCapability());
+            Assert.Equal(["Default", "Green", "Red", "Amber"], ledCapability.SupportedColorKeys);
+            var initialLayout = controlUpdates.Where(update => update.IsSnapshot).ToArray();
+            Assert.Equal(99, initialLayout.Length);
+            Assert.Contains(initialLayout, update =>
+                update.ControlId == "winmm-midi:channel-1:note-57" &&
+                update.DisplayLabel == "Pad R1 C2");
+            Assert.Contains(initialLayout, update =>
+                update.ControlId == "winmm-midi:channel-1:cc-56:increase" &&
+                update.DisplayLabel == "Master fader ↑");
+
+            var controlId = "winmm-midi:channel-1:note-36";
+            var sequence = ControllerActionSequenceDefinition.Once(
+                "MIDI pad full macro",
+                new ControllerActionStepDefinition
+                {
+                    Type = ControllerActionStepType.KeyboardChord,
+                    Keys = [new KeyboardOutputKey("CTRL"), new KeyboardOutputKey("S")],
+                },
+                new ControllerActionStepDefinition
+                {
+                    Type = ControllerActionStepType.Text,
+                    Value = "from APC MINI",
+                },
+                new ControllerActionStepDefinition
+                {
+                    Type = ControllerActionStepType.Midi,
+                    Value = "cc:1:7:100",
+                },
+                new ControllerActionStepDefinition
+                {
+                    Type = ControllerActionStepType.Osc,
+                    Value = "/tappy/test",
+                    Arguments = "1",
+                    Target = "127.0.0.1",
+                    Amount = 9000,
+                });
+            Assert.True(runtime.AssignControllerAction(
+                controlId,
+                new ControllerActionAssignment(
+                    sequence.Name,
+                    sequence,
+                    new ControllerActionSequenceDefinition())).Succeeded);
+
+            var editableCopy = Assert.IsType<ControllerActionAssignment>(runtime.GetControllerAction(controlId));
+            Assert.Equal(4, editableCopy.PressSequence.Steps.Count);
+            Assert.Equal("from APC MINI", editableCopy.PressSequence.Steps[1].Value);
+            editableCopy.PressSequence.Steps[1].Value = "changed only in editor copy";
+            Assert.Equal(
+                "from APC MINI",
+                Assert.IsType<ControllerActionAssignment>(runtime.GetControllerAction(controlId))
+                    .PressSequence.Steps[1].Value);
+
+            var reordered = initialLayout.Select(update => update.ControlId).ToArray();
+            (reordered[0], reordered[^1]) = (reordered[^1], reordered[0]);
+            Assert.True(runtime.ReorderControls(reordered).Succeeded);
+            var originalWorkspace = Assert.IsType<ControllerLayoutWorkspace>(runtime.GetControllerLayout());
+            var customControls = originalWorkspace.Controls
+                .Select((control, index) => index == 0
+                    ? control with
+                    {
+                        X = 37,
+                        Y = 49,
+                        Width = 0.5,
+                        Height = 0.75,
+                        ColorKey = "Purple",
+                        AnalogRawAtMinimum = 11,
+                        AnalogRawAtMaximum = 119,
+                        AnalogRawAtCenter = 63,
+                        EncoderDegreesPerStep = 7.5,
+                        EncoderReversed = true,
+                    }
+                    : control)
+                .ToArray();
+            Assert.True(runtime.UpdateControllerLayout(new ControllerLayoutWorkspace(
+                12,
+                10,
+                SnapToGrid: false,
+                customControls)).Succeeded);
+            Assert.True((await runtime.SaveProfileAsync()).Succeeded);
+            var savedProfile = await new AtomicProfileStore(root).LoadAsync("default");
+            var savedController = Assert.Single(savedProfile.Controllers);
+            Assert.Equal(12, savedController.Layout.GridColumns);
+            Assert.Equal(10, savedController.Layout.GridRows);
+            Assert.False(savedController.Layout.SnapToGrid);
+            var savedOrder = savedController.Layout.Rows
+                .SelectMany(row => row.Controls)
+                .Where(control => control.ControlId is not null)
+                .Select(control => control.ControlId!.Value.Value)
+                .ToArray();
+            Assert.Equal(reordered, savedOrder);
+
+            using (var restoredMidiBackend = new FakeMidiBackend(
+                       new WinMmMidiInputDevice(0, "APC MINI", 1, 2, 3)))
+            {
+                var restoredMidiProvider = new WinMmMidiInputProvider(restoredMidiBackend);
+                var restoredUpdates = new List<RuntimeControlUpdate>();
+                await using var restoredRuntime = new DeviceAwareControllerRuntime(
+                    new RawInputKeyboardProvider(
+                        new FakeEnumerator(),
+                        new FakeMessageHost(),
+                        keyboardIsNeutral: static () => true),
+                    logitechG13Provider: null,
+                    new RecordingOutput(),
+                    new AtomicProfileStore(root),
+                    actionOutput: new RecordingActionOutput(),
+                    midiInputProvider: restoredMidiProvider);
+                restoredRuntime.ControlChanged += (_, update) => restoredUpdates.Add(update);
+                await restoredRuntime.InitializeAsync();
+                var restoredDevice = Assert.Single(restoredRuntime.Devices);
+                Assert.True(restoredRuntime.BeginIdentification(restoredDevice).Succeeded);
+                restoredMidiBackend.Publish(PackMidi(0x90, 36, 127));
+                restoredMidiBackend.Publish(PackMidi(0x80, 36, 0));
+                Assert.True(restoredRuntime.ConfirmController().Succeeded);
+                Assert.Equal(
+                    reordered,
+                    restoredUpdates.Where(update => update.IsSnapshot).Select(update => update.ControlId));
+                var restoredWorkspace = Assert.IsType<ControllerLayoutWorkspace>(
+                    restoredRuntime.GetControllerLayout());
+                Assert.Equal(12, restoredWorkspace.GridColumns);
+                Assert.Equal(10, restoredWorkspace.GridRows);
+                Assert.False(restoredWorkspace.SnapToGrid);
+                var restoredPlacement = restoredWorkspace.Controls.Single(control =>
+                    control.ControlId == customControls[0].ControlId);
+                Assert.Equal(37, restoredPlacement.X);
+                Assert.Equal(49, restoredPlacement.Y);
+                Assert.Equal(0.5, restoredPlacement.Width);
+                Assert.Equal(0.75, restoredPlacement.Height);
+                Assert.Equal("Purple", restoredPlacement.ColorKey);
+                Assert.Equal(11, restoredPlacement.AnalogRawAtMinimum);
+                Assert.Equal(119, restoredPlacement.AnalogRawAtMaximum);
+                Assert.Equal(63, restoredPlacement.AnalogRawAtCenter);
+                Assert.Equal(7.5, restoredPlacement.EncoderDegreesPerStep);
+                Assert.True(restoredPlacement.EncoderReversed);
+            }
+
+            midiBackend.Publish(PackMidi(0xB0, 48, 100));
+            Assert.Contains(controlUpdates, update =>
+                update.ControlId == "winmm-midi:channel-1:cc-48:increase" &&
+                update.IsPressed &&
+                update.AnalogRawValue == 100 &&
+                update.AnalogDelta == 1);
+
+            runtime.IsRehearsal = false;
+            midiBackend.Publish(PackMidi(0x90, 36, 100));
+            midiBackend.Publish(PackMidi(0x80, 36, 0));
+
+            Assert.Contains(controlUpdates, update =>
+                !update.IsSnapshot &&
+                update.ControlId == controlId &&
+                update.DisplayLabel == "Pad R4 C5");
+
+            var request = Assert.Single(actionOutput.Started);
+            Assert.Equal(4, request.Sequence.Steps.Count);
+            Assert.Equal(
+                [ControllerActionStepType.KeyboardChord, ControllerActionStepType.Text,
+                    ControllerActionStepType.Midi, ControllerActionStepType.Osc],
+                request.Sequence.Steps.Select(step => step.Type));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task Identify_confirm_map_and_unplug_releases_held_output()
     {
@@ -946,6 +1171,9 @@ public sealed class DeviceAwareControllerRuntimeTests
             flags.HasFlag(RawKeyboardFlags.Break) ? 0x101u : 0x100u,
             extraInformation);
 
+    private static uint PackMidi(byte status, byte data1, byte data2) =>
+        status | ((uint)data1 << 8) | ((uint)data2 << 16);
+
     private static string NewTemporaryDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), $"Tappy-AppTests-{Guid.NewGuid():N}");
@@ -1003,6 +1231,39 @@ public sealed class DeviceAwareControllerRuntimeTests
             IsRunning = false;
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class FakeMidiBackend(params WinMmMidiInputDevice[] devices) : IWinMmMidiInputBackend
+    {
+        private readonly IReadOnlyList<WinMmMidiInputDevice> _devices = devices;
+
+        public event Action<uint>? ShortMessageReceived;
+
+        public bool IsOpen { get; private set; }
+
+        public IReadOnlyList<WinMmMidiInputDevice> EnumerateDevices() => _devices;
+
+        public void Open(int deviceId)
+        {
+            Assert.Contains(_devices, device => device.DeviceId == deviceId);
+            IsOpen = true;
+        }
+
+        public void Start() => Assert.True(IsOpen);
+
+        public void Stop()
+        {
+        }
+
+        public void Close() => IsOpen = false;
+
+        public void Publish(uint message)
+        {
+            Assert.True(IsOpen);
+            ShortMessageReceived?.Invoke(message);
+        }
+
+        public void Dispose() => IsOpen = false;
     }
 
     private sealed class RecordingOutput : IKeyboardOutput
