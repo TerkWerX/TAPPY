@@ -62,14 +62,12 @@ public sealed class G13HilSessionTests
     }
 
     [Fact]
-    public void UnexpectedDuplicateAndUnbalancedSignalsNeverAdvanceExpectedPrompt()
+    public void DuplicateAndUnbalancedSignalsRemainFatalEvenWhenExpectedPromptCompletes()
     {
         var session = new G13HilSession();
         session.MarkNeutralObserved();
         var originalRevision = session.Snapshot().Prompt.Revision;
 
-        session.Accept(LogitechG13Control.G2, ControlSignalKind.Press);
-        session.Accept(LogitechG13Control.G2, ControlSignalKind.Release);
         session.Accept(LogitechG13Control.G1, ControlSignalKind.Release);
         session.Accept(LogitechG13Control.G1, ControlSignalKind.Press);
         session.Accept(LogitechG13Control.G1, ControlSignalKind.Press);
@@ -78,16 +76,42 @@ public sealed class G13HilSessionTests
         var beforeBalancedRelease = session.Snapshot();
         Assert.Equal(G13HilPhase.Handshake, beforeBalancedRelease.Prompt.Phase);
         Assert.Equal(originalRevision, beforeBalancedRelease.Prompt.Revision);
-        Assert.Equal(2, beforeBalancedRelease.UnexpectedTransitions);
+        Assert.Equal(0, beforeBalancedRelease.UnexpectedTransitions);
         Assert.Equal(2, beforeBalancedRelease.DuplicateTransitions);
         Assert.Equal(1, beforeBalancedRelease.UnbalancedTransitions);
 
         session.Accept(LogitechG13Control.G1, ControlSignalKind.Release);
         var after = session.Snapshot();
         Assert.Equal(G13HilPhase.Controls, after.Prompt.Phase);
-        Assert.False(after.ExpectedControlGatingPassed);
+        Assert.True(after.ExpectedControlGatingPassed);
         Assert.False(after.DuplicateSuppressionPassed);
         Assert.False(after.BalancedTransitions);
+    }
+
+    [Fact]
+    public void Balanced_wrong_control_retries_prompt_without_poisoning_clean_run()
+    {
+        var session = new G13HilSession();
+        session.MarkNeutralObserved();
+        var originalRevision = session.Snapshot().Prompt.Revision;
+
+        Cycle(session, LogitechG13Control.G2, 1);
+        var retry = session.Snapshot();
+
+        Assert.Equal(G13HilPhase.Handshake, retry.Prompt.Phase);
+        Assert.True(retry.Prompt.Revision > originalRevision);
+        Assert.Equal(1, retry.PromptRetries);
+        Assert.Equal(0, retry.UnexpectedTransitions);
+
+        Cycle(session, LogitechG13Control.G1, 1);
+        CompleteAllControlPrompts(session);
+        CompleteSimultaneousSets(session);
+        CompleteDuplicateSweep(session);
+        var complete = session.Snapshot();
+
+        Assert.True(complete.SessionAssertionsPassed);
+        Assert.True(complete.ExpectedControlGatingPassed);
+        Assert.Equal(1, complete.PromptRetries);
     }
 
     [Fact]
@@ -109,7 +133,7 @@ public sealed class G13HilSessionTests
     }
 
     [Fact]
-    public void PrematureSweepReleaseCanBeRetriedButFailsDuplicateSweepAssertion()
+    public void PrematureSweepReleaseCanBeRetriedWithoutPoisoningCleanAttempt()
     {
         var session = PrepareThroughIndividualControls();
         CompleteSimultaneousSets(session);
@@ -124,9 +148,35 @@ public sealed class G13HilSessionTests
 
         Assert.True(snapshot.IsComplete);
         Assert.True(snapshot.DuplicateSweepCompleted);
-        Assert.False(snapshot.DuplicateSuppressionPassed);
-        Assert.False(snapshot.SessionAssertionsPassed);
+        Assert.True(snapshot.DuplicateSuppressionPassed);
+        Assert.True(snapshot.SessionAssertionsPassed);
         Assert.Equal(1, snapshot.PromptRetries);
+    }
+
+    [Fact]
+    public void Perpendicular_stick_crossings_are_tolerated_during_horizontal_duplicate_sweep()
+    {
+        var session = PrepareThroughIndividualControls();
+        CompleteSimultaneousSets(session);
+
+        session.Accept(LogitechG13Control.G1, ControlSignalKind.Press);
+        for (var index = 0; index < G13HilSession.RequiredSweepCyclesPerDirection; index++)
+        {
+            Cycle(session, LogitechG13Control.StickLeft, 1);
+            Cycle(session, LogitechG13Control.StickUp, 1);
+            Cycle(session, LogitechG13Control.StickRight, 1);
+            Cycle(session, LogitechG13Control.StickDown, 1);
+        }
+
+        session.Accept(LogitechG13Control.G1, ControlSignalKind.Release);
+        var snapshot = session.Snapshot();
+
+        Assert.True(snapshot.IsComplete);
+        Assert.True(snapshot.SessionAssertionsPassed);
+        Assert.True(snapshot.DuplicateSweepCompleted);
+        Assert.True(snapshot.DuplicateSuppressionPassed);
+        Assert.True(snapshot.ExpectedControlGatingPassed);
+        Assert.Equal(0, snapshot.UnexpectedTransitions);
     }
 
     [Fact]

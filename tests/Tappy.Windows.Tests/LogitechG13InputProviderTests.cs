@@ -262,6 +262,27 @@ public sealed class LogitechG13InputProviderTests
     }
 
     [Fact]
+    public async Task Duplicate_arrival_for_selected_unchanged_controller_is_ignored()
+    {
+        var host = new FakeRawInputMessageHost();
+        var enumerator = new FakeLogitechG13DeviceEnumerator(G13);
+        await using var provider = new LogitechG13InputProvider(enumerator, host);
+        var changes = new List<LogitechG13DeviceChangedEventArgs>();
+        var devicesChanged = 0;
+        provider.DeviceChanged += (_, change) => changes.Add(change);
+        provider.DevicesChanged += () => devicesChanged++;
+        _ = provider.EnumerateControllers();
+        Assert.True(provider.SetCaptureTarget(G13.SessionHandle));
+
+        host.EmitDeviceChange(G13.SessionHandle, RawInputDeviceChangeKind.Arrival);
+
+        Assert.Empty(changes);
+        Assert.Equal(0, devicesChanged);
+        Assert.Equal(G13.SessionHandle, provider.CaptureTarget);
+        Assert.False(provider.IsCaptureTargetNeutral);
+    }
+
+    [Fact]
     public async Task RemovalPublishesAllHeldReleasesAndSanitizedDeviceChange()
     {
         var host = new FakeRawInputMessageHost();

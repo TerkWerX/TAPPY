@@ -239,6 +239,7 @@ internal sealed class G13HilRunner
             var lastUnexpected = 0;
             var lastDuplicate = 0;
             var lastUnbalanced = 0;
+            var lastPromptRetries = 0;
             while (!runCancellation.IsCancellationRequested)
             {
                 if (session.Phase == G13HilPhase.AwaitNeutral &&
@@ -270,6 +271,12 @@ internal sealed class G13HilRunner
                 {
                     Console.WriteLine("Unbalanced transition detected; only the aggregate count will be retained.");
                     lastUnbalanced = snapshot.UnbalancedTransitions;
+                }
+
+                if (snapshot.PromptRetries != lastPromptRetries)
+                {
+                    Console.WriteLine("That attempt was reset. Release all controls, then repeat the current prompt; earlier completed prompts are preserved.");
+                    lastPromptRetries = snapshot.PromptRetries;
                 }
 
                 if (snapshot.IsComplete)

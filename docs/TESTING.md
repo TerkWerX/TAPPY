@@ -4,7 +4,7 @@ This record separates deterministic software evidence from packaged-artifact and
 physical-hardware evidence. Passing automated tests does not certify a controller,
 prove 6KRO/NKRO behavior, or establish physical latency.
 
-## 2026-09-06 source-tree verification
+## 2026-09-07 source-tree verification
 
 Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.400`; product projects
 target .NET 8. The verification was run in Release configuration.
@@ -13,12 +13,12 @@ target .NET 8. The verification was run in Release configuration.
 |---|---:|---|
 | `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
 | `Tappy.Core.Tests` | 58 passed, 0 failed | Deterministic platform-neutral behavior, including exclusive-input safety policy, explicit cleanup-dispatch results, immutable action sequences, profile/layout round-trip, MIDI parsing, OSC encoding, and action-output press/release/Rehearsal routing |
-| `Tappy.Windows.Tests` | 134 passed, 0 failed | Keyboard/G13/MIDI packet parsing and providers, exact G13 lighting isolation, ContainerId grouping, output and lifecycle seams, plus 20 filter-protocol, device-session, and grouped two-phase coordinator cases using deterministic/native-boundary fixtures |
+| `Tappy.Windows.Tests` | 135 passed, 0 failed | Keyboard/G13/MIDI packet parsing and providers, exact G13 lighting isolation, duplicate-startup-arrival suppression, ContainerId grouping, output and lifecycle seams, plus 20 filter-protocol, device-session, and grouped two-phase coordinator cases using deterministic/native-boundary fixtures |
 | `Tappy.App.Tests` | 109 passed, 0 failed | Keyboard/G13/MIDI selection and routing, persistent freeform controller layouts, group selection/coloring, model-aware lighting palettes and photo locators, assignment editing, theme readability, profile round-trip, and lifecycle/fault cleanup with fake providers/output |
 | `Tappy.InputBroker.Tests` | 16 passed, 0 failed | Bootstrap SID/key refusal, protected pipe ACL, bounded HMAC framing, modification/key/replay/reserved/size rejection, real local named-pipe handshake, and status-only command boundary |
-| `Tappy.G13Hil.Tests` | 23 passed, 0 failed | Finite state machine, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
+| `Tappy.G13Hil.Tests` | 25 passed, 0 failed | Finite state machine, retriable operator slips, physical-stick perpendicular crossings, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
 | `Tappy.OutputWitness.Tests` | 53 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break and output state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
-| Current automated total | 393 passed, 0 failed | Core 58 + Windows 134 + App 109 + Input Broker 16 + G13 HIL tool 23 + Output Witness 53 |
+| Current automated total | 396 passed, 0 failed | Core 58 + Windows 135 + App 109 + Input Broker 16 + G13 HIL tool 25 + Output Witness 53 |
 | `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 14 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
@@ -132,8 +132,14 @@ support. Follow
 
 `Tappy.G13Hil` now provides a finite, explicitly armed aggregate verifier for all 39
 code-defined controls, simultaneous groups, transition balance, and duplicate
-suppression. Its 23 deterministic tests pass, but no armed live run has completed;
-its existence does not advance the G13 beyond code-supported. See the
+suppression. Its 25 deterministic tests pass. On 2026-09-07 the exact attached
+`046D:C21C`, `FF00:0000` G13 completed the armed live run with all aggregate
+assertions true, 78 completed control cycles, 95 balanced accepted presses/releases,
+and zero unexpected, duplicate, unbalanced, disconnect, fault, or lifecycle events.
+The evidence SHA-256 is
+`54CE558B9180D541E647D745C214CA778882D0B8C03815B7ED751AB7EE023A86`.
+This input-functional record does not advance the G13 beyond code-supported by
+itself. See the
 [G13 support boundary](LOGITECH_G13.md).
 
 ## Static identity and privacy audit

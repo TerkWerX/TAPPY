@@ -62,18 +62,23 @@ The optional `--timeout-minutes <5..60>` overrides the finite 30-minute default.
 The guided run requires neutral state, an identity handshake, two press/release
 cycles for each of the 39 code-defined controls, three simultaneous-control sets,
 balanced transitions, all four stick directions, and a duplicate-suppression
-sweep. Ctrl+C, timeout, fault, lifecycle interruption, or unplug disarms capture
+sweep. Because all four directions are verified separately before the sweep, brief
+perpendicular-axis crossings from the physical analog stick are tolerated during
+the final horizontal sweep. A balanced wrong-control attempt resets only the current
+prompt and preserves earlier completed prompts; repeated device cross-talk still
+cannot complete a clean prompt. Duplicate or unbalanced normalized transitions remain
+fatal assertions. Ctrl+C, timeout, fault, lifecycle interruption, or unplug disarms capture
 and prevents a passing result.
 
 The tool sends no G13 output reports, invokes no mapped actions, and measures no
 pass-through, mapping-output, or latency behavior. It writes only aggregate
 input-functional evidence under
 `artifacts/hil/<random-run-id>/g13.tappy-hil.json`; it retains no raw reports,
-device paths, ContainerIds, control chronology, or typed text. Its 23 automated
-tests validate the verifier's state machine, refusal, and evidence contract, but no
-armed physical run has completed. A passing run is therefore one input-functional
-record, not by itself a full Controller Passport, full HIL certification, or
-`Verified` support.
+device paths, ContainerIds, control chronology, or typed text. Its 25 automated
+tests validate the verifier's state machine, refusal, retriable-prompt behavior, and
+evidence contract. The exact attached G13 completed a clean passing physical run on
+2026-09-07. That result is one input-functional record, not by itself a full
+Controller Passport, full HIL certification, or `Verified` support.
 
 ## Required initial physical matrix
 

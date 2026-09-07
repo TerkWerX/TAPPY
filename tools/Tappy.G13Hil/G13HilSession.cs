@@ -100,6 +100,7 @@ internal sealed class G13HilSession
     private readonly HashSet<LogitechG13Control> _simultaneousHeld = [];
     private readonly HashSet<LogitechG13Control> _simultaneousSeen = [];
     private readonly HashSet<LogitechG13Control> _sweepHeld = [];
+    private readonly HashSet<LogitechG13Control> _unexpectedHeld = [];
     private G13HilPhase _phase = G13HilPhase.AwaitNeutral;
     private long _phaseStartedAt;
     private int _promptRevision = 1;
@@ -122,7 +123,7 @@ internal sealed class G13HilSession
     private bool _sweepAnchorPressed;
     private bool _sweepAnchorCompleted;
     private bool _sweepInvalid;
-    private int _sweepSequenceErrors;
+    private bool _attemptHasUnexpectedControl;
     private bool _neutralObserved;
     private bool _handshakePassed;
     private bool _allControlsPassed;
@@ -226,7 +227,8 @@ internal sealed class G13HilSession
                 _unbalancedTransitions == 0 &&
                 !_singleHeld &&
                 _simultaneousHeld.Count == 0 &&
-                _sweepHeld.Count == 0;
+                _sweepHeld.Count == 0 &&
+                _unexpectedHeld.Count == 0;
             return new G13HilSessionSnapshot(
                 CreatePrompt(),
                 _neutralObserved,
@@ -237,7 +239,7 @@ internal sealed class G13HilSession
                 _duplicateSweepCompleted,
                 balanced,
                 _unexpectedTransitions == 0,
-                _duplicateTransitions == 0 && _sweepSequenceErrors == 0,
+                _duplicateTransitions == 0,
                 _definitions.Count,
                 RequiredCyclesPerControl,
                 _completedControlCycles,
@@ -266,7 +268,8 @@ internal sealed class G13HilSession
     {
         if (control != expected)
         {
-            _unexpectedTransitions++;
+            RecordUnexpectedAttemptControl(control, kind);
+            TryFinishSingleAttempt(expected, requiredCycles);
             return;
         }
 
@@ -292,6 +295,24 @@ internal sealed class G13HilSession
         _singleHeld = false;
         _acceptedReleases++;
         _singleCycles++;
+        TryFinishSingleAttempt(expected, requiredCycles);
+    }
+
+    private void TryFinishSingleAttempt(
+        LogitechG13Control expected,
+        int requiredCycles)
+    {
+        if (_singleHeld || _unexpectedHeld.Count != 0)
+        {
+            return;
+        }
+
+        if (_attemptHasUnexpectedControl)
+        {
+            RetrySingleAttempt();
+            return;
+        }
+
         if (_singleCycles < requiredCycles)
         {
             return;
@@ -323,12 +344,22 @@ internal sealed class G13HilSession
         }
     }
 
+    private void RetrySingleAttempt()
+    {
+        _singleCycles = 0;
+        _singleHeld = false;
+        ResetUnexpectedAttemptControls();
+        _promptRetries++;
+        _promptRevision++;
+    }
+
     private void AcceptSimultaneous(LogitechG13Control control, ControlSignalKind kind)
     {
         var expected = SimultaneousSets[_simultaneousIndex];
         if (!expected.Contains(control))
         {
-            _unexpectedTransitions++;
+            RecordUnexpectedAttemptControl(control, kind);
+            TryFinishSimultaneousAttempt(expected);
             return;
         }
 
@@ -357,8 +388,19 @@ internal sealed class G13HilSession
         }
 
         _acceptedReleases++;
-        if (_simultaneousHeld.Count != 0)
+        TryFinishSimultaneousAttempt(expected);
+    }
+
+    private void TryFinishSimultaneousAttempt(LogitechG13Control[] expected)
+    {
+        if (_simultaneousHeld.Count != 0 || _unexpectedHeld.Count != 0)
         {
+            return;
+        }
+
+        if (_attemptHasUnexpectedControl)
+        {
+            RetrySimultaneousAttempt();
             return;
         }
 
@@ -381,6 +423,11 @@ internal sealed class G13HilSession
             return;
         }
 
+        RetrySimultaneousAttempt();
+    }
+
+    private void RetrySimultaneousAttempt()
+    {
         _promptRetries++;
         ResetSimultaneousAttempt();
         _promptRevision++;
@@ -388,10 +435,20 @@ internal sealed class G13HilSession
 
     private void AcceptDuplicateSweep(LogitechG13Control control, ControlSignalKind kind)
     {
+        // A real G13 thumb stick can briefly cross the vertical hysteresis bands
+        // during a deliberate full-width horizontal sweep. Up/Down were already
+        // verified twice in the individual-control phase; this final phase exists
+        // only to verify Left/Right duplicate suppression while G1 is held.
+        if (control is LogitechG13Control.StickUp or LogitechG13Control.StickDown)
+        {
+            return;
+        }
+
         if (control is not (LogitechG13Control.G1 or
             LogitechG13Control.StickLeft or LogitechG13Control.StickRight))
         {
-            _unexpectedTransitions++;
+            RecordUnexpectedAttemptControl(control, kind);
+            TryFinishSweepAttempt();
             return;
         }
 
@@ -409,7 +466,6 @@ internal sealed class G13HilSession
                 if (_sweepAnchorPressed)
                 {
                     _sweepInvalid = true;
-                    _sweepSequenceErrors++;
                 }
 
                 _sweepAnchorPressed = true;
@@ -417,7 +473,6 @@ internal sealed class G13HilSession
             else if (!_sweepHeld.Contains(LogitechG13Control.G1))
             {
                 _sweepInvalid = true;
-                _sweepSequenceErrors++;
             }
 
             return;
@@ -438,7 +493,6 @@ internal sealed class G13HilSession
                 _sweepRightCycles < RequiredSweepCyclesPerDirection)
             {
                 _sweepInvalid = true;
-                _sweepSequenceErrors++;
             }
         }
         else if (_sweepHeld.Contains(LogitechG13Control.G1))
@@ -455,15 +509,20 @@ internal sealed class G13HilSession
         else
         {
             _sweepInvalid = true;
-            _sweepSequenceErrors++;
         }
 
-        if (_sweepHeld.Count != 0)
+        TryFinishSweepAttempt();
+    }
+
+    private void TryFinishSweepAttempt()
+    {
+        if (_sweepHeld.Count != 0 || _unexpectedHeld.Count != 0)
         {
             return;
         }
 
-        if (!_sweepInvalid &&
+        if (!_attemptHasUnexpectedControl &&
+            !_sweepInvalid &&
             _sweepAnchorCompleted &&
             _sweepLeftCycles >= RequiredSweepCyclesPerDirection &&
             _sweepRightCycles >= RequiredSweepCyclesPerDirection)
@@ -478,11 +537,40 @@ internal sealed class G13HilSession
         _promptRevision++;
     }
 
+    private void RecordUnexpectedAttemptControl(
+        LogitechG13Control control,
+        ControlSignalKind kind)
+    {
+        _attemptHasUnexpectedControl = true;
+        if (kind == ControlSignalKind.Press)
+        {
+            if (!_unexpectedHeld.Add(control))
+            {
+                _duplicateTransitions++;
+            }
+
+            return;
+        }
+
+        if (!_unexpectedHeld.Remove(control))
+        {
+            _unexpectedTransitions++;
+            _unbalancedTransitions++;
+        }
+    }
+
+    private void ResetUnexpectedAttemptControls()
+    {
+        _unexpectedHeld.Clear();
+        _attemptHasUnexpectedControl = false;
+    }
+
     private void ResetSimultaneousAttempt()
     {
         _simultaneousHeld.Clear();
         _simultaneousSeen.Clear();
         _simultaneousOverlap = false;
+        ResetUnexpectedAttemptControls();
     }
 
     private void ResetSweepAttempt()
@@ -493,6 +581,7 @@ internal sealed class G13HilSession
         _sweepAnchorPressed = false;
         _sweepAnchorCompleted = false;
         _sweepInvalid = false;
+        ResetUnexpectedAttemptControls();
     }
 
     private void TransitionTo(G13HilPhase next)
@@ -541,7 +630,7 @@ internal sealed class G13HilSession
             G13HilPhase.SimultaneousSets =>
                 $"Hold this complete set at the same time, then release all: {FormatSet(SimultaneousSets[_simultaneousIndex])}.",
             G13HilPhase.DuplicateSweep =>
-                "Hold G1 continuously. Sweep fully left, fully right, and back to center twice; then release G1.",
+                "Hold G1 continuously. Sweep fully left, fully right, and back to center twice; then release G1. Brief Up/Down crossings are tolerated.",
             G13HilPhase.Complete =>
                 "Input sequence complete. Capture is being disarmed and aggregate assertions are being evaluated.",
             _ => throw new InvalidOperationException("Unsupported HIL phase."),

@@ -27,15 +27,15 @@ builder is used whether the selected source is a keyboard key, G13 control, or M
 note/pad/CC direction/program change. Assignments can run once
 on press or release, remain owned until release, or repeat while held. The milestone witness still uses
 the deliberately harmless F24 mapping. The Release solution build passes with zero
-warnings or errors; 393 current automated tests pass
-(Core 58, Windows 134, App 109, Input Broker 16, G13 HIL tool 23, Output Witness 53). Exact package and
+warnings or errors; 396 current automated tests pass
+(Core 58, Windows 135, App 109, Input Broker 16, G13 HIL tool 25, Output Witness 53). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its
 [fillable evidence record](docs/FIRST_MILESTONE_RECORD_TEMPLATE.md) keeps every
 physical check pending until observed. Broader K15, Tartarus, and G13 promotion is
-separate. An attended preflight records the operator's report that every G13 control
-responds visually; the formal finite G13 verifier and output/pass-through checks
+separate. The exact physical G13 has now passed the finite attended 39-control input
+verifier; mapped-output, pass-through, reconnect, and full Controller Passport checks
 remain pending.
 
 Descriptor-only evidence now shows the attached K15 as one four-interface
@@ -45,9 +45,9 @@ Descriptor-only evidence now shows the attached K15 as one four-interface
 `FF00:0000` group with 39 code-defined controls in a stable tile grid. For this exact
 identity, the grid sits beside an owner-supplied G13 photo whose matching control
 glows when its square is selected or its physical input is pressed.
-No complete Controller Passport or physical HIL run has completed for these
-devices; all remain below Functional/Verified. The G13 has operator-reported visual
-control response but still requires the finite armed record. See the
+No complete Controller Passport or full mapping-output HIL run has completed for
+these devices; all remain below Functional/Verified. The G13 additionally has a
+passing finite armed input-functional record. See the
 [G13 support boundary](docs/LOGITECH_G13.md).
 
 Windows currently enumerates the attached APC MINI through Tappy's native WinMM

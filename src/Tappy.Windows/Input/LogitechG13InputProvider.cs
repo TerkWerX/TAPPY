@@ -384,6 +384,17 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
                     string.Equals(candidate.PersistentId, descriptor.PersistentId, StringComparison.Ordinal));
                 ReplaceDescriptorsLocked(enumerated);
                 descriptor = _descriptorByMember.GetValueOrDefault(eventArgs.DeviceHandle) ?? descriptor;
+
+                // RegisterRawInputDevices can be followed by an arrival notification for a
+                // controller that was already present and enumerated before the message host
+                // started. That notification is not a topology change. Treating it as one
+                // clears confirmation (and makes the attended HIL verifier report a false
+                // disconnect) even though the same physical G13 never left the system.
+                if (previous is not null && HasSameSessionMembership(previous, descriptor))
+                {
+                    return;
+                }
+
                 wasCaptureTarget = _captureTarget == descriptor.SessionHandle;
                 logicalChangeKind = previous is null
                     ? RawInputDeviceChangeKind.Arrival
@@ -597,6 +608,14 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
         descriptor.ProductId == LogitechG13Protocol.ProductId &&
         descriptor.UsagePage == LogitechG13Protocol.UsagePage &&
         descriptor.Usage == LogitechG13Protocol.Usage;
+
+    private static bool HasSameSessionMembership(
+        SanitizedDeviceDescriptor previous,
+        SanitizedDeviceDescriptor current) =>
+        previous.SessionHandle == current.SessionHandle &&
+        previous.Grouping == current.Grouping &&
+        previous.MemberSessionHandles.Count == current.MemberSessionHandles.Count &&
+        previous.MemberSessionHandles.All(current.MemberSessionHandles.Contains);
 
     private static ControllerIdentity ToCoreIdentity(SanitizedDeviceDescriptor descriptor) =>
         new(

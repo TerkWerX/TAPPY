@@ -1,7 +1,7 @@
 # Logitech G13 support boundary
 
-> Status: code-supported with attended all-control visual response and exact-target
-> RGB lighting spot checks; formal finite HIL evidence pending
+> Status: code-supported with a passing finite input-functional record, attended
+> all-control visual response, and exact-target RGB lighting spot checks
 >
 > Exact physical identity: USB `046D:C21C`, Raw Input `RIM_TYPEHID`, usage
 > page/usage `FF00:0000`
@@ -48,15 +48,20 @@ layout.
 Deterministic Windows and App tests cover report validation, all defined button
 bits, joystick direction thresholds, simultaneous transitions, exact device
 identity, `C232` exclusion, deliberate confirmation, mapping/profile round-trip,
-and cleanup. Another 23 deterministic tests cover the finite verifier's state
+and cleanup. Another 25 deterministic tests cover the finite verifier's state
 machine, exact-device/explicit-arm refusal, interruption handling, and aggregate
 evidence contract. During the final accessibility-build preflight, the operator
 selected, identified, and confirmed the attached G13 with Rehearsal Mode checked,
-then reported that every G13 control responded visually in Tappy. The ignored local
-run record preserves the statement and screenshot. This is useful attended evidence,
-but it is not the finite verifier: no aggregate verifier record, mapped-output run,
-pass-through witness, unplug-while-held run, or completed HIL record exists, so the
-device is not Functional or Verified.
+then reported that every G13 control responded visually in Tappy. On 2026-09-07 the
+same exact physical controller completed the explicitly armed finite verifier. All
+39 code-defined controls passed two balanced cycles; all four stick directions,
+all three simultaneous sets, the held-G1 duplicate-suppression sweep, exact identity,
+cleanup, and every runtime assertion passed with zero unexpected, duplicate,
+unbalanced, disconnect, provider-fault, or lifecycle events. The aggregate record's
+SHA-256 is `54CE558B9180D541E647D745C214CA778882D0B8C03815B7ED751AB7EE023A86`.
+The record is input-functional only: mapped-output, pass-through, hardware repeat,
+reconnect, unplug-while-held, latency, and full Controller Passport work remain, so
+the device is not yet Functional or Verified.
 
 On 2026-09-04 an initial broad Logitech lighting path was rejected after it changed
 the owner's protected G910 rather than the G13. Tappy removed that path. The owner
@@ -67,8 +72,9 @@ replace the remaining finite input/output, reconnect, cleanup, and pass-through
 evidence.
 
 The finite verifier and its safeguards are described in
-[`HARDWARE_TEST_STATION.md`](HARDWARE_TEST_STATION.md). It must be explicitly armed;
-until that run succeeds, “code-supported” is the strongest accurate label.
+[`HARDWARE_TEST_STATION.md`](HARDWARE_TEST_STATION.md). Its passing narrow record does
+not substitute for the remaining promotion gates; “code-supported” is still the
+strongest accurate label.
 
 ## Primary protocol and platform sources
 

@@ -5,15 +5,15 @@ Status values are `Implemented`, `First-slice`, `Code-supported`, `Planned`,
 provenance, not a runtime dependency; Tappy does not reference the Tippy working
 tree.
 
-Evidence snapshot: the Release solution build has zero warnings/errors and all 393
-current automated tests pass (Core 58, Windows 134, App 109, Input Broker 16, G13
-HIL tool 23, Output Witness 53). The
+Evidence snapshot: the Release solution build has zero warnings/errors and all 396
+current automated tests pass (Core 58, Windows 135, App 109, Input Broker 16, G13
+HIL tool 25, Output Witness 53). The
 last clean-source portable checkpoint includes the K15/G13 provider additions and
 passes both published/extracted readiness audits; it predates the expanded keyboard
 assignment editor. Exact evidence boundaries are in [`TESTING.md`](TESTING.md).
-Formal Targus and finite G13 output/pass-through checks remain pending; an attended
-preflight separately records the operator's report that every G13 control responds
-visually.
+Formal Targus and G13 output/pass-through checks remain pending. The G13 has a
+passing finite input-functional record plus an attended preflight report that every
+control responds visually.
 The finite attended run and its narrow-versus-promotion boundary are defined in
 [`FIRST_MILESTONE_OPERATOR_RUN.md`](FIRST_MILESTONE_OPERATOR_RUN.md); publishing the
 procedure does not advance any hardware tier.
