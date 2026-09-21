@@ -15,6 +15,7 @@ public partial class KeyboardAssignmentWindow : Window
     private sealed record StepRow(ControllerActionStepDefinition Step, string Summary);
 
     private readonly IReadOnlyList<KeyboardAssignmentOption> _allOptions;
+    private readonly Func<IReadOnlyList<WinMmMidiOutput.Device>> _enumerateMidiDevices;
     private readonly List<ControllerActionStepDefinition> _steps = [];
     private ControllerActionSequenceDefinition _preservedReleaseSequence = new();
     private int _editingStepIndex = -1;
@@ -22,7 +23,16 @@ public partial class KeyboardAssignmentWindow : Window
     public KeyboardAssignmentWindow(
         string controlLabel,
         ControllerActionAssignment? existingAssignment = null)
+        : this(controlLabel, existingAssignment, () => WinMmMidiOutput.GetDevices())
     {
+    }
+
+    internal KeyboardAssignmentWindow(
+        string controlLabel,
+        ControllerActionAssignment? existingAssignment,
+        Func<IReadOnlyList<WinMmMidiOutput.Device>> enumerateMidiDevices)
+    {
+        _enumerateMidiDevices = enumerateMidiDevices ?? throw new ArgumentNullException(nameof(enumerateMidiDevices));
         _allOptions = KeyboardAssignmentCatalog.Create();
         InitializeComponent();
         ControlLabelText.Text = $"Selected controller control: {controlLabel}";
@@ -46,6 +56,8 @@ public partial class KeyboardAssignmentWindow : Window
     public KeyboardMappingAssignment? Result { get; private set; }
 
     public ControllerActionAssignment? ActionResult { get; private set; }
+
+    internal Func<KeyboardMappingAssignment?, ControllerActionAssignment?, RuntimeOperation>? SaveAssignment { get; init; }
 
     private void LoadExistingAssignment(ControllerActionAssignment assignment)
     {
@@ -89,58 +101,74 @@ public partial class KeyboardAssignmentWindow : Window
 
     private void AddKeyboardStep_OnClick(object sender, RoutedEventArgs e) => AddKeyboardStep();
 
-    private void AddKeyboardStep()
+    private void AddKeyboardStep() => AddStepFromEditor(ControllerActionStepType.KeyboardChord);
+
+    private void AddTextStep_OnClick(object sender, RoutedEventArgs e) => AddStepFromEditor(ControllerActionStepType.Text);
+
+    private void AddDelayStep_OnClick(object sender, RoutedEventArgs e) => AddStepFromEditor(ControllerActionStepType.Delay);
+
+    private void AddMouseStep_OnClick(object sender, RoutedEventArgs e) => AddStepFromEditor(ControllerActionStepType.MouseButton);
+
+    private void AddProgramStep_OnClick(object sender, RoutedEventArgs e) => AddStepFromEditor(ControllerActionStepType.LaunchProgram);
+
+    private void AddPowerShellStep_OnClick(object sender, RoutedEventArgs e) => AddStepFromEditor(ControllerActionStepType.PowerShellCommand);
+
+    private void AddMidiStep_OnClick(object sender, RoutedEventArgs e) => AddStepFromEditor(ControllerActionStepType.Midi);
+
+    private void AddOscStep_OnClick(object sender, RoutedEventArgs e) => AddStepFromEditor(ControllerActionStepType.Osc);
+
+    private ControllerActionStepDefinition? BuildKeyboardStep()
     {
         if (AssignmentList.SelectedItem is not KeyboardAssignmentOption option)
         {
             ShowError("Choose a keyboard assignment first.");
-            return;
+            return null;
         }
 
-        AddStep(new ControllerActionStepDefinition
+        return new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.KeyboardChord,
             Keys = option.Keys.Select(key => new KeyboardOutputKey(key)).ToList(),
             DurationMs = 25
-        }, $"Keyboard step added: {option.Shortcut}.");
+        };
     }
 
-    private void AddTextStep_OnClick(object sender, RoutedEventArgs e)
+    private ControllerActionStepDefinition? BuildTextStep()
     {
         if (string.IsNullOrEmpty(TextValueBox.Text))
         {
             ShowError("Enter the text Tappy should type.");
-            return;
+            return null;
         }
 
         if (TextValueBox.Text.Length > 32_768)
         {
             ShowError("Text is limited to 32,768 characters per step.");
-            return;
+            return null;
         }
 
-        AddStep(new ControllerActionStepDefinition
+        return new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.Text,
             Value = TextValueBox.Text
-        }, "Text step added.");
+        };
     }
 
-    private void AddDelayStep_OnClick(object sender, RoutedEventArgs e)
+    private ControllerActionStepDefinition? BuildDelayStep()
     {
         if (!TryInteger(DelayBox.Text, 1, 600_000, "Delay", out var milliseconds))
         {
-            return;
+            return null;
         }
 
-        AddStep(new ControllerActionStepDefinition
+        return new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.Delay,
             DurationMs = milliseconds
-        }, $"Delay step added: {milliseconds:N0} ms.");
+        };
     }
 
-    private void AddMouseStep_OnClick(object sender, RoutedEventArgs e)
+    private ControllerActionStepDefinition? BuildMouseStep()
     {
         var action = SelectedTag(MouseActionBox);
         ControllerActionStepDefinition step;
@@ -150,7 +178,7 @@ public partial class KeyboardAssignmentWindow : Window
                 if (!TryInteger(MouseXBox.Text, -100_000, 100_000, "Mouse X", out var x) ||
                     !TryInteger(MouseYBox.Text, -100_000, 100_000, "Mouse Y", out var y))
                 {
-                    return;
+                    return null;
                 }
 
                 step = new ControllerActionStepDefinition
@@ -163,7 +191,7 @@ public partial class KeyboardAssignmentWindow : Window
             case "Vertical wheel":
                 if (!TryInteger(MouseYBox.Text, -1_000_000, 1_000_000, "Scroll amount", out var vertical))
                 {
-                    return;
+                    return null;
                 }
 
                 step = new ControllerActionStepDefinition
@@ -176,7 +204,7 @@ public partial class KeyboardAssignmentWindow : Window
             case "Horizontal wheel":
                 if (!TryInteger(MouseXBox.Text, -1_000_000, 1_000_000, "Scroll amount", out var horizontal))
                 {
-                    return;
+                    return null;
                 }
 
                 step = new ControllerActionStepDefinition
@@ -195,41 +223,41 @@ public partial class KeyboardAssignmentWindow : Window
                 break;
         }
 
-        AddStep(step, $"Mouse step added: {action}.");
+        return step;
     }
 
-    private void AddProgramStep_OnClick(object sender, RoutedEventArgs e)
+    private ControllerActionStepDefinition? BuildProgramStep()
     {
         if (string.IsNullOrWhiteSpace(ProgramPathBox.Text))
         {
             ShowError("Enter a program, file, folder, or URL to launch.");
-            return;
+            return null;
         }
 
-        AddStep(new ControllerActionStepDefinition
+        return new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.LaunchProgram,
             Value = ProgramPathBox.Text.Trim(),
             Arguments = ProgramArgumentsBox.Text,
             WorkingDirectory = ProgramWorkingDirectoryBox.Text.Trim()
-        }, "Launch step added.");
+        };
     }
 
-    private void AddPowerShellStep_OnClick(object sender, RoutedEventArgs e)
+    private ControllerActionStepDefinition? BuildPowerShellStep()
     {
         if (string.IsNullOrWhiteSpace(PowerShellCommandBox.Text))
         {
             ShowError("Enter a PowerShell command.");
-            return;
+            return null;
         }
 
-        AddStep(new ControllerActionStepDefinition
+        return new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.PowerShellCommand,
             Value = PowerShellCommandBox.Text,
             Target = SelectedTag(PowerShellHostBox),
             WorkingDirectory = PowerShellWorkingDirectoryBox.Text.Trim()
-        }, "PowerShell step added. It will run hidden, non-interactive, and without a profile.");
+        };
     }
 
     private void RefreshMidi_OnClick(object sender, RoutedEventArgs e) => RefreshMidiDevices();
@@ -238,7 +266,7 @@ public partial class KeyboardAssignmentWindow : Window
     {
         try
         {
-            MidiDeviceBox.ItemsSource = WinMmMidiOutput.GetDevices();
+            MidiDeviceBox.ItemsSource = _enumerateMidiDevices();
             MidiDeviceBox.SelectedIndex = 0;
         }
         catch (Exception exception)
@@ -248,12 +276,12 @@ public partial class KeyboardAssignmentWindow : Window
         }
     }
 
-    private void AddMidiStep_OnClick(object sender, RoutedEventArgs e)
+    private ControllerActionStepDefinition? BuildMidiStep(ControllerActionStepDefinition? originalStep)
     {
         if (!TryInteger(MidiChannelBox.Text, 1, 16, "MIDI channel", out var channel) ||
             !TryInteger(MidiData1Box.Text, 0, 127, "MIDI data", out var data1))
         {
-            return;
+            return null;
         }
 
         var kind = SelectedTag(MidiKindBox);
@@ -262,7 +290,7 @@ public partial class KeyboardAssignmentWindow : Window
         {
             if (!TryInteger(MidiData2Box.Text, 0, 127, "MIDI velocity/value", out var data2))
             {
-                return;
+                return null;
             }
 
             description += $":{data2}";
@@ -275,44 +303,36 @@ public partial class KeyboardAssignmentWindow : Window
         catch (ArgumentException exception)
         {
             ShowError(exception.Message);
-            return;
+            return null;
         }
 
         var device = MidiDeviceBox.SelectedItem as WinMmMidiOutput.Device;
         var target = device?.Name;
         if (string.IsNullOrWhiteSpace(target) &&
-            _editingStepIndex >= 0 &&
-            _editingStepIndex < _steps.Count &&
-            _steps[_editingStepIndex].Type == ControllerActionStepType.Midi)
+            originalStep?.Type == ControllerActionStepType.Midi)
         {
-            target = _steps[_editingStepIndex].Target;
+            target = originalStep.Target;
         }
 
-        AddStep(new ControllerActionStepDefinition
+        return new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.Midi,
             Value = description,
             Target = target ?? string.Empty
-        }, $"MIDI step added: {description}.");
-
-        if (kind == "note" && SelectedTag(TimingBox) == "PressOnce")
-        {
-            TimingBox.SelectedIndex = 1;
-            ShowStatus("MIDI note-on added. Behavior was set to stop and send note-off when the controller key is released.");
-        }
+        };
     }
 
-    private void AddOscStep_OnClick(object sender, RoutedEventArgs e)
+    private ControllerActionStepDefinition? BuildOscStep()
     {
         if (!TryInteger(OscPortBox.Text, 1, 65_535, "OSC UDP port", out var port))
         {
-            return;
+            return null;
         }
 
         if (string.IsNullOrWhiteSpace(OscHostBox.Text))
         {
             ShowError("Enter an OSC host name or IP address.");
-            return;
+            return null;
         }
 
         try
@@ -322,41 +342,65 @@ public partial class KeyboardAssignmentWindow : Window
         catch (ArgumentException exception)
         {
             ShowError(exception.Message);
-            return;
+            return null;
         }
 
-        AddStep(new ControllerActionStepDefinition
+        return new ControllerActionStepDefinition
         {
             Type = ControllerActionStepType.Osc,
             Target = OscHostBox.Text.Trim(),
             Amount = port,
             Value = OscAddressBox.Text.Trim(),
             Arguments = OscValuesBox.Text
-        }, $"OSC step added: {OscAddressBox.Text.Trim()} → {OscHostBox.Text.Trim()}:{port}.");
+        };
     }
 
-    private void AddStep(ControllerActionStepDefinition step, string status)
-    {
-        step.Normalize();
-        if (_editingStepIndex >= 0 && _editingStepIndex < _steps.Count)
+    private ControllerActionStepDefinition? BuildStep(
+        ControllerActionStepType type,
+        ControllerActionStepDefinition? originalStep = null) => type switch
         {
-            var index = _editingStepIndex;
-            _steps[index] = step;
-            EndStepEdit();
-            RefreshStepList(index);
-            ShowStatus($"Step {index + 1:N0} updated. Save assignment changes when the sequence is ready.");
-            return;
-        }
+            ControllerActionStepType.KeyboardChord => BuildKeyboardStep(),
+            ControllerActionStepType.Text => BuildTextStep(),
+            ControllerActionStepType.Delay => BuildDelayStep(),
+            ControllerActionStepType.MouseButton or ControllerActionStepType.MouseMove or ControllerActionStepType.MouseWheel => BuildMouseStep(),
+            ControllerActionStepType.LaunchProgram => BuildProgramStep(),
+            ControllerActionStepType.PowerShellCommand => BuildPowerShellStep(),
+            ControllerActionStepType.Midi => BuildMidiStep(originalStep),
+            ControllerActionStepType.Osc => BuildOscStep(),
+            _ => null,
+        };
 
+    private void AddStepFromEditor(ControllerActionStepType type)
+    {
         if (_steps.Count >= 500)
         {
             ShowError("An assignment is limited to 500 steps.");
             return;
         }
 
+        var step = BuildStep(type);
+        if (step is null)
+        {
+            return;
+        }
+
+        step.Normalize();
         _steps.Add(step);
+        EndStepEdit();
         RefreshStepList(_steps.Count - 1);
+        ShowCommittedStepStatus(step, $"Step added: {step.ToSummary()}.");
+    }
+
+    private void ShowCommittedStepStatus(ControllerActionStepDefinition step, string status)
+    {
         ShowStatus(status);
+        if (step.Type == ControllerActionStepType.Midi &&
+            step.Value.StartsWith("note:", StringComparison.Ordinal) &&
+            SelectedTag(TimingBox) == "PressOnce")
+        {
+            TimingBox.SelectedIndex = 1;
+            ShowStatus(status + " Behavior was set to stop and send note-off when the controller key is released.");
+        }
     }
 
     private void SequenceList_OnSelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateStepButtons();
@@ -391,38 +435,20 @@ public partial class KeyboardAssignmentWindow : Window
             return;
         }
 
-        switch (_steps[_editingStepIndex].Type)
+        var index = _editingStepIndex;
+        var original = _steps[index];
+        var replacement = BuildStep(original.Type, original);
+        if (replacement is null)
         {
-            case ControllerActionStepType.KeyboardChord:
-                AddKeyboardStep();
-                break;
-            case ControllerActionStepType.Text:
-                AddTextStep_OnClick(sender, e);
-                break;
-            case ControllerActionStepType.Delay:
-                AddDelayStep_OnClick(sender, e);
-                break;
-            case ControllerActionStepType.MouseButton:
-            case ControllerActionStepType.MouseMove:
-            case ControllerActionStepType.MouseWheel:
-                AddMouseStep_OnClick(sender, e);
-                break;
-            case ControllerActionStepType.LaunchProgram:
-                AddProgramStep_OnClick(sender, e);
-                break;
-            case ControllerActionStepType.PowerShellCommand:
-                AddPowerShellStep_OnClick(sender, e);
-                break;
-            case ControllerActionStepType.Midi:
-                AddMidiStep_OnClick(sender, e);
-                break;
-            case ControllerActionStepType.Osc:
-                AddOscStep_OnClick(sender, e);
-                break;
-            default:
-                ShowError("This low-level imported step can be moved or removed, but this editor cannot safely rewrite it yet.");
-                break;
+            return;
         }
+
+        replacement.Normalize();
+        _steps[index] = replacement;
+        EndStepEdit();
+        RefreshStepList(index);
+        ShowCommittedStepStatus(replacement,
+            $"Step {index + 1:N0} updated. Save assignment changes when the sequence is ready.");
     }
 
     private bool PopulateEditor(ControllerActionStepDefinition step)
@@ -669,7 +695,8 @@ public partial class KeyboardAssignmentWindow : Window
                     $"On release: {shortcut}", keys),
                 _ => KeyboardMappingAssignment.PressOnce($"Tap {shortcut}", keys)
             };
-            DialogResult = true;
+            ActionResult = null;
+            AcceptAssignment();
             return;
         }
 
@@ -689,6 +716,18 @@ public partial class KeyboardAssignmentWindow : Window
         ActionResult = timing == "ReleaseOnce"
             ? new ControllerActionAssignment(name, new ControllerActionSequenceDefinition(), sequence)
             : new ControllerActionAssignment(name, sequence, _preservedReleaseSequence.Clone());
+        Result = null;
+        AcceptAssignment();
+    }
+
+    private void AcceptAssignment()
+    {
+        if (SaveAssignment?.Invoke(Result, ActionResult) is { Succeeded: false } failure)
+        {
+            ShowError(failure.Message + " Your edits are still open in this window.");
+            return;
+        }
+
         DialogResult = true;
     }
 

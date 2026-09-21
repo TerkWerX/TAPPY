@@ -7,6 +7,8 @@ internal enum OutputWitnessScenario
     Basic,
     Rehearsal,
     HeldUnplug,
+    ControllerBasic,
+    ControllerHeldUnplug,
 }
 
 internal sealed record WitnessKeySpec(string Name, ushort VirtualKeyCode);
@@ -244,6 +246,8 @@ internal static class OutputWitnessOptionParser
             OutputWitnessScenario.Basic => "basic",
             OutputWitnessScenario.Rehearsal => "rehearsal",
             OutputWitnessScenario.HeldUnplug => "held-unplug",
+            OutputWitnessScenario.ControllerBasic => "controller-basic",
+            OutputWitnessScenario.ControllerHeldUnplug => "controller-held-unplug",
             _ => throw new ArgumentOutOfRangeException(nameof(scenario)),
         };
 
@@ -254,6 +258,8 @@ internal static class OutputWitnessOptionParser
             "basic" => OutputWitnessScenario.Basic,
             "rehearsal" => OutputWitnessScenario.Rehearsal,
             "held-unplug" => OutputWitnessScenario.HeldUnplug,
+            "controller-basic" => OutputWitnessScenario.ControllerBasic,
+            "controller-held-unplug" => OutputWitnessScenario.ControllerHeldUnplug,
             _ => (OutputWitnessScenario)(-1),
         };
         return Enum.IsDefined(scenario);

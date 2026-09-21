@@ -1,0 +1,53 @@
+<Window x:Class="Tappy.App.BankControlWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Tappy bank control" Width="660" Height="650" MinWidth="520" MinHeight="570"
+        WindowStartupLocation="CenterOwner" Icon="/Tappy;component/Assets/Icons/tappy.ico">
+    <Window.Resources>
+        <DataTemplate x:Key="BankChoiceTemplate">
+            <TextBlock Text="{Binding Label}" Foreground="{DynamicResource ComboBoxTextBrush}" TextWrapping="Wrap" />
+        </DataTemplate>
+        <DataTemplate x:Key="BankTargetTemplate">
+            <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource ComboBoxTextBrush}" TextWrapping="Wrap" />
+        </DataTemplate>
+    </Window.Resources>
+    <Grid Background="{DynamicResource WindowBrush}" Margin="18">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="0,0,8,12">
+                <TextBlock Text="Make controllers work together" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock x:Name="SourceLabel" Margin="0,8,0,14" TextWrapping="Wrap"/>
+                <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,16">
+                    <TextBlock TextWrapping="Wrap" Text="This button becomes a bank control in ALL of its source banks. Its existing macros stay saved underneath and return when you remove the bank control. One press and release changes only the destination controller."/>
+                </Border>
+                <TextBlock Text="DESTINATION CONTROLLER" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                <ComboBox x:Name="TargetBox" ItemTemplate="{StaticResource BankTargetTemplate}" MinHeight="42"
+                          SelectionChanged="ChoiceChanged" AutomationProperties.Name="Destination controller"/>
+                <TextBlock Text="WHAT THIS BUTTON DOES" FontWeight="SemiBold" Margin="0,16,0,6"/>
+                <ComboBox x:Name="OperationBox" ItemTemplate="{StaticResource BankChoiceTemplate}" MinHeight="38"
+                          SelectionChanged="ChoiceChanged" AutomationProperties.Name="Bank operation"/>
+                <TextBlock Text="DESTINATION BANK / FIRST TOGGLE BANK" FontWeight="SemiBold" Margin="0,16,0,6"/>
+                <ComboBox x:Name="BankBox" ItemTemplate="{StaticResource BankChoiceTemplate}" MinHeight="38"
+                          AutomationProperties.Name="Destination bank"/>
+                <StackPanel x:Name="AlternateBankPanel" Visibility="Collapsed">
+                    <TextBlock Text="SECOND TOGGLE BANK" FontWeight="SemiBold" Margin="0,16,0,6"/>
+                    <ComboBox x:Name="AlternateBankBox" ItemTemplate="{StaticResource BankChoiceTemplate}" MinHeight="38"
+                              AutomationProperties.Name="Second toggle bank"/>
+                    <TextBlock Text="From the first bank, switch to the second. From any other bank, switch to the first." TextWrapping="Wrap" Margin="0,8,0,0"/>
+                </StackPanel>
+                <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"
+                    Text="Next and previous wrap through the destination's banks. Unavailable targets are never replaced or queued. Release the destination's controls before switching. Navigation works in Rehearsal; physical bank LEDs follow only if you enabled Follow bank changes on the destination."/>
+                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"
+                    Text="Devices without reliable persistent identity (including legacy MIDI inputs) require you to reselect the destination after reconnection or restart. Pass-through is unchanged: a button's original native input may still reach other applications."/>
+            </StackPanel>
+        </ScrollViewer>
+        <TextBlock x:Name="StatusText" Grid.Row="1" Margin="0,8,0,8" TextWrapping="Wrap"/>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Button x:Name="RemoveButton" Content="Remove bank control" Click="RemoveClick" MinHeight="40" Margin="0"/>
+            <Button Grid.Column="2" Content="Cancel" IsCancel="True" MinWidth="76" MinHeight="40" Margin="0"/>
+            <Button x:Name="SaveButton" Grid.Column="4" Content="Use bank control" Click="SaveClick" MinWidth="130" MinHeight="40" Margin="0"/>
+        </Grid>
+    </Grid>
+</Window>

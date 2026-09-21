@@ -4,10 +4,40 @@ This record separates deterministic software evidence from packaged-artifact and
 physical-hardware evidence. Passing automated tests does not certify a controller,
 prove 6KRO/NKRO behavior, or establish physical latency.
 
-## 2026-09-07 source-tree verification
+## 2026-09-21 current source-tree verification
 
-Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.400`; product projects
-target .NET 8. The verification was run in Release configuration.
+The handoff baseline was independently rerun locally: `dotnet build Tappy.slnx
+-c Debug --no-restore` completed with zero warnings/errors; `dotnet test
+Tappy.slnx -c Debug --no-build --no-restore` passed all **925** tests (Core 151,
+Windows 279, App 392, Input Broker 16, G13 HIL 25, Output Witness 62).
+`dotnet format Tappy.slnx --verify-no-changes --no-restore` also passed.
+This includes the frame editor, compact encoder clusters, layout lock, Fit/Fill,
+and bulk resizing recorded in D-034–D-039. These are source-tree automated checks,
+not a new physical-controller verification or a signed/certified release.
+
+## 2026-09-20 source-tree verification (historical checkpoint)
+
+Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.401`; product projects
+target .NET 8. The verification was run in Release configuration. This supersedes
+the 2026-09-07 snapshot below, which predates the K15/Targus device-tab work, Akai
+Fire support, the Fire OLED (logo/status/scrolling wordmark), the Fire Modes/Bank
+LED indicator, LED animations (including the multi-device shared-canvas milestone),
+and several theme-readability fixes — all added since.
+
+| Check | Result | Evidence boundary |
+|---|---:|---|
+| `dotnet build Tappy.slnx -c Release` | Passed; 0 warnings, 0 errors | Current local source tree |
+| `Tappy.Core.Tests` | 146 passed, 0 failed | Deterministic platform-neutral behavior, including exclusive-input safety policy, explicit cleanup-dispatch results, immutable action sequences, profile/layout round-trip, MIDI parsing, OSC encoding, action-output press/release/Rehearsal routing, Fire OLED font/logo/scroll rendering, and LED effect math |
+| `Tappy.Windows.Tests` | 279 passed, 0 failed | Keyboard/G13/MIDI packet parsing and providers, exact G13 lighting isolation, duplicate-startup-arrival suppression, ContainerId grouping, output and lifecycle seams, Tartarus indicator sync, filter-protocol/device-session/grouped two-phase coordinator cases using deterministic/native-boundary fixtures |
+| `Tappy.App.Tests` | 369 passed, 0 failed | Keyboard/G13/MIDI selection and routing, persistent freeform controller layouts, group selection/coloring, model-aware lighting palettes and photo locators, assignment editing, theme readability (including ComboBox item templates), profile round-trip, lifecycle/fault cleanup with fake providers/output, Fire OLED welcome-sequence/mode playback, Fire bank/LED-indicator sync, and multi-device shared-canvas LED animation playback |
+| `Tappy.InputBroker.Tests` | 16 passed, 0 failed | Bootstrap SID/key refusal, protected pipe ACL, bounded HMAC framing, modification/key/replay/reserved/size rejection, real local named-pipe handshake, and status-only command boundary |
+| `Tappy.G13Hil.Tests` | 25 passed, 0 failed | Finite state machine, retriable operator slips, physical-stick perpendicular crossings, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
+| `Tappy.OutputWitness.Tests` | 62 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break, controller-output-only and controller-held-unplug state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
+| Current automated total | 897 passed, 0 failed | Core 146 + Windows 279 + App 369 + Input Broker 16 + G13 HIL tool 25 + Output Witness 62 |
+| `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 15 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
+| `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | 301 pre-existing whitespace-only violations (accumulated across the features listed above) were mechanically auto-fixed via `dotnet format Tappy.slnx --no-restore` first, then the full build/test suite above was re-run and stayed green before this verify-only pass was recorded |
+
+### 2026-09-07 source-tree verification (superseded)
 
 | Check | Result | Evidence boundary |
 |---|---:|---|
@@ -17,8 +47,8 @@ target .NET 8. The verification was run in Release configuration.
 | `Tappy.App.Tests` | 109 passed, 0 failed | Keyboard/G13/MIDI selection and routing, persistent freeform controller layouts, group selection/coloring, model-aware lighting palettes and photo locators, assignment editing, theme readability, profile round-trip, and lifecycle/fault cleanup with fake providers/output |
 | `Tappy.InputBroker.Tests` | 16 passed, 0 failed | Bootstrap SID/key refusal, protected pipe ACL, bounded HMAC framing, modification/key/replay/reserved/size rejection, real local named-pipe handshake, and status-only command boundary |
 | `Tappy.G13Hil.Tests` | 25 passed, 0 failed | Finite state machine, retriable operator slips, physical-stick perpendicular crossings, explicit-arm/argument refusal, exact-device gating, interruption handling, and aggregate/redacted evidence contract |
-| `Tappy.OutputWitness.Tests` | 53 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break and output state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
-| Current automated total | 396 passed, 0 failed | Core 58 + Windows 135 + App 109 + Input Broker 16 + G13 HIL tool 25 + Output Witness 53 |
+| `Tappy.OutputWitness.Tests` | 62 passed, 0 failed | Exact-arm refusal, finite focused-console make/repeat/break, controller-output-only and controller-held-unplug state machines, quiet/post-release observation windows, aggregate-only evidence, cleanup, and privacy boundaries |
+| Current automated total | 405 passed, 0 failed | Core 58 + Windows 135 + App 109 + Input Broker 16 + G13 HIL tool 25 + Output Witness 62 |
 | `dotnet list Tappy.slnx package --vulnerable --include-transitive` | Exit 0; no known vulnerable packages reported in all 14 projects | Point-in-time NuGet advisory data from `nuget.org`; not a complete security audit |
 | `dotnet format Tappy.slnx --verify-no-changes --no-restore` | Passed | Current local source tree |
 
@@ -47,9 +77,10 @@ plus physical presses reference the same visual state. Those are code tests, not
 physical G13 control or hotspot-alignment evidence.
 
 The Output Witness tests cover its narrow allowlist, explicit acknowledgments,
-aggregate-only evidence, exact selected-output cardinality, source repeat, and
-post-condition drains. They do not provide physical-device attribution or replace
-the attended operator record.
+aggregate-only evidence, exact selected-output cardinality, source repeat,
+controller-output-only operation, negative source-key guarding, and post-condition
+drains. They do not provide physical-device attribution or replace the attended
+operator record.
 
 The app suite also asserts that both standard theme palettes provide at least 4.5:1
 ComboBox and disabled-button text/background contrast, that High Contrast uses
@@ -72,17 +103,28 @@ duplicate a commit ID that would become stale when the record itself is committe
 
 ## Local portable artifact checkpoint
 
-The last post-provider package checkpoint was built from clean committed source and
-predates the expanded assignment editor. It ran all 261 tests, recorded all twelve package locks, verified the allowlisted
-three-file payload, and executed both the actual published `Tappy.exe` and a fresh
-copy extracted from the portable ZIP. Each readiness run passed
-`controller-registry`, `profile-round-trip`, `rehearsal-no-output`, and
-`tappy-doctor`, with `injectedInputCount: 0`. The manifest records the source as not
-dirty and includes the exact source revision, payload and archive hashes.
+The 2026-09-20 checkpoint (`artifacts/packages-20260920-doc-sync/`) was built from
+the current dirty local worktree (commit `c0cf135`, the tip at the time; `source.dirty:
+true` since this session's changes are uncommitted). It ran all 897 tests, recorded
+every package lock, verified the allowlisted payload, and executed both the actual
+published `Tappy.exe` and a fresh copy extracted from the portable ZIP. Each
+readiness run passed `controller-registry`, `profile-round-trip`,
+`rehearsal-no-output`, and `tappy-doctor`, with `injectedInputCount: 0`.
+`Tappy-0.1.0-Portable-x64.zip` SHA-256 `B6A6CB53D4E199888925043C334ED2631205212FA7A7BD8354DCB84CBF852D27`;
+extracted `Tappy.exe` SHA-256
+`E394A7F507916273814185D68EAC8E8D0323156620440E260290B929D05947ED` — identical to
+the checkpoint built minutes earlier for the multi-Fire animations feature
+(`artifacts/packages-20260920-multi-fire-animations/`), confirming the intervening
+`dotnet format` whitespace pass touched only test/tool files, not the shipped
+product assemblies.
 
 The generated manifest is authoritative for the exact source revision, payload
 paths/sizes/hashes, archive hash, toolchain, and unsigned status. A passing local
-readiness artifact is not an authorized software release.
+readiness artifact is not an authorized software release. This predates the
+multi-Fire shared-canvas LED animation feature's own physical hardware confirmation,
+which was performed against the earlier `20260920-multi-fire-animations` checkpoint
+directly (see [D-032](DECISIONS.md#d-032--any-number-of-confirmed-led-grid-controllers-can-share-one-animations-canvas)),
+not this later doc-sync rebuild.
 
 ## Physical and manual evidence
 
@@ -94,18 +136,18 @@ HIL promotion. Copy the
 run directory; the procedure and blank template are not evidence that any step
 passed.
 
-No complete Controller Passport, finite G13 HIL session, or Targus T01–T12 run has
-been completed. The operator did select/identify/confirm the G13 in the final
-accessibility build and reported that all of its controls responded visually in
-Tappy; the local ignored record preserves that statement and screenshot without
-promoting it into a formal output or pass-through result. In particular, the
-following remain unverified on hardware:
+No complete Controller Passport or Targus T01–T12 run has been completed. The exact
+G13 has a passing finite 39-control input-functional record and a separate passing
+G1-to-F24 mapped-output record through the real application. Those records do not
+promote recovery, pass-through, or a whole-device compatibility tier. In particular,
+the following remain unverified on hardware:
 
 - make/break illumination, OS repeat, rollover/ghosting, simultaneous-state truth,
   Num Lock variants, reconnect identity, and identical-device selection;
 - original-key pass-through in a harmless target application;
-- normal F13-F24 output, self-injection behavior, unplug-while-held release, the
-  global emergency chord, and mouse/tray recovery;
+- normal F13-F24 output beyond the passing G13 G1-to-F24 path, self-injection
+  behavior, unplug-while-held release, the global emergency chord, and mouse/tray
+  recovery;
 - Windows lock/unlock, suspend/resume, orderly shutdown, multi-monitor/DPI behavior,
   theme/high-contrast accessibility, and input-to-output latency targets.
 
@@ -141,6 +183,18 @@ The evidence SHA-256 is
 This input-functional record does not advance the G13 beyond code-supported by
 itself. See the
 [G13 support boundary](LOGITECH_G13.md).
+
+The separate schema-2 `controller-basic` Output Witness then exercised the real
+Tappy application with confirmed physical G13 G1 mapped to hold F24 until release.
+After the operator verified G1 tile/photo response in Rehearsal and deliberately
+enabled normal output, the finite armed run passed every assertion: one F24 down/up,
+zero NumPad1 guard events, zero duplicate/unbalanced output, final output released,
+a completed 2,012 ms quiet window, no reader fault, and completed cleanup. The
+evidence SHA-256 is
+`8D1AA1A6F25A5FC197A5D9FA79007C81017453D6B0B2CDED15323CAF60F5E84A`.
+The JSON claims no device-source attribution or compatibility tier; the operator
+record supplies only the narrow G13/G1 attribution. Pass-through and recovery gates
+remain pending.
 
 ## Static identity and privacy audit
 

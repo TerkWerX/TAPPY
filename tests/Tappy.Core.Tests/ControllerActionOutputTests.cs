@@ -149,6 +149,44 @@ public sealed class ControllerActionOutputTests
     }
 
     [Fact]
+    public void ProviderCleanupCancelsPressOutputWithoutDispatchingReleaseSequence()
+    {
+        var control = ControlId.Create("test", "cleanup");
+        var actions = new RecordingControllerActionOutput();
+        var engine = CreateEngine(control, actions,
+            press: ControllerActionSequenceDefinition.Once("Press",
+                new ControllerActionStepDefinition { Type = ControllerActionStepType.Delay, DurationMs = 1000 }),
+            release: ControllerActionSequenceDefinition.Once("Release",
+                new ControllerActionStepDefinition { Type = ControllerActionStepType.Text, Value = "must not run" }));
+        TestProfiles.Activate(engine, control);
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Press, 10));
+        var press = Assert.Single(actions.Started);
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Release, 11)
+            with
+        { IsCleanup = true });
+        Assert.Single(actions.Started);
+        Assert.Equal(press.OwnerId, Assert.Single(actions.ReleasedOwners));
+    }
+
+    [Fact]
+    public void RunOnceReleaseIsLinkedToItsOriginalPressLifetime()
+    {
+        var control = ControlId.Create("test", "midi");
+        var actions = new RecordingControllerActionOutput();
+        var engine = CreateEngine(control, actions,
+            press: ControllerActionSequenceDefinition.Once("Press",
+                new ControllerActionStepDefinition { Type = ControllerActionStepType.Midi, Value = "note:1:60:100" }),
+            release: ControllerActionSequenceDefinition.Once("Release",
+                new ControllerActionStepDefinition { Type = ControllerActionStepType.Midi, Value = "noteoff:1:60:0" }));
+        TestProfiles.Activate(engine, control);
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Press, 10));
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Release, 11));
+        Assert.Equal(2, actions.Started.Count);
+        Assert.True(actions.Started[0].RetainMidiUntilFollowUp);
+        Assert.Equal(actions.Started[0].OwnerId, actions.Started[1].PreviousOwnerId);
+    }
+
+    [Fact]
     public void RehearsalSuppressesActionSequencesAndEmergencyStopCancelsAll()
     {
         var control = ControlId.FromRawInputKeyboard(0x004F);

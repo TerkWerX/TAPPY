@@ -7,6 +7,24 @@ namespace Tappy.Core.Tests;
 public sealed class InputStateAndActivationTests
 {
     [Fact]
+    public void Remembered_restore_requires_a_candidate_and_no_held_controls_and_reset_revokes_it()
+    {
+        var tracker = new ControllerInputStateTracker();
+        var gate = new ControllerActivationGate(tracker);
+        var session = TestProfiles.Session();
+        var control = ControlId.FromRawInputKeyboard(0x4F);
+        Assert.False(gate.TryRestoreRememberedCandidate());
+        gate.SelectCandidate(session);
+        tracker.Apply(ControlSignal.Physical(session, control, ControlSignalKind.Press, 1));
+        Assert.False(gate.TryRestoreRememberedCandidate());
+        tracker.Apply(ControlSignal.Physical(session, control, ControlSignalKind.Release, 2));
+        Assert.True(gate.TryRestoreRememberedCandidate());
+        Assert.True(gate.IsActive(session));
+        gate.Reset();
+        Assert.False(gate.TryRestoreRememberedCandidate());
+        Assert.False(gate.IsActive(session));
+    }
+    [Fact]
     public void StateTrackerKeepsSimultaneousControlsAndDevicesIndependent()
     {
         var tracker = new ControllerInputStateTracker();

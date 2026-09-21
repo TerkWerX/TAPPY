@@ -18,6 +18,44 @@ separate owner-approved Tappy brand set is recorded below and is embedded in the
 | `Targus PAUK10U.webp` | Targus PAUK10U USB numeric keypad | Strong standard-numpad candidate |
 | `TargusmodelPAUK10U ITEM NO 10.jpg` | Alternate Targus PAUK10U source | Compare views and retain the better factual source |
 
+## 2026-09-18 Targus local test integration
+
+The owner confirmed the silver PAUK10U (Backspace at upper right, 000 beside 0)
+for the requested local test build. `PAD IMAGES/Targus PAUK10U.png` was copied
+without modification to `src/Tappy.App/Assets/Controllers/targus-pauk10u.png`.
+SHA-256: `AB94186FE344DEDCECF6F546FCB804E9E2F38FBDF2618758227FEFEF70604148`.
+The app crops only the transparent horizontal margin at rendering time, to
+`x=375, y=0, width=625, height=880`. Original bytes remain unchanged. Dark and
+light previews were inspected. No button recoloring or RGB support is implied.
+Owner model confirmation is not a third-party image license: source URL and
+public redistribution permission remain to be established before public release.
+See [multi-device test notes](MULTI_DEVICE_TABS.md) for the unverified 000 signal.
+
+### Targus straight-on replacement, 2026-09-18
+
+At the owner's explicit request, the local test asset now uses
+`PAD IMAGES/TargusmodelPAUK10U ITEM NO 10.png`, copied byte-for-byte to
+`src/Tappy.App/Assets/Controllers/targus-pauk10u-front.png`.
+SHA-256: `FD324FAEF9D3E033DC93FD462B55E80709264CEFF8CBD54CD60EDCA0B238B874`.
+This replaces the skewed photo in the application resource list; the older source
+is preserved. Runtime crop: `x=350, y=0, width=670, height=880`. All 19 highlight
+rectangles were realigned inside the key faces, reviewed together in a rendered
+preview, and checked pairwise for overlap. Enter receives one tall rectangle.
+No source pixels, legends, or key colors were edited. Public image licensing
+remains subject to the release review above.
+
+## 2026-09-18 Microsoft Bluetooth Number Pad local test integration
+
+At the owner's explicit request, the X821504-001 keypad uses
+`PAD IMAGES/Microsoft X821504_001 product id 02010_486_0126212_00934.png`, copied
+byte-for-byte to `src/Tappy.App/Assets/Controllers/microsoft-bluetooth-number-pad.png`.
+SHA-256: `5CB5EC0A940C33C7570DB68F3D405DDF49012BE41C32620AD03D4697213FE767`.
+Render-only crop: `x=330, y=0, width=720, height=880`. Black key faces and legends
+remain unchanged. All 17 non-overlapping key highlights were reviewed together
+in the rendered app, with tall +/Enter and wide 0. The layout is selected by the
+observed Bluetooth model signature, not by a product-name guess. This is an
+owner-requested local test asset; public redistribution rights remain unverified.
+
 ## Asset rules
 
 - Preserve every original filename and source file. Never overwrite or delete a raw
@@ -147,3 +185,41 @@ were supplied locally under `docs/images` and remain ignored/untracked. Their ex
 APC MINI v1 image is the first locally integrated model derivative; the others
 remain visual candidates until exact protocol, hotspot, hardware, and rights gates
 are completed.
+
+## 2026-09-18 original Tartarus operator-test asset
+
+The owner requested `PAD IMAGES/RAZER_tartarus RZ07-0103_0100.png` for the
+connected original Tartarus. `Assets/Controllers/razer-tartarus-original.png` is
+a byte-identical embedded copy (SHA-256
+`E6E99B9A512D0CBDA5F724EC49F434B343DCAF5EE1B5BB56EE4CB0090DA1DBF5`).
+A render-only viewport at x=320, y=0, width=740, height=880 removes empty margins;
+the source file is unmodified. The original black keys, green legends, and
+non-addressable surfaces remain as photographed. UI overlays show key presses
+and a Tappy bank-indicator preview. A separate status distinguishes that preview
+from a pattern confirmed by hardware readback at the last explicit LED sync;
+the photo overlay is not a continuous monitor of external lighting changes.
+This is a local operator-test integration, not independent image-rights clearance
+or approval to distribute a public release. See [Tartarus notes](RAZER_TARTARUS.md).
+
+## 2026-09-21 owner approval for public repository and website assets
+
+For the requested GitHub and Tappy website batch sync, the owner was explicitly
+asked whether the newer Targus, Microsoft Number Pad, Tartarus, and Fire photos
+were theirs or otherwise approved for public publication. The owner answered:
+**"Yes, approved—include them."** This supersedes the local-only publication
+restriction for the following selected application derivatives:
+
+- `src/Tappy.App/Assets/Controllers/targus-pauk10u.png`
+- `src/Tappy.App/Assets/Controllers/targus-pauk10u-front.png`
+- `src/Tappy.App/Assets/Controllers/microsoft-bluetooth-number-pad.png`
+- `src/Tappy.App/Assets/Controllers/razer-tartarus-original.png`
+- `src/Tappy.App/Assets/Controllers/akai-fire-neutral.png`
+
+The website includes byte-identical copies of the Microsoft, Tartarus, and Fire
+application assets as `WEBSITE/dist/assets/microsoft-number-pad.png`,
+`razer-tartarus.png`, and `akai-fire.png`. Approval covers these public repository
+and website uses. It records the owner's authorization, not an independent
+copyright audit, manufacturer endorsement, hardware certification, or a new
+software license. Unselected source/reference images under `PAD IMAGES` and
+`docs/images` remain protected and ignored; this is not blanket publication of
+the raw image collection.

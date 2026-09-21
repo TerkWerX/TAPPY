@@ -4,14 +4,21 @@ using Tappy.Core.Output;
 
 namespace Tappy.Windows.Output;
 
-public sealed class WinMmMidiOutput : IDisposable
+public sealed class WinMmMidiOutput : IMidiOutput
 {
-    private static readonly UIntPtr MidiMapperId = UIntPtr.Size == 8
-        ? new UIntPtr(ulong.MaxValue)
-        : new UIntPtr(uint.MaxValue);
     private readonly object _gate = new();
-    private IntPtr _handle;
+    private readonly IWinMmMidiOutputBackend _backend;
+    private bool _isOpen;
     private string _activeDevice = string.Empty;
+
+    public WinMmMidiOutput() : this(new WinMmMidiOutputBackend())
+    {
+    }
+
+    internal WinMmMidiOutput(IWinMmMidiOutputBackend backend)
+    {
+        _backend = backend ?? throw new ArgumentNullException(nameof(backend));
+    }
 
     public sealed record Device(int DeviceId, string Name, bool IsSystemDefault = false)
     {
@@ -44,33 +51,65 @@ public sealed class WinMmMidiOutput : IDisposable
     {
         lock (_gate)
         {
-            EnsureOpen(preferredDeviceName?.Trim() ?? string.Empty);
-            var code = midiOutShortMsg(_handle, message.PackedValue);
-            if (code == 0)
+            EnsureOpenLocked(preferredDeviceName?.Trim() ?? string.Empty);
+            try
             {
-                return;
+                _backend.SendShortMessage(message.PackedValue);
             }
-
-            var device = _activeDevice;
-            Close();
-            throw CreateError(code, $"Windows could not send the MIDI message to {device}");
+            catch (Exception exception)
+            {
+                var device = _activeDevice;
+                CloseLocked();
+                throw new InvalidOperationException(
+                    $"Windows could not send the MIDI message to {device}: {exception.Message}", exception);
+            }
         }
     }
 
-    private void EnsureOpen(string deviceName)
+    /// <summary>
+    /// Sends a complete System Exclusive message (including the leading F0 and
+    /// trailing F7) and blocks the calling thread until Windows confirms delivery
+    /// or the wait times out — callers must invoke this off the UI thread. See
+    /// WinMmMidiOutputBackend for the buffer-lifetime contract this relies on.
+    /// </summary>
+    public void SendSysEx(string? preferredDeviceName, byte[] data)
     {
-        if (_handle != IntPtr.Zero &&
-            deviceName.Equals(_activeDevice, StringComparison.OrdinalIgnoreCase))
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length < 2 || data[0] != 0xF0 || data[^1] != 0xF7)
+        {
+            throw new ArgumentException("A SysEx message must start with F0 and end with F7.", nameof(data));
+        }
+
+        lock (_gate)
+        {
+            EnsureOpenLocked(preferredDeviceName?.Trim() ?? string.Empty);
+            try
+            {
+                _backend.SendSysEx(data);
+            }
+            catch (Exception exception)
+            {
+                var device = _activeDevice;
+                CloseLocked();
+                throw new InvalidOperationException(
+                    $"Windows could not send the SysEx message to {device}: {exception.Message}", exception);
+            }
+        }
+    }
+
+    private void EnsureOpenLocked(string deviceName)
+    {
+        if (_isOpen && deviceName.Equals(_activeDevice, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        Close();
-        var id = MidiMapperId;
+        CloseLocked();
+        int? id = null;
         var displayName = "Windows default MIDI output";
         if (!string.IsNullOrWhiteSpace(deviceName))
         {
-            var selected = GetDevices(false).FirstOrDefault(device =>
+            var selected = _backend.EnumerateDevices().FirstOrDefault(device =>
                 device.Name.Equals(deviceName, StringComparison.OrdinalIgnoreCase));
             if (selected is null)
             {
@@ -78,17 +117,20 @@ public sealed class WinMmMidiOutput : IDisposable
                     $"The selected MIDI output '{deviceName}' is not connected.");
             }
 
-            id = (UIntPtr)(uint)selected.DeviceId;
+            id = selected.DeviceId;
             displayName = selected.Name;
         }
 
-        var code = midiOutOpen(out _handle, id, IntPtr.Zero, IntPtr.Zero, 0);
-        if (code != 0)
+        try
         {
-            _handle = IntPtr.Zero;
-            throw CreateError(code, $"Could not open {displayName}");
+            _backend.Open(id);
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException($"Could not open {displayName}: {exception.Message}", exception);
         }
 
+        _isOpen = true;
         // An empty active name denotes the mapper and is distinct from any named device.
         _activeDevice = deviceName;
     }
@@ -97,9 +139,9 @@ public sealed class WinMmMidiOutput : IDisposable
     {
         lock (_gate)
         {
-            if (_handle != IntPtr.Zero)
+            if (_isOpen)
             {
-                _ = midiOutReset(_handle);
+                _backend.Reset();
             }
         }
     }
@@ -108,29 +150,21 @@ public sealed class WinMmMidiOutput : IDisposable
     {
         lock (_gate)
         {
-            Close();
+            CloseLocked();
+            _backend.Dispose();
         }
     }
 
-    private void Close()
+    private void CloseLocked()
     {
-        if (_handle == IntPtr.Zero)
+        if (!_isOpen)
         {
             return;
         }
 
-        _ = midiOutReset(_handle);
-        _ = midiOutClose(_handle);
-        _handle = IntPtr.Zero;
+        _backend.Close();
+        _isOpen = false;
         _activeDevice = string.Empty;
-    }
-
-    private static Exception CreateError(int code, string context)
-    {
-        var text = new StringBuilder(256);
-        return midiOutGetErrorTextW(code, text, text.Capacity) == 0
-            ? new InvalidOperationException($"{context}: {text} (MIDI error {code}).")
-            : new InvalidOperationException($"{context} (MIDI error {code}).");
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -152,19 +186,4 @@ public sealed class WinMmMidiOutput : IDisposable
 
     [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
     private static extern int midiOutGetDevCapsW(UIntPtr deviceId, out MidiOutCaps caps, uint capsSize);
-
-    [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
-    private static extern int midiOutGetErrorTextW(int error, StringBuilder text, int textLength);
-
-    [DllImport("winmm.dll")]
-    private static extern int midiOutOpen(out IntPtr handle, UIntPtr deviceId, IntPtr callback, IntPtr instance, int flags);
-
-    [DllImport("winmm.dll")]
-    private static extern int midiOutShortMsg(IntPtr handle, uint message);
-
-    [DllImport("winmm.dll")]
-    private static extern int midiOutReset(IntPtr handle);
-
-    [DllImport("winmm.dll")]
-    private static extern int midiOutClose(IntPtr handle);
 }

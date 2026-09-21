@@ -1,0 +1,51 @@
+<Window x:Class="Tappy.App.ResizeTilesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Resize squares" Width="320" Height="230"
+        MinWidth="320" MinHeight="230" WindowStartupLocation="CenterOwner"
+        Icon="/Tappy;component/Assets/Icons/tappy.ico"
+        ResizeMode="NoResize"
+        AutomationProperties.Name="Resize selected controller squares">
+    <Grid Background="{DynamicResource WindowBrush}" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="AffectedCountText" Grid.Row="0" Margin="0,0,0,14"
+                   TextWrapping="Wrap" Text="This will resize 1 square." />
+
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Width (px)" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <TextBox x:Name="WidthTextBox" Grid.Column="1"
+                     TextChanged="SizeTextBox_OnTextChanged"
+                     AutomationProperties.Name="Tile width in pixels" />
+        </Grid>
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Height (px)" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <TextBox x:Name="HeightTextBox" Grid.Column="1"
+                     TextChanged="SizeTextBox_OnTextChanged"
+                     AutomationProperties.Name="Tile height in pixels" />
+        </Grid>
+        <TextBlock x:Name="RangeHintText" Grid.Row="3"
+                   Foreground="{DynamicResource MutedTextBrush}"
+                   TextWrapping="Wrap" />
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Click="Cancel_OnClick" Margin="0,0,10,0" MinWidth="80" />
+            <Button x:Name="ApplyButton" Content="Apply and save" Click="Apply_OnClick" MinWidth="120" IsDefault="True" />
+        </StackPanel>
+    </Grid>
+</Window>

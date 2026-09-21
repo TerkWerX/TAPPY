@@ -371,11 +371,12 @@ boundary, not a fabricated keyboard result or whole-device pass.
 For each device also verify target-only identification and selected-device isolation
 against the other attached controllers. A normal-output/unplug claim needs the same
 Rehearsal, normal, external output, cleanup, reconnect, and profile evidence as
-T05-T11. The current Output Witness accepts only `NumPad0`-`NumPad9` original keys;
-therefore it can be reused only if a reviewed harmless vendor profile makes the
-chosen physical control emit that exact original key. Otherwise a separately
-reviewed finite witness extension is required. A visual Tappy tile or F-key action
-label alone is not output evidence.
+T05-T11. The source-attributed Output Witness scenarios accept only
+`NumPad0`-`NumPad9` original keys. The separate `controller-basic` scenario can
+verify one exact F13-F24 output cycle from a vendor-HID or MIDI control without
+requiring an ordinary console source key, but deliberately makes no device-source
+attribution or pass-through claim. A visual Tappy tile or F-key action label alone
+is not output evidence.
 
 Do not promote either whole product from keyboard-subset observations. Full
 `Functional` or `Verified` promotion also needs the applicable per-control Passport
@@ -422,13 +423,85 @@ The artifact must continue to say `evidenceScope: input-functional` and
 latency, unplug cleanup, full Controller Passport, or whole-device compatibility
 tier. Those require a separate app/output HIL run.
 
+## Part D — finite G13 mapped-output witness
+
+This is the next narrow G13 gate after Part C. It proves only that the attended,
+confirmed G13 control causes one balanced harmless output through the real Tappy
+application. It does not prove G13 pass-through, because the vendor-HID control has
+no ordinary console source keystroke for this witness to observe.
+
+1. Start Tappy normally. Select, identify, and confirm the exact Logitech G13.
+2. With Rehearsal Mode checked, select G1 and assign the direct **F24 key** action
+   with **Hold until controller key is released**. Save the profile and confirm the
+   tile says `Hold F24 until release`.
+3. Press and release physical G1 once. Confirm the G1 tile and photo locator respond
+   on press/release while Rehearsal remains checked. This is the attended Rehearsal
+   visual check; silence in an output-only console cannot prove which control was
+   physically operated.
+4. Uncheck Rehearsal Mode with the mouse. Open a dedicated console, inspect help,
+   then run the finite witness:
+
+```powershell
+dotnet run --project tools/Tappy.OutputWitness/Tappy.OutputWitness.csproj -c Release --no-build -- --help
+dotnet run --project tools/Tappy.OutputWitness/Tappy.OutputWitness.csproj -c Release --no-build -- --arm --ack-focused-console-only --ack-no-device-attribution --ack-tappy-mode-set --scenario controller-basic --original-key NumPad1 --output-key F24 --timeout-seconds 120
+```
+
+5. Keep that console focused. Do not touch NumPad1 or any other keyboard key. Press
+   and hold physical G1 until the witness asks for release, then release G1 exactly
+   once. Do not press anything during the two-second quiet window.
+6. Restore Rehearsal Mode immediately after the witness disarms.
+
+Acceptance: exit code 0; evidence schema 2, current tool version `0.3.0`, scenario
+`controller-basic`, scope `focused-console-controller-output-witness`, outcome
+`Passed`, expected original requirement `none-required` with the NumPad1 guard
+silent, exactly one F24 down/up, no duplicate or unbalanced output, completed quiet
+window, final output released, no reader fault, and completed cleanup. The evidence
+must continue to claim compatibility tier and device-source attribution `none`.
+The operator record supplies the G13 attribution by recording that only G1 was
+operated during the finite armed interval.
+
+The first preserved passing G13 mapped-output record was produced by tool version
+`0.2.0`, immediately before the held-unplug scenario advanced the tool to `0.3.0`.
+That earlier schema-2 evidence remains valid and immutable.
+
+## Part E — finite G13 unplug-while-held cleanup witness
+
+Run only with the G1-to-F24 hold-until-release assignment from Part D saved, all
+controls released, and Rehearsal Mode initially checked. Confirm the exact G13 again
+if Tappy is no longer armed, then deliberately uncheck Rehearsal with the mouse and
+start the dedicated console command:
+
+```powershell
+dotnet run --project tools/Tappy.OutputWitness/Tappy.OutputWitness.csproj -c Release --no-build -- --arm --ack-focused-console-only --ack-no-device-attribution --ack-tappy-mode-set --scenario controller-held-unplug --original-key NumPad1 --output-key F24 --timeout-seconds 300
+```
+
+Keep the witness console focused and do not touch NumPad1. Press and physically keep
+holding G1. After the console reports F24 down and explicitly tells you to unplug,
+unplug the G13 while G1 remains held. Continue holding the now-unplugged G1 through
+the two-second observation window; release it only after the final result appears.
+
+Acceptance: exit code 0; schema 2/tool `0.3.0`; scenario
+`controller-held-unplug`; the specialized operator prerequisite records held-control
+plus unplug in normal-output mode; one F24 down/up; zero NumPad1 guard events; held
+cleanup stage and output release true; zero duplicate/unbalanced output; completed
+quiet window; final output released; no reader fault; and completed cleanup. The
+operator record must state that G1 remained physically held until after the result,
+because the focused output-only stream cannot distinguish an ordinary G1 release
+from unplug cleanup by itself.
+
+After the result, verify Tappy shows no confirmed controller and safe/Rehearsal
+state. Reconnect the G13 and confirm it does not silently re-arm: deliberate
+identify/confirm must be required, and the saved G1-to-F24 assignment must return
+only after that process.
+
 ## Current observability limits
 
 The following cannot be promoted from the present UI or narrow verifiers alone:
 
 - Tappy's UI does not display F13-F24 output transitions. The focused-console Output
-  Witness is required for the Targus Rehearsal, normal, and held-unplug checks, and
-  it deliberately makes no device-source attribution.
+  Witness is required for the Targus Rehearsal, normal, and held-unplug checks. Its
+  `controller-basic` scenario can verify one balanced G13/MIDI-controller output
+  cycle. Every scenario deliberately makes no device-source attribution.
 - The UI shows aggregate count, current pressed set, simultaneous count, and last
   transition, but no durable per-control cycle/repeat/timing history. The manual
   record must capture observations; there is no generic Passport writer yet.

@@ -5,15 +5,16 @@ Status values are `Implemented`, `First-slice`, `Code-supported`, `Planned`,
 provenance, not a runtime dependency; Tappy does not reference the Tippy working
 tree.
 
-Evidence snapshot: the Release solution build has zero warnings/errors and all 396
-current automated tests pass (Core 58, Windows 135, App 109, Input Broker 16, G13
-HIL tool 25, Output Witness 53). The
-last clean-source portable checkpoint includes the K15/G13 provider additions and
-passes both published/extracted readiness audits; it predates the expanded keyboard
-assignment editor. Exact evidence boundaries are in [`TESTING.md`](TESTING.md).
-Formal Targus and G13 output/pass-through checks remain pending. The G13 has a
-passing finite input-functional record plus an attended preflight report that every
-control responds visually.
+Evidence snapshot: the Release solution build has zero warnings/errors and all 897
+current automated tests pass (Core 146, Windows 279, App 369, Input Broker 16, G13
+HIL tool 25, Output Witness 62). The
+last clean-source portable checkpoint includes the Akai Fire/APC MINI providers, the
+Fire OLED and bank-LED indicator, and multi-device shared-canvas LED animations, and
+passes both published/extracted readiness audits. Exact evidence boundaries are in
+[`TESTING.md`](TESTING.md).
+Formal Targus checks and broader G13 recovery/pass-through checks remain pending.
+The G13 has a passing finite input-functional record plus a passing attended
+G1-to-F24 mapped-output witness.
 The finite attended run and its narrow-versus-promotion boundary are defined in
 [`FIRST_MILESTONE_OPERATOR_RUN.md`](FIRST_MILESTONE_OPERATOR_RUN.md); publishing the
 procedure does not advance any hardware tier.
@@ -51,10 +52,10 @@ procedure does not advance any hardware tier.
 | Immutable snapshots/migrations | First-slice | Schema v2 adds action sequences while normalizing v1 profiles | Deep action-sequence snapshot, round-trip, and corrupt isolation tests | Explicit migration fixtures for later versions |
 | Live diagnostics/overlay | First-slice | Aggregate selected-device state with ordered bounded visual delivery | Redaction/state, quick-tap pulse, FIFO, and backlog-compaction tests | Overlay and bounded armed samples |
 | Tappy Doctor | First-slice | Headless readiness runner implemented | Current clean post-provider published-directory and fresh-ZIP runs passed all four checks with zero injected inputs | Full interactive Doctor |
-| Controller Passport/HIL | Hardware evidence required | General station plan, finite G13 input verifier, and focused-console output witness | 23 G13-verifier plus 53 output-witness state-machine/refusal/evidence tests; no physical capture | Attended Targus milestone record, armed G13 input-functional record, and full controller Passport/output/pass-through/latency HIL |
+| Controller Passport/HIL | Hardware evidence required | General station plan, finite G13 input verifier, and focused-console output witness, including controller-output and controller-held-unplug scenarios | 25 G13-verifier plus 62 output-witness state-machine/refusal/evidence tests; passing physical G13 input-functional and one-control mapped-output records | Attended G13 recovery checks, Targus milestone record, and full controller Passport/pass-through/latency HIL |
 | Signed data-only controller packs | Planned | New extension/schema/trust store | Fixture only | Auth/sign/install/catalog implementation |
 | Raw keyboard provider | First-slice | Scan/E0/E1/device identity, dedicated message thread, and ContainerId grouping | Normalizer/provider contracts plus authoritative K15 four-interface and Tartarus two-interface grouping | Physical K15/Targus/Tartarus make-break, rollover, pass-through, reconnect, and cleanup |
-| Logitech G13 vendor-HID provider | Hardware evidence required | Exact `046D:C21C`, `FF00:0000` provider; `C232` excluded; fixed 39-control model, stable tile grid, and separate live photo locator | Decoder/provider/App tests, exact 39-hotspot catalog and shared-state tests, plus 23 finite-verifier tests; attended operator report that every control responds visually | Complete the finite armed input record and broader Passport/output/pass-through HIL; the operator report alone is not a promotion pass |
+| Logitech G13 vendor-HID provider | Hardware evidence required | Exact `046D:C21C`, `FF00:0000` provider; `C232` excluded; fixed 39-control model, stable tile grid, and separate live photo locator | Decoder/provider/App tests, exact 39-hotspot catalog and shared-state tests, 25 finite-verifier tests, a passing physical 39-control input-functional record, and a passing G1-to-F24 output witness | Complete attended unplug/reconnect/emergency/lifecycle and broader Passport/pass-through HIL; the narrow records alone are not a promotion pass |
 | Learned raw-HID provider | Planned | Core has a discrete provider seam with no fixed 32-control cap; current App composition is explicitly keyboard plus model-specific G13 | Interface and G13-specific composition only | Generic identity, selection/UI integration, learner, report schema, and real-device tests |
 | MIDI/encoder/joystick triggers | First-slice | WinMM notes, program changes, and balanced CC directions enter the ordinary assignment engine; G13 also has provider-specific raw X/Y threshold directions | Provider/runtime tests plus attended APC MINI note-input spot check | Finite all-control APC run; generic analog values/threshold/deadzone schemas; SysEx/clock and additional providers |
 | Data-driven controller layouts | First-slice | Generic learned grid/registry plus code-defined 39-control G13 and exact-name 99-direction APC MINI v1 models; selectable tiles stay separate from photo locators | Profile tests round-trip more than 100 controls; App tests cover fixed models, identity isolation, shared selection/press state, and bounded hotspots | Row/cluster-aware WPF projection, designer/templates, reviewed art and hardware passports for additional candidates |

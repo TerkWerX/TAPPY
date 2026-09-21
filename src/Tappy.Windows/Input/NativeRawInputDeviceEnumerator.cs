@@ -4,19 +4,24 @@ using Tappy.Windows.Interop;
 
 namespace Tappy.Windows.Input;
 
-public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
+public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator, IKeyboardMetadataUpdates
 {
     private readonly IDeviceContainerIdResolver _containerIdResolver;
+    private readonly WirelessKeyboardMetadataDiscovery? _metadata;
 
-    public NativeRawInputDeviceEnumerator()
-        : this(new WindowsDeviceContainerIdResolver())
+    public NativeRawInputDeviceEnumerator(bool discoverWirelessNames = true)
+        : this(new WindowsDeviceContainerIdResolver(), discoverWirelessNames ? new WirelessKeyboardMetadataDiscovery() : null)
     {
     }
 
-    internal NativeRawInputDeviceEnumerator(IDeviceContainerIdResolver containerIdResolver)
+    internal NativeRawInputDeviceEnumerator(IDeviceContainerIdResolver containerIdResolver, WirelessKeyboardMetadataDiscovery? metadata = null)
     {
         _containerIdResolver = containerIdResolver ?? throw new ArgumentNullException(nameof(containerIdResolver));
+        _metadata = metadata;
     }
+
+    public bool IsMetadataPending => _metadata?.IsPending == true;
+    public bool ConsumeMetadataChange() => _metadata?.ConsumeChange() == true;
 
     public IReadOnlyList<SanitizedDeviceDescriptor> EnumerateKeyboards()
     {
@@ -30,15 +35,17 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
 
         if (count == 0)
         {
+            _metadata?.Retain([]);
             return Array.Empty<SanitizedDeviceDescriptor>();
         }
 
+        var capacity = count;
         var bytes = checked((int)(count * structureSize));
         var buffer = Marshal.AllocHGlobal(bytes);
         try
         {
             result = RawInputNativeMethods.GetRawInputDeviceList(buffer, ref count, structureSize);
-            if (result == uint.MaxValue)
+            if (result == uint.MaxValue || result > capacity || count > capacity)
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Raw Input device enumeration failed.");
             }
@@ -57,10 +64,11 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
                 if (!string.IsNullOrWhiteSpace(rawPath))
                 {
                     var interfaceDescriptor = DeviceDescriptorSanitizer.CreateKeyboard(item.Device, rawPath);
-                    if (LogitechG13Protocol.IsVirtualKeyboard(
+                    if (!KeyboardInterfacePolicy.IsSelectable(rawPath,
                             interfaceDescriptor.VendorId,
                             interfaceDescriptor.ProductId))
                     {
+                        // eHome infrared interfaces are not controller choices.
                         // Logitech's C232 interface is a software-emulated virtual
                         // keyboard, not a selectable physical controller. Exposing
                         // it risks feedback and false identity; the physical C21C
@@ -73,11 +81,19 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
                         rawPath,
                         interfaceDescriptor.VendorId,
                         interfaceDescriptor.ProductId,
-                        _containerIdResolver.Resolve(rawPath)));
+                        _containerIdResolver.Resolve(rawPath), HidProductNameReader.Read(rawPath)));
                 }
             }
 
-            return CreatePhysicalDescriptors(candidates);
+            _metadata?.Retain(candidates);
+            var metadataByHandle = candidates.ToDictionary(c => c.SessionHandle,
+                c => _metadata?.Get(c) ?? WirelessKeyboardMetadata.Empty);
+            return CreatePhysicalDescriptors(candidates).Select(descriptor =>
+            {
+                var labels = descriptor.MemberSessionHandles.Select(h => metadataByHandle[h].Apply(descriptor.DisplayName))
+                    .Distinct(StringComparer.Ordinal).ToArray();
+                return labels.Length == 1 ? descriptor with { DisplayName = labels[0] } : descriptor;
+            }).ToArray();
         }
         finally
         {
@@ -104,14 +120,15 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
         }
 
         var fallback = DeviceDescriptorSanitizer.CreateKeyboard(deviceHandle, rawPath);
-        if (LogitechG13Protocol.IsVirtualKeyboard(fallback.VendorId, fallback.ProductId))
+        if (!KeyboardInterfacePolicy.IsSelectable(rawPath, fallback.VendorId, fallback.ProductId))
         {
             return null;
         }
 
         var containerId = _containerIdResolver.Resolve(rawPath);
+        var productName = HidProductNameReader.Read(rawPath);
         return containerId is null
-            ? fallback
+            ? DeviceDescriptorSanitizer.CreateKeyboard(deviceHandle, rawPath, reportedProduct: productName)
             : DeviceDescriptorSanitizer.CreateKeyboardGroup(
                 containerId.Value,
                 [new RawKeyboardDeviceCandidate(
@@ -119,7 +136,7 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
                     rawPath,
                     fallback.VendorId,
                     fallback.ProductId,
-                    containerId)]);
+                    containerId, productName)]);
     }
 
     internal static IReadOnlyList<SanitizedDeviceDescriptor> CreatePhysicalDescriptors(
@@ -127,7 +144,7 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
     {
         ArgumentNullException.ThrowIfNull(candidates);
         var selectable = candidates.Where(candidate =>
-            !LogitechG13Protocol.IsVirtualKeyboard(candidate.VendorId, candidate.ProductId)).ToArray();
+            KeyboardInterfacePolicy.IsSelectable(candidate.RawDevicePath, candidate.VendorId, candidate.ProductId)).ToArray();
         var descriptors = new List<SanitizedDeviceDescriptor>(selectable.Length);
 
         foreach (var group in selectable
@@ -142,7 +159,7 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
         {
             descriptors.Add(DeviceDescriptorSanitizer.CreateKeyboard(
                 candidate.SessionHandle,
-                candidate.RawDevicePath));
+                candidate.RawDevicePath, reportedProduct: candidate.ReportedProduct));
         }
 
         return descriptors
@@ -151,7 +168,7 @@ public sealed class NativeRawInputDeviceEnumerator : IRawInputDeviceEnumerator
             .ToArray();
     }
 
-    private static string? GetDevicePath(nint deviceHandle)
+    internal static string? GetDevicePath(nint deviceHandle)
     {
         uint characterCount = 0;
         var result = RawInputNativeMethods.GetRawInputDeviceInfo(

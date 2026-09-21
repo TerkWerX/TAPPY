@@ -26,6 +26,14 @@
     <Resource Include="Assets\Controllers\logitech-g13-user-photo.png" />
     <Resource Include="Assets\Controllers\akai-apc-mini-v1-neutral.png" />
     <Resource Include="Assets\Controllers\logitech-g13-tight-neutral.png" />
+    <None Remove="Assets\Controllers\targus-pauk10u-front.png" />
+    <Resource Include="Assets\Controllers\targus-pauk10u-front.png" />
+    <None Remove="Assets\Controllers\microsoft-bluetooth-number-pad.png" />
+    <Resource Include="Assets\Controllers\microsoft-bluetooth-number-pad.png" />
+    <None Remove="Assets\Controllers\razer-tartarus-original.png" />
+    <Resource Include="Assets\Controllers\razer-tartarus-original.png" />
+    <None Remove="Assets\Controllers\akai-fire-neutral.png" />
+    <Resource Include="Assets\Controllers\akai-fire-neutral.png" />
     <Resource Include="Assets\Branding\*.png" />
     <Resource Include="Assets\Icons\tappy.ico" />
   </ItemGroup>

@@ -267,6 +267,22 @@ public sealed class ControllerLayoutDefinition
     public bool SnapToGrid { get; set; } = true;
     public List<LayoutRowDefinition> Rows { get; set; } = [];
 
+    /// <summary>
+    /// Per-controller workspace zoom and photo-pane width. Each device tab has its
+    /// own layout, so each remembers its own visual arrangement independently —
+    /// zooming or resizing the photo pane for one confirmed controller must not
+    /// affect any other tab's saved presentation.
+    /// </summary>
+    public double Zoom { get; set; } = 1.0;
+    public double PhotoPaneWidth { get; set; } = 420;
+
+    /// <summary>
+    /// Once a layout is arranged the way the owner wants it, locking it stops
+    /// accidental tile drags/resizes without affecting selection or color
+    /// actions. Per-controller, like Zoom/PhotoPaneWidth above.
+    /// </summary>
+    public bool IsLayoutLocked { get; set; }
+
     public static ControllerLayoutDefinition CreateGrid(IEnumerable<ControlId> controls, int columns = 6)
     {
         columns = Math.Max(1, columns);
@@ -300,6 +316,8 @@ public sealed class ControllerLayoutDefinition
         var naturalColumns = Rows.Count == 0 ? 1 : Rows.Max(row => row.Controls.Count);
         GridColumns = GridColumns <= 0 ? naturalColumns : Math.Clamp(GridColumns, 1, 40);
         GridRows = GridRows <= 0 ? Math.Max(1, Rows.Count) : Math.Clamp(GridRows, 1, 40);
+        Zoom = Zoom <= 0 ? 1.0 : Math.Clamp(Zoom, 0.25, 2.0);
+        PhotoPaneWidth = PhotoPaneWidth <= 0 ? 420 : Math.Clamp(PhotoPaneWidth, 240, 1200);
     }
 
     public ControllerLayoutDefinition Clone() => new()
@@ -310,6 +328,9 @@ public sealed class ControllerLayoutDefinition
         GridColumns = GridColumns,
         GridRows = GridRows,
         SnapToGrid = SnapToGrid,
+        Zoom = Zoom,
+        PhotoPaneWidth = PhotoPaneWidth,
+        IsLayoutLocked = IsLayoutLocked,
         Rows = Rows?.Select(row => row.Clone()).ToList() ?? []
     };
 }
@@ -322,6 +343,8 @@ public sealed class ControllerProfile
     public SourceModeConfiguration SourceMode { get; set; } = new();
     public string ActiveLayerId { get; set; } = "layer-1";
     public List<InputLayerDefinition> Layers { get; set; } = [];
+    public List<BankControlBinding> BankControls { get; set; } = [];
+    public List<ControlCombination> Combinations { get; set; } = [];
     public ControllerLayoutDefinition Layout { get; set; } = new();
 
     public static ControllerProfile Create(
@@ -358,6 +381,20 @@ public sealed class ControllerProfile
         DisplayName = string.IsNullOrWhiteSpace(DisplayName) ? Identity.DisplayName : DisplayName.Trim();
         SourceMode ??= new SourceModeConfiguration();
         SourceMode.Normalize();
+        BankControls ??= [];
+        foreach (var control in BankControls)
+        {
+            if (control is null) { throw new InvalidDataException("A bank control cannot be null."); }
+            control.Validate();
+        }
+        BankControls = BankControls.GroupBy(control => control.ControlId).Select(group => group.Last()).ToList();
+        Combinations ??= [];
+        foreach (var combination in Combinations)
+        {
+            if (combination is null) { throw new InvalidDataException("A combination cannot be null."); }
+            combination.Normalize();
+        }
+        Combinations = Combinations.GroupBy(c => c.ControlId).Select(g => g.Last()).ToList();
         Layers ??= [];
         if (Layers.Count == 0)
         {
@@ -399,6 +436,8 @@ public sealed class ControllerProfile
             SourceMode = SourceMode?.Clone() ?? new SourceModeConfiguration(),
             ActiveLayerId = ActiveLayerId,
             Layers = Layers?.Select(layer => layer.Clone()).ToList() ?? [],
+            BankControls = BankControls is null ? [] : [.. BankControls],
+            Combinations = Combinations?.Select(c => c.Clone()).ToList() ?? [],
             Layout = Layout?.Clone() ?? new ControllerLayoutDefinition()
         };
     }
@@ -406,11 +445,20 @@ public sealed class ControllerProfile
 
 public sealed class TappyProfile
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 6;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string Name { get; set; } = "Default";
     public List<ControllerProfile> Controllers { get; set; } = [];
+
+    /// <summary>
+    /// The persistent id of whichever controller was confirmed most recently,
+    /// eligible for a silent startup restore (no re-identification gesture) if
+    /// the same unambiguous device is already connected the next time Tappy
+    /// starts. Null means no controller is currently eligible. See
+    /// DeviceAwareControllerRuntime's remembered-reconnect handling.
+    /// </summary>
+    public string? RememberedReconnectPersistentId { get; set; }
 
     public void Normalize()
     {
@@ -432,6 +480,12 @@ public sealed class TappyProfile
             .GroupBy(controller => controller.Id, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.Last())
             .ToList();
+
+        if (RememberedReconnectPersistentId is not null && Controllers.All(controller =>
+                controller.Identity.PersistentId is not { } id || id.Value != RememberedReconnectPersistentId))
+        {
+            RememberedReconnectPersistentId = null;
+        }
     }
 
     public TappyProfileSnapshot CreateSnapshot() => TappyProfileSnapshot.Create(this);

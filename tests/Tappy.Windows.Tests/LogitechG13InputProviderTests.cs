@@ -298,6 +298,9 @@ public sealed class LogitechG13InputProviderTests
 
         host.EmitDeviceChange(G13.SessionHandle, RawInputDeviceChangeKind.Removal);
 
+        Assert.All(signals.Where(signal => signal.Kind == ControlSignalKind.Release),
+            signal => Assert.True(signal.IsCleanup));
+
         Assert.Equal(4, signals.Count);
         Assert.Equal(2, signals.Count(signal => signal.Kind == ControlSignalKind.Release));
         Assert.NotNull(removal);

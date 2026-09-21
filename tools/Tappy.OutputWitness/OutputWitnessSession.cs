@@ -13,9 +13,14 @@ internal enum OutputWitnessPhase
     AwaitOriginalRepeat,
     AwaitOriginalRelease,
     AwaitRequiredOutput,
+    AwaitControllerOutputPress,
+    AwaitControllerOutputRelease,
     HeldUnplugReady,
     RehearsalQuietWindow,
+    ControllerQuietWindow,
     HeldUnplugObservationWindow,
+    ControllerHeldUnplugReady,
+    ControllerHeldUnplugObservationWindow,
     AwaitOutputReleaseAfterFailure,
     Complete,
     Failed,
@@ -24,7 +29,7 @@ internal enum OutputWitnessPhase
 internal sealed record OutputWitnessSessionSnapshot(
     OutputWitnessScenario Scenario,
     OutputWitnessPhase Phase,
-    bool ExpectedOriginalKeyDownObserved,
+    bool OriginalKeyDownRequirementSatisfied,
     bool ExpectedOriginalKeyUpObserved,
     bool ExpectedOriginalRepeatObserved,
     bool ExpectedOutputKeyDownObserved,
@@ -152,7 +157,7 @@ internal sealed class OutputWitnessSession
         return new OutputWitnessSessionSnapshot(
             _scenario,
             phase,
-            _sourceInitialDowns == 1,
+            OriginalKeyDownRequirementSatisfied(),
             _sourceKeyUpUnits == 1,
             _sourceRepeatUnits > 0,
             _outputInitialDowns == 1,
@@ -245,9 +250,9 @@ internal sealed class OutputWitnessSession
             return;
         }
 
-        if (_scenario == OutputWitnessScenario.HeldUnplug &&
+        if (IsHeldUnplugScenario() &&
             _heldUnplugStageReached &&
-            _sourceHeld &&
+            (_scenario == OutputWitnessScenario.ControllerHeldUnplug || _sourceHeld) &&
             repeatCount == 1)
         {
             _heldUnplugOutputReleaseObserved = true;
@@ -258,6 +263,16 @@ internal sealed class OutputWitnessSession
         if (repeatCount > 1)
         {
             _outputUnbalancedReleaseUnits += repeatCount - 1;
+        }
+
+        if (_scenario == OutputWitnessScenario.ControllerBasic &&
+            _outputInitialDowns == 1 &&
+            _outputKeyDownUnits == 1 &&
+            _outputKeyUpUnits == 1 &&
+            _outputDuplicateDownUnits == 0 &&
+            _outputUnbalancedReleaseUnits == 0)
+        {
+            StartPostConditionWindow();
         }
     }
 
@@ -271,17 +286,32 @@ internal sealed class OutputWitnessSession
         {
             _heldUnplugStageReached = true;
         }
+
+        if (_scenario == OutputWitnessScenario.ControllerHeldUnplug &&
+            _outputHeld &&
+            _outputInitialDowns == 1 &&
+            _sourceKeyDownUnits == 0 &&
+            _sourceKeyUpUnits == 0)
+        {
+            _heldUnplugStageReached = true;
+        }
     }
 
     private bool SourceCardinalityFailed() =>
-        _sourceInitialDowns > 1 ||
-        _sourceUnbalancedReleaseUnits > 0 ||
-        (_scenario == OutputWitnessScenario.HeldUnplug
-            ? _sourceKeyUpUnits > 0
-            : _sourceKeyUpUnits > 1) ||
-        (_scenario == OutputWitnessScenario.Basic &&
-            _sourceKeyUpUnits == 1 &&
-            _sourceRepeatUnits == 0);
+        IsControllerScenario()
+            ? _sourceKeyDownUnits > 0 ||
+                _sourceKeyUpUnits > 0 ||
+                _sourceRepeatUnits > 0 ||
+                _sourceUnbalancedReleaseUnits > 0 ||
+                _sourceHeld
+            : _sourceInitialDowns > 1 ||
+                _sourceUnbalancedReleaseUnits > 0 ||
+                (_scenario == OutputWitnessScenario.HeldUnplug
+                    ? _sourceKeyUpUnits > 0
+                    : _sourceKeyUpUnits > 1) ||
+                (_scenario == OutputWitnessScenario.Basic &&
+                    _sourceKeyUpUnits == 1 &&
+                    _sourceRepeatUnits == 0);
 
     private bool OutputCardinalityFailed() =>
         _scenario == OutputWitnessScenario.Rehearsal
@@ -292,7 +322,7 @@ internal sealed class OutputWitnessSession
                 _outputUnbalancedReleaseUnits > 0;
 
     private bool ScenarioSequenceFailed() =>
-        _scenario == OutputWitnessScenario.HeldUnplug &&
+        IsHeldUnplugScenario() &&
         _outputKeyUpUnits > 0 &&
         !_heldUnplugOutputReleaseObserved;
 
@@ -321,8 +351,31 @@ internal sealed class OutputWitnessSession
                 _heldUnplugOutputReleaseObserved &&
                 postConditionWindowCompleted &&
                 ExactOutputCycleObserved(),
+            OutputWitnessScenario.ControllerBasic =>
+                _sourceKeyDownUnits == 0 &&
+                _sourceKeyUpUnits == 0 &&
+                !_sourceHeld &&
+                postConditionWindowCompleted &&
+                ExactOutputCycleObserved(),
+            OutputWitnessScenario.ControllerHeldUnplug =>
+                _sourceKeyDownUnits == 0 &&
+                _sourceKeyUpUnits == 0 &&
+                !_sourceHeld &&
+                _heldUnplugStageReached &&
+                _heldUnplugOutputReleaseObserved &&
+                postConditionWindowCompleted &&
+                ExactOutputCycleObserved(),
             _ => throw new InvalidOperationException("Unsupported witness scenario."),
         };
+
+    private bool OriginalKeyDownRequirementSatisfied() =>
+        IsControllerScenario()
+            ? _sourceKeyDownUnits == 0 &&
+                _sourceKeyUpUnits == 0 &&
+                _sourceRepeatUnits == 0 &&
+                _sourceUnbalancedReleaseUnits == 0 &&
+                !_sourceHeld
+            : _sourceInitialDowns == 1;
 
     private bool ExactOutputCycleObserved() =>
         _outputInitialDowns == 1 &&
@@ -369,6 +422,33 @@ internal sealed class OutputWitnessSession
                 : OutputWitnessPhase.AwaitOriginalPress;
         }
 
+        if (_scenario == OutputWitnessScenario.ControllerHeldUnplug)
+        {
+            if (_heldUnplugOutputReleaseObserved && !postConditionWindowCompleted)
+            {
+                return OutputWitnessPhase.ControllerHeldUnplugObservationWindow;
+            }
+
+            return _heldUnplugStageReached
+                ? OutputWitnessPhase.ControllerHeldUnplugReady
+                : OutputWitnessPhase.AwaitControllerOutputPress;
+        }
+
+        if (_scenario == OutputWitnessScenario.ControllerBasic)
+        {
+            if (_outputInitialDowns == 0)
+            {
+                return OutputWitnessPhase.AwaitControllerOutputPress;
+            }
+
+            if (_outputHeld)
+            {
+                return OutputWitnessPhase.AwaitControllerOutputRelease;
+            }
+
+            return OutputWitnessPhase.ControllerQuietWindow;
+        }
+
         if (_sourceInitialDowns == 0)
         {
             return OutputWitnessPhase.AwaitOriginalPress;
@@ -399,6 +479,14 @@ internal sealed class OutputWitnessSession
         _postConditionWindowStarted = true;
         _postConditionWindowStartedAt = _timestampProvider();
     }
+
+    private bool IsControllerScenario() =>
+        _scenario is OutputWitnessScenario.ControllerBasic or
+            OutputWitnessScenario.ControllerHeldUnplug;
+
+    private bool IsHeldUnplugScenario() =>
+        _scenario is OutputWitnessScenario.HeldUnplug or
+            OutputWitnessScenario.ControllerHeldUnplug;
 
     private long PostConditionWindowObservedMilliseconds()
     {

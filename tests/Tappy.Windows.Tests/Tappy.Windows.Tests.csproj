@@ -14,5 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tappy.Windows\Tappy.Windows.csproj" />
+    <Compile Include="../../tools/Tappy.KeypadCapture/KeypadCaptureSession.cs" Link="KeypadCaptureSession.cs" />
+    <Compile Include="../../tools/Tappy.KeypadCapture/KeypadCaptureConnectionGuard.cs" Link="KeypadCaptureConnectionGuard.cs" />
   </ItemGroup>
 </Project>

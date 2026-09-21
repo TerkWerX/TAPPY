@@ -22,10 +22,12 @@ public readonly record struct KeyboardOutputKey
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant() switch
     {
-        "CONTROL" => "CTRL",
+        "CONTROL" or "LEFTCTRL" => "CTRL",
+        "LEFTSHIFT" => "SHIFT",
+        "LEFTALT" => "ALT",
         "RETURN" => "ENTER",
         "ESC" => "ESCAPE",
-        "WINDOWS" => "WIN",
+        "WINDOWS" or "LEFTWIN" => "WIN",
         var normalized => normalized
     };
 }

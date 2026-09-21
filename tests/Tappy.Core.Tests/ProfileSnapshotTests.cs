@@ -7,6 +7,23 @@ namespace Tappy.Core.Tests;
 public sealed class ProfileSnapshotTests
 {
     [Fact]
+    public void OptionalNullCollectionsStillUseSafeDefaults()
+    {
+        var serializer = new ProfileSerializer();
+        Assert.Empty(serializer.Deserialize("{\"Controllers\":null}").Controllers);
+        var controller = ControllerProfile.Create(TestProfiles.Identity());
+        var json = serializer.Serialize(new TappyProfile { Controllers = [controller] });
+        var root = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        root["Controllers"]![0]!["Layers"] = null;
+        root["Controllers"]![0]!["Layout"]!["Rows"] = null;
+
+        var restored = Assert.Single(serializer.Deserialize(root.ToJsonString()).Controllers);
+
+        Assert.Equal(3, restored.Layers.Count);
+        Assert.Empty(restored.Layout.Rows);
+    }
+
+    [Fact]
     public void ControllerDefaultsToThreeLayersWithoutImposingAFixedLimit()
     {
         var defaultController = ControllerProfile.Create(TestProfiles.Identity());

@@ -23,7 +23,7 @@ internal sealed record OutputWitnessEvidenceAssertions(
     bool NoDeviceAttributionAcknowledged,
     bool TappyModeSetAcknowledged,
     bool FiniteScenarioCompleted,
-    bool ExpectedOriginalKeyDownObserved,
+    bool OriginalKeyDownRequirementSatisfied,
     bool OriginalKeyUpRequirementSatisfied,
     bool OriginalRepeatRequirementSatisfied,
     bool OutputTransitionRequirementSatisfied,
@@ -101,15 +101,31 @@ internal static class OutputWitnessEvidenceFactory
             throw new InvalidOperationException("Evidence inputs are outside the witness allowlist.");
         }
 
-        var originalUpSatisfied = options.Scenario == OutputWitnessScenario.HeldUnplug
-            ? session.SourceKeyUpUnits == 0 && session.SourceKeyHeld
-            : session.SourceKeyUpUnits == 1 && !session.SourceKeyHeld;
-        var originalRepeatSatisfied = options.Scenario != OutputWitnessScenario.Basic ||
-            session.SourceRepeatUnits > 0;
+        var originalUpSatisfied = options.Scenario switch
+        {
+            OutputWitnessScenario.HeldUnplug =>
+                session.SourceKeyUpUnits == 0 && session.SourceKeyHeld,
+            OutputWitnessScenario.ControllerBasic or
+                OutputWitnessScenario.ControllerHeldUnplug =>
+                session.SourceKeyDownUnits == 0 &&
+                session.SourceKeyUpUnits == 0 &&
+                !session.SourceKeyHeld,
+            _ => session.SourceKeyUpUnits == 1 && !session.SourceKeyHeld,
+        };
+        var originalRepeatSatisfied = options.Scenario switch
+        {
+            OutputWitnessScenario.Basic => session.SourceRepeatUnits > 0,
+            OutputWitnessScenario.ControllerBasic or
+                OutputWitnessScenario.ControllerHeldUnplug =>
+                session.SourceRepeatUnits == 0,
+            _ => true,
+        };
         var outputSatisfied = options.Scenario == OutputWitnessScenario.Rehearsal
             ? session.OutputKeyDownUnits == 0 && session.OutputKeyUpUnits == 0
             : session.OutputKeyDownUnits == 1 && session.OutputKeyUpUnits == 1;
-        var heldUnplugSatisfied = options.Scenario != OutputWitnessScenario.HeldUnplug ||
+        var heldUnplugSatisfied = options.Scenario is not
+            (OutputWitnessScenario.HeldUnplug or
+                OutputWitnessScenario.ControllerHeldUnplug) ||
             session.HeldUnplugStageReached &&
             session.HeldUnplugOutputReleaseObserved &&
             session.SourceKeyUpUnits == 0;
@@ -122,7 +138,7 @@ internal static class OutputWitnessEvidenceFactory
             runtime.NoDeviceAttributionAcknowledged,
             runtime.TappyModeSetAcknowledged,
             outcome == OutputWitnessOutcome.Passed,
-            session.ExpectedOriginalKeyDownObserved,
+            session.OriginalKeyDownRequirementSatisfied,
             originalUpSatisfied,
             originalRepeatSatisfied,
             outputSatisfied,
@@ -143,17 +159,17 @@ internal static class OutputWitnessEvidenceFactory
         }
 
         return new OutputWitnessEvidence(
-            SchemaVersion: 1,
+            SchemaVersion: 2,
             Product: "Tappy",
-            ToolVersion: "0.1.0",
-            EvidenceScope: "focused-console-pass-through-and-output-witness",
+            ToolVersion: "0.3.0",
+            EvidenceScope: EvidenceScope(options.Scenario),
             CompatibilityTierClaimed: "none",
             DeviceSourceAttribution: "none",
             OperatorPrerequisite: OperatorPrerequisite(options.Scenario),
             Scenario: OutputWitnessOptionParser.ScenarioName(options.Scenario),
             outcome,
             new OutputWitnessEvidenceExpectedKeys(
-                options.OriginalKey.Name,
+                OriginalKeyRequirement(options),
                 options.OutputKey.Name),
             assertions,
             new OutputWitnessEvidenceCounts(
@@ -177,9 +193,25 @@ internal static class OutputWitnessEvidenceFactory
     }
 
     private static string OperatorPrerequisite(OutputWitnessScenario scenario) =>
-        scenario == OutputWitnessScenario.Rehearsal
-            ? "operator-set-tappy-rehearsal-mode"
-            : "operator-set-tappy-normal-output-mode";
+        scenario switch
+        {
+            OutputWitnessScenario.Rehearsal => "operator-set-tappy-rehearsal-mode",
+            OutputWitnessScenario.ControllerHeldUnplug =>
+                "operator-held-controller-control-and-unplugged-device-in-tappy-normal-output-mode",
+            _ => "operator-set-tappy-normal-output-mode",
+        };
+
+    private static string EvidenceScope(OutputWitnessScenario scenario) =>
+        scenario is OutputWitnessScenario.ControllerBasic or
+            OutputWitnessScenario.ControllerHeldUnplug
+            ? "focused-console-controller-output-witness"
+            : "focused-console-pass-through-and-output-witness";
+
+    private static string OriginalKeyRequirement(OutputWitnessOptions options) =>
+        options.Scenario is OutputWitnessScenario.ControllerBasic or
+            OutputWitnessScenario.ControllerHeldUnplug
+            ? $"none-required; {options.OriginalKey.Name} guard-must-remain-silent"
+            : options.OriginalKey.Name;
 }
 
 internal static class OutputWitnessEvidenceWriter

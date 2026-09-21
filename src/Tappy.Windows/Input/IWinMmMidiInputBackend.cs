@@ -7,9 +7,21 @@ internal sealed record WinMmMidiInputDevice(
     ushort ProductId,
     uint DriverVersion);
 
+internal readonly record struct WinMmMidiInputMessage(long SessionGeneration, uint PackedMessage);
+
+internal sealed class WinMmMidiInputSessionException(long sessionGeneration, Exception innerException)
+    : Exception(innerException.Message, innerException)
+{
+    internal long SessionGeneration { get; } = sessionGeneration;
+}
+
 internal interface IWinMmMidiInputBackend : IDisposable
 {
-    event Action<uint>? ShortMessageReceived;
+    event Action<WinMmMidiInputMessage>? ShortMessageReceived;
+
+    event EventHandler<Exception>? Faulted;
+
+    long SessionGeneration { get; }
 
     IReadOnlyList<WinMmMidiInputDevice> EnumerateDevices();
 

@@ -13,36 +13,80 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
 {
     private readonly ConcurrentDictionary<string, ActiveExecution> _active = new(StringComparer.Ordinal);
     private readonly object _dispatchGate = new();
-    private readonly SendInputKeyboardOutput _keyboard;
-    private readonly WinMmMidiOutput _midi = new();
+    private readonly OwnedKeyboardOutput _keyboard;
+    private readonly IMidiOutput _midi;
+    private readonly Func<int, CancellationToken, Task> _delay;
+    private readonly Dictionary<MidiNoteId, HashSet<ActiveExecution>> _midiOwners = [];
     private readonly UdpClient _osc = new();
     private int _disposed;
 
-    public WindowsControllerActionOutput(SendInputKeyboardOutput? keyboard = null)
+    public WindowsControllerActionOutput(IKeyboardOutput? keyboard = null, IMidiOutput? midi = null)
+        : this(keyboard, midi, Task.Delay)
     {
-        _keyboard = keyboard ?? new SendInputKeyboardOutput();
+    }
+
+    internal WindowsControllerActionOutput(IKeyboardOutput? keyboard, IMidiOutput? midi,
+        Func<int, CancellationToken, Task> delay)
+    {
+        _keyboard = keyboard as OwnedKeyboardOutput ??
+                    new OwnedKeyboardOutput(keyboard ?? new SendInputKeyboardOutput());
+        _midi = midi ?? new WinMmMidiOutput();
+        _delay = delay ?? throw new ArgumentNullException(nameof(delay));
     }
 
     public event EventHandler<ControllerActionOutputFault>? Faulted;
 
+    internal Task CurrentExecutionsCompletion
+    {
+        get
+        {
+            lock (_dispatchGate)
+            {
+                return Task.WhenAll(_active.Values.Distinct().Select(execution => execution.Completion.Task));
+            }
+        }
+    }
+
     public bool Start(ControllerActionOutputRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         if (request.InjectionMarker != InjectedInputMarker.Value || request.Sequence.IsEmpty)
         {
             return false;
         }
 
-        var execution = new ActiveExecution(this, request);
-        if (!_active.TryAdd(request.OwnerId, execution))
+        lock (_dispatchGate)
         {
-            execution.Dispose();
-            return false;
-        }
+            ObjectDisposedException.ThrowIf(_disposed != 0, this);
+            if (request.PreviousOwnerId is { } previousOwnerId)
+            {
+                if (request.Sequence.Mode != ControllerActionSequenceMode.RunOnce ||
+                    _active.ContainsKey(request.OwnerId) ||
+                    !_active.TryGetValue(previousOwnerId, out var previous) ||
+                    !previous.TryQueueFollowUpLocked(request))
+                {
+                    return false;
+                }
+                // Both request IDs address the same physical lifetime, including queued cancellation.
+                _active.TryAdd(request.OwnerId, previous);
+                return true;
+            }
 
-        execution.Start();
-        return true;
+            if (request.RetainMidiUntilFollowUp && request.Sequence.Mode != ControllerActionSequenceMode.RunOnce)
+            {
+                return false;
+            }
+
+            var execution = new ActiveExecution(this, request);
+            if (!_active.TryAdd(request.OwnerId, execution))
+            {
+                execution.Dispose();
+                return false;
+            }
+
+            execution.Start();
+            return true;
+        }
     }
 
     public bool ReleaseOwner(string ownerId)
@@ -57,50 +101,72 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
 
     public bool ReleaseScope(string scopeId)
     {
-        var success = true;
-        foreach (var execution in _active.Values.Where(item =>
-                     item.Request.ScopeId.Equals(scopeId, StringComparison.Ordinal)).ToArray())
-        {
-            success &= execution.CancelAndRelease();
-        }
-
-        return success;
+        return CancelExecutions(scopeId);
     }
 
     public bool ReleaseAll()
     {
+        return CancelExecutions(scopeId: null);
+    }
+
+    private bool CancelExecutions(string? scopeId)
+    {
+        ActiveExecution[] executions;
         var success = true;
-        foreach (var execution in _active.Values.ToArray())
+        lock (_dispatchGate)
         {
-            success &= execution.CancelAndRelease();
+            executions = _active.Values.Distinct().Where(item => scopeId is null ||
+                item.Request.ScopeId.Equals(scopeId, StringComparison.Ordinal)).ToArray();
+            // Mark every matching execution stopped before releasing the dispatch gate.
+            foreach (var execution in executions)
+            {
+                execution.Stopped = true;
+                success &= execution.ReleaseHeldLocked();
+                execution.RemoveIfFinishedLocked();
+            }
+
+            if (scopeId is null)
+            {
+                try
+                {
+                    _midi.Reset();
+                }
+                catch
+                {
+                    success = false;
+                }
+            }
         }
 
-        try
+        foreach (var execution in executions)
         {
-            _midi.Reset();
+            execution.Cancel();
         }
-        catch
-        {
-            success = false;
-        }
-
         return success;
     }
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        lock (_dispatchGate)
         {
-            return;
+            if (_disposed != 0)
+            {
+                return;
+            }
+            _disposed = 1;
         }
 
         _ = ReleaseAll();
-        _osc.Dispose();
-        _midi.Dispose();
+        lock (_dispatchGate)
+        {
+            _osc.Dispose();
+            _midi.Dispose();
+        }
     }
 
     private async Task RunAsync(ActiveExecution execution)
     {
+        Exception? failure = null;
         try
         {
             var sequence = execution.Request.Sequence;
@@ -120,25 +186,61 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
                     break;
                 default:
                     await ExecuteStepsAsync(execution).ConfigureAwait(false);
+                    if (execution.Request.RetainMidiUntilFollowUp)
+                    {
+                        lock (_dispatchGate)
+                        {
+                            if (!execution.ReleaseHeldLocked(retainMidi: true))
+                            {
+                                throw new InvalidOperationException("A completed press sequence could not release its held output.");
+                            }
+                        }
+                        var followUp = await execution.FollowUp.Task.WaitAsync(execution.Token)
+                            .ConfigureAwait(false);
+                        lock (_dispatchGate)
+                        {
+                            execution.ThrowIfStoppedLocked();
+                            execution.Request = followUp;
+                        }
+                        await ExecuteStepsAsync(execution).ConfigureAwait(false);
+                    }
                     break;
             }
         }
-        catch (OperationCanceledException) when (execution.Token.IsCancellationRequested)
+        catch (OperationCanceledException) when (execution.Stopped || execution.Token.IsCancellationRequested)
         {
         }
         catch (Exception exception)
         {
-            Faulted?.Invoke(this, new ControllerActionOutputFault(
-                execution.Request.OwnerId,
-                execution.Request.ScopeId,
-                exception.Message,
-                exception));
+            failure = exception;
         }
         finally
         {
-            _ = execution.ReleaseHeld();
-            _active.TryRemove(execution.Request.OwnerId, out _);
-            execution.Dispose();
+            lock (_dispatchGate)
+            {
+                execution.Stopped = true;
+                execution.WorkerFinished = true;
+                if (!execution.ReleaseHeldLocked())
+                {
+                    failure ??= new InvalidOperationException(
+                        "Windows rejected an owned-output release. Output remains tracked for cleanup retry.");
+                }
+                execution.RemoveIfFinishedLocked();
+            }
+        }
+
+        // Runtime subscribers may take locks or initiate another cleanup. Never call them under an output lock.
+        try
+        {
+            if (failure is not null)
+            {
+                Faulted?.Invoke(this, new ControllerActionOutputFault(
+                    execution.OwnerId, execution.Request.ScopeId, failure.Message, failure));
+            }
+        }
+        finally
+        {
+            execution.Completion.TrySetResult();
         }
     }
 
@@ -164,7 +266,7 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
         ControllerActionStepSnapshot step,
         CancellationToken cancellationToken)
     {
-        var owner = execution.Request.OwnerId;
+        var owner = execution.OwnerId;
         var keyboardRequest = new KeyboardOutputRequest(
             owner, step.Keys, execution.Request.InjectionMarker, execution.Request.Ancestry);
         switch (step.Type)
@@ -177,7 +279,7 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
                 }
                 try
                 {
-                    await Task.Delay(Math.Clamp(step.DurationMs, 1, 5_000), cancellationToken)
+                    await _delay(Math.Clamp(step.DurationMs, 1, 5_000), cancellationToken)
                         .ConfigureAwait(false);
                 }
                 finally
@@ -195,7 +297,7 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
                 SendText(execution, step.Value);
                 break;
             case ControllerActionStepType.Delay:
-                await Task.Delay(Math.Clamp(step.DurationMs, 1, 600_000), cancellationToken)
+                await _delay(Math.Clamp(step.DurationMs, 1, 600_000), cancellationToken)
                     .ConfigureAwait(false);
                 break;
             case ControllerActionStepType.MouseButton:
@@ -222,7 +324,7 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
                 execution.SendMidi(step);
                 break;
             case ControllerActionStepType.Osc:
-                await SendOscAsync(step, cancellationToken).ConfigureAwait(false);
+                await SendOscAsync(execution, step, cancellationToken).ConfigureAwait(false);
                 break;
             default:
                 throw new NotSupportedException($"Unsupported controller action step: {step.Type}.");
@@ -307,7 +409,7 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
         }
     }
 
-    private async Task SendOscAsync(ControllerActionStepSnapshot step, CancellationToken cancellationToken)
+    private async Task SendOscAsync(ActiveExecution execution, ControllerActionStepSnapshot step, CancellationToken cancellationToken)
     {
         var packet = OscPacketBuilder.Build(step.Value, step.Arguments);
         var host = string.IsNullOrWhiteSpace(step.Target) ? "127.0.0.1" : step.Target;
@@ -317,7 +419,7 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
                       ?? throw new InvalidOperationException($"OSC host could not be resolved: {host}");
         var endpoint = new IPEndPoint(address, Math.Clamp(step.Amount == 0 ? 8000 : step.Amount, 1, 65535));
         cancellationToken.ThrowIfCancellationRequested();
-        Dispatch(execution: null, cancellationToken, () => _osc.Send(packet, endpoint));
+        Dispatch(execution, cancellationToken, () => _osc.Send(packet, endpoint));
     }
 
     private void SendText(ActiveExecution execution, string text)
@@ -339,6 +441,7 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
         lock (_dispatchGate)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            execution?.ThrowIfStoppedLocked();
             action();
         }
     }
@@ -361,24 +464,50 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
         }
     }
 
+    private readonly record struct MidiNoteId(string Device, int Channel, int Note)
+    {
+        internal static MidiNoteId Create(string device, MidiShortMessage message) =>
+            new(device.Trim().ToUpperInvariant(), message.Channel, message.Data1);
+    }
+
     private sealed class ActiveExecution : IDisposable
     {
         private readonly WindowsControllerActionOutput _owner;
         private readonly CancellationTokenSource _cancellation = new();
-        private readonly object _heldGate = new();
-        private readonly HashSet<Tappy.Core.Output.KeyboardOutputKey> _heldKeys = [];
         private readonly HashSet<string> _heldMouseButtons = new(StringComparer.OrdinalIgnoreCase);
-        private readonly List<(string Device, MidiShortMessage NoteOff)> _heldMidi = [];
-        private int _released;
+        private readonly Dictionary<MidiNoteId, (string Device, MidiShortMessage NoteOff)> _heldMidi = [];
 
         internal ActiveExecution(WindowsControllerActionOutput owner, ControllerActionOutputRequest request)
         {
             _owner = owner;
             Request = request;
+            OwnerId = request.OwnerId;
+            Token = _cancellation.Token;
         }
 
-        internal ControllerActionOutputRequest Request { get; }
-        internal CancellationToken Token => _cancellation.Token;
+        internal string OwnerId { get; }
+        internal ControllerActionOutputRequest Request { get; set; }
+        internal CancellationToken Token { get; }
+        internal bool Stopped { get; set; }
+        internal bool WorkerFinished { get; set; }
+        internal TaskCompletionSource<ControllerActionOutputRequest> FollowUp { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Completion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal bool TryQueueFollowUpLocked(ControllerActionOutputRequest request) =>
+            !Stopped && !Token.IsCancellationRequested && Request.RetainMidiUntilFollowUp &&
+            request.ScopeId.Equals(Request.ScopeId, StringComparison.Ordinal) &&
+            FollowUp.TrySetResult(request);
+
+        internal void ThrowIfStoppedLocked()
+        {
+            if (Stopped)
+            {
+                throw new OperationCanceledException(Token);
+            }
+            Token.ThrowIfCancellationRequested();
+        }
 
         internal void CancelAfter(TimeSpan timeout) => _cancellation.CancelAfter(timeout);
 
@@ -391,33 +520,15 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
                 throw new InvalidOperationException("A keyboard action requires at least one key.");
             }
 
-            _owner.Dispatch(this, () =>
-            {
-                _owner._keyboard.KeyDown(request);
-                lock (_heldGate)
-                {
-                    foreach (var key in request.Keys)
-                    {
-                        _heldKeys.Add(key);
-                    }
-                }
-            });
+            _owner.Dispatch(this, () => _owner._keyboard.KeyDown(request));
         }
 
         internal void KeyUp(KeyboardOutputRequest request)
         {
-            KeyboardOutputKey[] releasing;
-            lock (_heldGate)
+            // Releases are allowed after cancellation and remain owned when a native release fails.
+            lock (_owner._dispatchGate)
             {
-                releasing = request.Keys.Where(_heldKeys.Remove).ToArray();
-            }
-
-            if (releasing.Length > 0)
-            {
-                lock (_owner._dispatchGate)
-                {
-                    _owner._keyboard.KeyUp(request with { Keys = releasing });
-                }
+                _owner._keyboard.KeyUp(request with { Keys = request.Keys.Reverse().ToArray() });
             }
         }
 
@@ -426,33 +537,23 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
             var normalized = (description ?? string.Empty).Trim().ToLowerInvariant();
             var button = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "left";
             var (down, up, data) = MouseButtonFlags(button);
-            if (normalized.EndsWith("down", StringComparison.Ordinal) ||
-                Request.Sequence.Mode == ControllerActionSequenceMode.WhileHeld)
+            if (normalized.EndsWith("up", StringComparison.Ordinal))
+            {
+                lock (_owner._dispatchGate)
+                {
+                    ReleaseMouseLocked(button);
+                }
+            }
+            else if (normalized.EndsWith("down", StringComparison.Ordinal) ||
+                     Request.Sequence.Mode == ControllerActionSequenceMode.WhileHeld)
             {
                 _owner.Dispatch(this, () =>
                 {
-                    SendMouse(down, data, 0, 0, Request.InjectionMarker);
-                    lock (_heldGate)
+                    if (_heldMouseButtons.Add(button))
                     {
-                        _heldMouseButtons.Add(button);
+                        SendMouse(down, data, 0, 0, Request.InjectionMarker);
                     }
                 });
-            }
-            else if (normalized.EndsWith("up", StringComparison.Ordinal))
-            {
-                var shouldRelease = false;
-                lock (_heldGate)
-                {
-                    shouldRelease = _heldMouseButtons.Remove(button);
-                }
-
-                if (shouldRelease)
-                {
-                    lock (_owner._dispatchGate)
-                    {
-                        SendMouse(up, data, 0, 0, Request.InjectionMarker);
-                    }
-                }
             }
             else
             {
@@ -468,28 +569,56 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
             var message = MidiMessageParser.Parse(step.Value);
             _owner.Dispatch(this, () =>
             {
-                _owner._midi.Send(step.Target, message);
-                if (message.IsNoteOn && Request.Sequence.Mode == ControllerActionSequenceMode.WhileHeld)
+                var key = MidiNoteId.Create(step.Target, message);
+                if (message.IsNoteOn)
                 {
-                    lock (_heldGate)
+                    if (!_heldMidi.ContainsKey(key))
                     {
-                        _heldMidi.Add((step.Target, message.ToNoteOff()));
+                        if (!_owner._midiOwners.TryGetValue(key, out var owners))
+                        {
+                            owners = [];
+                            _owner._midiOwners.Add(key, owners);
+                        }
+                        _heldMidi.Add(key, (step.Target, message.ToNoteOff()));
+                        owners.Add(this);
+                        if (owners.Count == 1)
+                        {
+                            _owner._midi.Send(step.Target, message);
+                        }
                     }
                 }
                 else if (message.Kind is MidiShortMessageKind.NoteOff or MidiShortMessageKind.NoteOn)
                 {
-                    lock (_heldGate)
+                    if (_heldMidi.ContainsKey(key))
                     {
-                        _heldMidi.RemoveAll(item =>
-                            item.Device.Equals(step.Target, StringComparison.OrdinalIgnoreCase) &&
-                            item.NoteOff.Channel == message.Channel &&
-                            item.NoteOff.Data1 == message.Data1);
+                        ReleaseMidiLocked(key, message);
                     }
+                    else if (!_owner._midiOwners.ContainsKey(key))
+                    {
+                        _owner._midi.Send(step.Target, message);
+                    }
+                }
+                else
+                {
+                    _owner._midi.Send(step.Target, message);
                 }
             });
         }
 
         internal bool CancelAndRelease()
+        {
+            bool success;
+            lock (_owner._dispatchGate)
+            {
+                Stopped = true;
+                success = ReleaseHeldLocked();
+                RemoveIfFinishedLocked();
+            }
+            Cancel();
+            return success;
+        }
+
+        internal void Cancel()
         {
             try
             {
@@ -499,51 +628,40 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
             {
             }
 
-            return ReleaseHeld();
         }
 
-        internal bool ReleaseHeld()
+        internal bool ReleaseHeldLocked(bool retainMidi = false)
         {
-            if (Interlocked.Exchange(ref _released, 1) != 0)
-            {
-                return true;
-            }
-
-            KeyboardOutputKey[] keys;
-            string[] mouseButtons;
-            (string Device, MidiShortMessage NoteOff)[] midi;
-            lock (_heldGate)
-            {
-                keys = _heldKeys.Reverse().ToArray();
-                mouseButtons = _heldMouseButtons.ToArray();
-                midi = _heldMidi.ToArray();
-                _heldKeys.Clear();
-                _heldMouseButtons.Clear();
-                _heldMidi.Clear();
-            }
-
             var success = true;
-            lock (_owner._dispatchGate)
+            try
+            {
+                _owner._keyboard.ReleaseOwner(OwnerId);
+            }
+            catch
+            {
+                success = false;
+            }
+
+            foreach (var button in _heldMouseButtons.ToArray())
             {
                 try
                 {
-                    if (keys.Length > 0)
-                    {
-                        _owner._keyboard.KeyUp(new KeyboardOutputRequest(
-                            Request.OwnerId, keys, Request.InjectionMarker, Request.Ancestry));
-                    }
+                    ReleaseMouseLocked(button);
                 }
                 catch
                 {
                     success = false;
                 }
 
-                foreach (var button in mouseButtons)
+            }
+
+            if (!retainMidi)
+            {
+                foreach (var key in _heldMidi.Keys.ToArray())
                 {
                     try
                     {
-                        var (_, up, data) = MouseButtonFlags(button);
-                        SendMouse(up, data, 0, 0, Request.InjectionMarker);
+                        ReleaseMidiLocked(key, _heldMidi[key].NoteOff);
                     }
                     catch
                     {
@@ -551,20 +669,49 @@ public sealed class WindowsControllerActionOutput : IControllerActionOutput, IDi
                     }
                 }
 
-                foreach (var (device, noteOff) in midi)
-                {
-                    try
-                    {
-                        _owner._midi.Send(device, noteOff);
-                    }
-                    catch
-                    {
-                        success = false;
-                    }
-                }
             }
 
             return success;
+        }
+
+        private void ReleaseMouseLocked(string button)
+        {
+            if (_heldMouseButtons.Contains(button))
+            {
+                var (_, up, data) = MouseButtonFlags(button);
+                SendMouse(up, data, 0, 0, Request.InjectionMarker);
+                _heldMouseButtons.Remove(button);
+            }
+        }
+
+        private void ReleaseMidiLocked(MidiNoteId key, MidiShortMessage message)
+        {
+            var owners = _owner._midiOwners[key];
+            if (owners.Count == 1)
+            {
+                _owner._midi.Send(_heldMidi[key].Device, message);
+            }
+            owners.Remove(this);
+            _heldMidi.Remove(key);
+            if (owners.Count == 0)
+            {
+                _owner._midiOwners.Remove(key);
+            }
+        }
+
+        internal void RemoveIfFinishedLocked()
+        {
+            if (WorkerFinished && !_owner._keyboard.HasOwner(OwnerId) &&
+                _heldMouseButtons.Count == 0 && _heldMidi.Count == 0 &&
+                _owner._active.TryGetValue(OwnerId, out var current) && ReferenceEquals(current, this))
+            {
+                foreach (var key in _owner._active.Where(pair => ReferenceEquals(pair.Value, this))
+                             .Select(pair => pair.Key).ToArray())
+                {
+                    _owner._active.TryRemove(key, out _);
+                }
+                Dispose();
+            }
         }
 
         public void Dispose() => _cancellation.Dispose();

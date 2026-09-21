@@ -8,7 +8,9 @@ public sealed record ControllerActionOutputRequest(
     string ScopeId,
     ControllerActionSequenceSnapshot Sequence,
     ulong InjectionMarker,
-    ExecutionAncestry Ancestry);
+    ExecutionAncestry Ancestry,
+    string? PreviousOwnerId = null,
+    bool RetainMidiUntilFollowUp = false);
 
 public sealed record ControllerActionOutputFault(
     string OwnerId,

@@ -17,10 +17,11 @@ internal static class Program
             return 0;
         }
 
-        var json = args.Length == 1 && args[0].Equals("--json", StringComparison.OrdinalIgnoreCase);
-        if (args.Length != 0 && !json)
+        var json = args.Contains("--json");
+        var wirelessNames = args.Contains("--wireless-names");
+        if (args.Any(a => a is not ("--json" or "--wireless-names")))
         {
-            Console.Error.WriteLine("Unknown option. This probe intentionally supports descriptor inventory only; it has no watch or key-history mode.");
+            Console.Error.WriteLine("Unknown option. This probe supports device inventory and optional wireless names; it has no watch or key-history mode.");
             PrintHelp();
             return 2;
         }
@@ -33,8 +34,18 @@ internal static class Program
 
         try
         {
-            var keyboards = new NativeRawInputDeviceEnumerator()
-                .EnumerateKeyboards()
+            var enumerator = new NativeRawInputDeviceEnumerator(discoverWirelessNames: wirelessNames);
+            var keyboardDescriptors = enumerator.EnumerateKeyboards();
+            if (wirelessNames)
+            {
+                var until = DateTime.UtcNow.AddSeconds(12);
+                while (enumerator.IsMetadataPending && DateTime.UtcNow < until) { Thread.Sleep(50); }
+                keyboardDescriptors = enumerator.EnumerateKeyboards();
+            }
+            var privacyNotice = wirelessNames
+                ? "Wireless-name inventory: reads Windows metadata and Logitech receiver pairing-information registers. No pairing/settings changes, input registration, key capture, or output injection. Paired names do not prove a keyboard is awake."
+                : "Descriptor-only Windows inventory. No device was registered for input, opened for reports, or monitored, and no control activity was captured. Physical grouping occurs only when Windows reports a shared DEVPKEY_Device_ContainerId.";
+            var keyboards = keyboardDescriptors
                 .Select(ToKeyboardProbeDescriptor);
             var g13Controllers = new NativeLogitechG13DeviceEnumerator()
                 .EnumerateControllers()
@@ -47,9 +58,9 @@ internal static class Program
             if (json)
             {
                 var report = new ProbeReport(
-                    3,
+                    5,
                     "Tappy",
-                    "Descriptor-only Windows inventory. No device was registered for input, opened for reports, or monitored, and no control activity was captured. Physical grouping occurs only when Windows reports a shared DEVPKEY_Device_ContainerId.",
+                    privacyNotice,
                     controllers);
                 Console.WriteLine(JsonSerializer.Serialize(report, new JsonSerializerOptions
                 {
@@ -59,8 +70,8 @@ internal static class Program
             }
             else
             {
-                Console.WriteLine("Tappy Device Probe — descriptor-only controller inventory");
-                Console.WriteLine("No device was registered for input, opened for reports, or monitored. No control activity was captured.");
+                Console.WriteLine(wirelessNames ? "Tappy Device Probe — wireless-name inventory" : "Tappy Device Probe — descriptor-only controller inventory");
+                Console.WriteLine(privacyNotice);
                 Console.WriteLine("Interfaces merge only with an authoritative shared Windows ContainerId; unresolved interfaces stay separate.");
                 Console.WriteLine();
                 if (controllers.Length == 0)
@@ -77,7 +88,7 @@ internal static class Program
                     var usage = controller.UsagePage is null || controller.Usage is null
                         ? "usage unavailable"
                         : $"UP_{controller.UsagePage} U_{controller.Usage}";
-                    Console.WriteLine($"[{index + 1}] {controller.DeviceKind} · {usb} · {usage}");
+                    Console.WriteLine($"[{index + 1}] {controller.DisplayName} · {controller.DeviceKind} · {usb} · {usage}");
                     Console.WriteLine($"    identity fingerprint {controller.IdentityFingerprint}");
                     Console.WriteLine($"    grouping {controller.Grouping}; Raw Input interfaces {controller.InterfaceCount}");
                     if (controller.ReportedTotalKeys.Count != 0)
@@ -118,7 +129,8 @@ internal static class Program
             capabilities.Select(value => value.TotalKeys).Distinct().Order().ToArray(),
             capabilities.Select(value => value.FunctionKeys).Distinct().Order().ToArray(),
             capabilities.Select(value => value.Indicators).Distinct().Order().ToArray(),
-            CodeDefinedControlCount: null);
+            CodeDefinedControlCount: null, DisplayName: descriptor.DisplayName,
+            PresentationModelId: descriptor.PresentationModelId);
     }
 
     private static ProbeControllerDescriptor ToLogitechG13ProbeDescriptor(
@@ -135,7 +147,7 @@ internal static class Program
             [],
             [],
             [],
-            LogitechG13InputProvider.SupportedControls.Count);
+            LogitechG13InputProvider.SupportedControls.Count, descriptor.DisplayName);
 
     private static RawKeyboardInfo ReadKeyboardInfo(nint handle)
     {
@@ -150,11 +162,12 @@ internal static class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine("Usage: Tappy.DeviceProbe [--json]");
+        Console.WriteLine("Usage: Tappy.DeviceProbe [--json] [--wireless-names]");
         Console.WriteLine();
         Console.WriteLine("Lists sanitized physical keyboard and supported-controller descriptors using Windows ContainerId grouping.");
         Console.WriteLine("Container IDs and physical device paths are represented only by domain-separated SHA-256 fingerprints.");
         Console.WriteLine("This tool never registers for input and has no control capture, history, or streaming mode.");
+        Console.WriteLine("--wireless-names additionally queries Logitech pairing-information registers and Windows Bluetooth metadata; no settings are changed.");
     }
 
     [DllImport("user32.dll", EntryPoint = "GetRawInputDeviceInfoW", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -222,7 +235,9 @@ internal static class Program
         IReadOnlyList<uint> ReportedTotalKeys,
         IReadOnlyList<uint> ReportedFunctionKeys,
         IReadOnlyList<uint> ReportedIndicators,
-        int? CodeDefinedControlCount);
+        int? CodeDefinedControlCount,
+        string DisplayName,
+        string? PresentationModelId = null);
 
     private sealed record ProbeReport(
         int SchemaVersion,

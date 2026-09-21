@@ -61,12 +61,14 @@ public partial class App : System.Windows.Application
             }
 
             _applicationLifecycle = new ApplicationLifecycleSignalSource();
-            var runtime = new DeviceAwareControllerRuntime(
-                applicationLifecycleSource: _applicationLifecycle);
-            var viewModel = new MainViewModel(runtime, action =>
-                Dispatcher.BeginInvoke(action, DispatcherPriority.Render), ScheduleUiAfter);
+            var sessions = new ControllerSessionFactory(_applicationLifecycle);
+            var animationLibrary = new AnimationLibraryStore(ProductIdentity.LocalDataRoot);
+            var workspace = new ControllerWorkspace(sessions.Create, action =>
+                Dispatcher.BeginInvoke(action, DispatcherPriority.Render), ScheduleUiAfter,
+                Path.Combine(ProductIdentity.LocalDataRoot, "device-tabs.json"), sessions, animationLibrary);
+            var viewModel = workspace.Tabs[0].ViewModel;
             var placement = new WindowPlacementStore(ProductIdentity.LocalDataRoot);
-            _mainWindow = new MainWindow(viewModel, placement, _sessionMarker);
+            _mainWindow = new MainWindow(viewModel, placement, _sessionMarker, workspace);
             MainWindow = _mainWindow;
             _mainWindow.Show();
         }

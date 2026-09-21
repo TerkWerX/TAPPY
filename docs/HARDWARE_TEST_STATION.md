@@ -80,6 +80,30 @@ evidence contract. The exact attached G13 completed a clean passing physical run
 2026-09-07. That result is one input-functional record, not by itself a full
 Controller Passport, full HIL certification, or `Verified` support.
 
+## Vendor-HID/MIDI controller mapped-output witness
+
+`Tappy.OutputWitness --scenario controller-basic` and
+`--scenario controller-held-unplug` are finite output-only companions for controls
+such as G13 buttons or MIDI pads that do not also appear as ordinary console source
+keys. With the real Tappy application in normal-output mode and the chosen control
+mapped to an allowlisted F13-F24 key, the operator keeps the witness console focused
+and operates exactly that physical control. The basic scenario verifies one normal
+press/release. The held-unplug scenario waits for output-down, instructs the
+operator to keep the control physically held while unplugging its device, then
+requires the cleanup output-up. Both require zero transitions from the selected
+NumPad guard, a two-second duplicate/late-output quiet window, final output released,
+and clean console teardown.
+
+The JSON deliberately records `deviceSourceAttribution: none` and
+`compatibilityTierClaimed: none`; the attended operator record is the attribution
+and physical-action layer. The output-only stream cannot distinguish an ordinary
+physical release from a truthful held-unplug cleanup without that attended record.
+It also cannot prove source pass-through or Rehearsal recognition from silence.
+The exact G13 G1-to-F24 hold-until-release path passed this scenario on 2026-09-07
+with SHA-256
+`8D1AA1A6F25A5FC197A5D9FA79007C81017453D6B0B2CDED15323CAF60F5E84A`.
+This remains one narrow mapped-output record, not a full HIL or Passport promotion.
+
 ## Required initial physical matrix
 
 - One standard USB numpad.

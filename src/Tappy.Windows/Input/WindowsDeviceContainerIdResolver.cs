@@ -157,11 +157,24 @@ internal sealed class WindowsDeviceContainerIdResolver : IDeviceContainerIdResol
         return value == Guid.Empty ? null : value;
     }
 
-    private static bool TryReadTrailingInterfaceClass(string path, out Guid interfaceClass)
+    internal static bool TryReadTrailingInterfaceClass(string path, out Guid interfaceClass)
     {
         interfaceClass = Guid.Empty;
         var marker = path.LastIndexOf("#{", StringComparison.Ordinal);
-        return marker >= 0 && Guid.TryParse(path.AsSpan(marker + 1), out interfaceClass);
+        if (marker < 0)
+        {
+            return false;
+        }
+
+        // Raw Input device paths end "...#{GUID}" with nothing after the closing
+        // brace, but a KS device interface path (e.g. WinMM MIDI's own path, via
+        // DRV_QUERYDEVICEINTERFACE) can carry a trailing reference string after
+        // it, such as "...#{GUID}\global" - parsing to the end of the string
+        // then fails on that trailing content instead of reading the GUID. Stop
+        // at the closing brace instead of the end of the string.
+        var closingBrace = path.IndexOf('}', marker + 2);
+        return closingBrace >= 0 &&
+               Guid.TryParse(path.AsSpan(marker + 1, closingBrace - marker), out interfaceClass);
     }
 
     private static string NormalizeInterfacePath(string path) =>

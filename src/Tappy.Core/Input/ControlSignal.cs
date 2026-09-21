@@ -57,6 +57,9 @@ public sealed record ControlSignal(
     InputInjectionMetadata Injection,
     ExecutionAncestry? Ancestry = null)
 {
+    /// <summary>A provider-generated release for device loss, not an intentional user gesture.</summary>
+    public bool IsCleanup { get; init; }
+
     public static ControlSignal Physical(
         ControllerSessionId sessionId,
         ControlId controlId,

@@ -61,6 +61,123 @@ public sealed class OutputWitnessSessionTests
     }
 
     [Fact]
+    public void ControllerBasicRequiresOneBalancedOutputCycleAndQuietWindow()
+    {
+        var clock = 0L;
+        var session = CreateSession(
+            OutputWitnessScenario.ControllerBasic,
+            () => clock,
+            timestampFrequency: 1000);
+
+        Assert.Equal(
+            OutputWitnessPhase.AwaitControllerOutputPress,
+            session.Snapshot().Phase);
+        Output(session, isDown: true);
+        Assert.Equal(
+            OutputWitnessPhase.AwaitControllerOutputRelease,
+            session.Snapshot().Phase);
+        Output(session, isDown: false);
+        Assert.Equal(
+            OutputWitnessPhase.ControllerQuietWindow,
+            session.Snapshot().Phase);
+
+        clock = 1999;
+        Assert.False(session.Snapshot().IsComplete);
+        clock = 2000;
+        var snapshot = session.Snapshot();
+
+        Assert.True(snapshot.IsComplete);
+        Assert.True(snapshot.ScenarioAssertionsPassed);
+        Assert.True(snapshot.OriginalKeyDownRequirementSatisfied);
+        Assert.Equal(0, snapshot.SourceKeyDownUnits);
+        Assert.Equal(0, snapshot.SourceKeyUpUnits);
+        Assert.Equal(1, snapshot.OutputKeyDownUnits);
+        Assert.Equal(1, snapshot.OutputKeyUpUnits);
+    }
+
+    [Fact]
+    public void ControllerBasicRejectsSelectedNumPadGuardTransition()
+    {
+        var session = CreateSession(OutputWitnessScenario.ControllerBasic);
+
+        Source(session, isDown: true);
+        var held = session.Snapshot();
+        Assert.True(held.HasFailed);
+        Assert.False(held.CanTerminateFailed);
+
+        Source(session, isDown: false);
+        var released = session.Snapshot();
+
+        Assert.True(released.HasFailed);
+        Assert.True(released.CanTerminateFailed);
+        Assert.False(released.OriginalKeyDownRequirementSatisfied);
+        Assert.False(released.ScenarioAssertionsPassed);
+    }
+
+    [Fact]
+    public void ControllerBasicRejectsDuplicateOutputDuringQuietWindow()
+    {
+        var session = CreateSession(OutputWitnessScenario.ControllerBasic);
+        Output(session, isDown: true);
+        Output(session, isDown: false);
+        Output(session, isDown: true);
+        Output(session, isDown: false);
+
+        var snapshot = session.Snapshot();
+
+        Assert.True(snapshot.HasFailed);
+        Assert.True(snapshot.CanTerminateFailed);
+        Assert.False(snapshot.NoUnexpectedOrDuplicateOutputTransitions);
+        Assert.Equal(2, snapshot.OutputKeyDownUnits);
+        Assert.Equal(2, snapshot.OutputKeyUpUnits);
+    }
+
+    [Fact]
+    public void ControllerHeldUnplugRequiresCleanupReleaseAndQuietWindow()
+    {
+        var clock = 0L;
+        var session = CreateSession(
+            OutputWitnessScenario.ControllerHeldUnplug,
+            () => clock,
+            timestampFrequency: 1000);
+
+        Output(session, isDown: true);
+        Assert.Equal(
+            OutputWitnessPhase.ControllerHeldUnplugReady,
+            session.Snapshot().Phase);
+        Output(session, isDown: false);
+        Assert.Equal(
+            OutputWitnessPhase.ControllerHeldUnplugObservationWindow,
+            session.Snapshot().Phase);
+
+        clock = 2000;
+        var snapshot = session.Snapshot();
+
+        Assert.True(snapshot.IsComplete);
+        Assert.True(snapshot.ScenarioAssertionsPassed);
+        Assert.True(snapshot.HeldUnplugStageReached);
+        Assert.True(snapshot.HeldUnplugOutputReleaseObserved);
+        Assert.True(snapshot.PostConditionWindowCompleted);
+        Assert.False(snapshot.SourceKeyHeld);
+        Assert.False(snapshot.OutputKeyHeld);
+    }
+
+    [Fact]
+    public void ControllerHeldUnplugRejectsSelectedNumPadGuardTransition()
+    {
+        var session = CreateSession(OutputWitnessScenario.ControllerHeldUnplug);
+        Source(session, isDown: true);
+        Source(session, isDown: false);
+
+        var snapshot = session.Snapshot();
+
+        Assert.True(snapshot.HasFailed);
+        Assert.True(snapshot.CanTerminateFailed);
+        Assert.False(snapshot.OriginalKeyDownRequirementSatisfied);
+        Assert.False(snapshot.ScenarioAssertionsPassed);
+    }
+
+    [Fact]
     public void RehearsalCompletesOnlyAfterSourceCycleAndFixedQuietWindow()
     {
         var clock = 0L;

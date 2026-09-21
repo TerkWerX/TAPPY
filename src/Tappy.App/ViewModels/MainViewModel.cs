@@ -5,10 +5,11 @@ using Tappy.App.Services;
 namespace Tappy.App.ViewModels;
 
 public sealed record TileColorChoice(string Key, string Label, string Background, string Foreground);
+public sealed record TartarusKeymapChoice(int Number, string Label);
 
-public sealed class MainViewModel : ObservableObject, IAsyncDisposable
+public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 {
-    private static readonly TileColorChoice[] AllTileColorChoices =
+    internal static readonly TileColorChoice[] AllTileColorChoices =
     [
         new("Default", "Off / default", "#202936", "#F7FAFC"),
         new("Red", "Red", "#8F2636", "#FFFFFF"),
@@ -24,11 +25,28 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         new("White", "White", "#EEF2F6", "#17202C"),
     ];
     private static readonly TimeSpan MinimumIlluminationDuration = TimeSpan.FromMilliseconds(80);
-    internal const double LayoutCellWidth = 144;
-    internal const double LayoutCellHeight = 116;
+    // Must comfortably fit the largest grid-controller natural tile the
+    // default (unsaved) layout ever places at this pitch without a gap —
+    // the Fire's pads, at PhotoShapeTileScale (81*1.5 = 121.5px tall), are
+    // the tallest control placed edge-to-edge with no explicit gap column
+    // (an encoder cluster, at EncoderClusterTileScale, is smaller still).
+    // See NaturalTileSize.
+    internal const double LayoutCellWidth = 170;
+    internal const double LayoutCellHeight = 170;
     internal const double DefaultTileWidth = 134;
     internal const double DefaultTileHeight = 106;
     private const double MinimumTileSize = 48;
+    // Real physical size differences (an encoder knob is legitimately bigger
+    // than a button) carry straight through at this one uniform scale, rather
+    // than normalizing every tile to the same footprint — a bigger control on
+    // the real unit becomes a bigger tile, not just a differently-shaped one
+    // at the same size.
+    private const double PhotoShapeTileScale = 1.5;
+    // A rotary encoder's three controls (increase/touch/decrease) render as
+    // one compact concentric cluster, not three side-by-side tiles, so this
+    // stays at the raw measured knob diameter instead of PhotoShapeTileScale
+    // — scaling it up too would defeat the point of combining them.
+    private const double EncoderClusterTileScale = 1.0;
     private const double SnapStep = 12;
     private const double NeighborSnapDistance = 10;
     private readonly IControllerRuntime _runtime;
@@ -41,12 +59,96 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly Dictionary<string, IlluminationState> _illuminationStates = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ControllerControlPlacement> _layoutPlacements = new(StringComparer.Ordinal);
     private ControllerChoice? _selectedDevice;
+    private string _typingKeyboardStatus = "Typing keyboard: not set";
+    public string TypingKeyboardStatus { get => _typingKeyboardStatus; internal set => Set(ref _typingKeyboardStatus, value); }
     private ControlTileViewModel? _selectedControl;
     private string _selectedOutputKey = "F24";
     private string _identificationStatus = "Choose a device. Nothing is armed.";
     private string _mappingStatus = "No mapping selected.";
     private string _activeControllerLabel = "No controller confirmed";
     private string _activeLayerName = "Layer 1";
+    private string _inputBankLabel = string.Empty;
+    private bool? _numLockOn;
+    private int? _tartarusKeymap;
+    private bool _canChangeTartarusKeymap;
+    private bool _tartarusLedBusy;
+    private bool _tartarusFollowKeymaps;
+    private int? _tartarusVerifiedLedMask;
+    private string? _tartarusLedError;
+    private FireOledDisplayMode _oledDisplayMode = FireOledDisplayMode.Off;
+    public bool HasTartarusKeymaps => _tartarusKeymap is >= 1 and <= 8;
+    public bool CanChangeTartarusKeymap => _canChangeTartarusKeymap && !_tartarusLedBusy;
+    public bool TartarusFollowKeymaps { get => _tartarusFollowKeymaps; set => Set(ref _tartarusFollowKeymaps, value); }
+
+    /// <summary>
+    /// Read every tick by the tab's FireOledContentPlayer — no side effect on
+    /// set. The Fire's OLED reverts to black on its own a few seconds after
+    /// its last update, so switching away from any mode (including back to
+    /// Off) needs no explicit "clear" action; the display goes dark by
+    /// itself once the periodic sends for the old mode stop.
+    /// </summary>
+    public FireOledDisplayMode OledDisplayMode { get => _oledDisplayMode; set => Set(ref _oledDisplayMode, value); }
+    public IReadOnlyList<TartarusKeymapChoice> TartarusKeymaps { get; } =
+    [new(1, "1 · Yellow"), new(2, "2 · Green"), new(3, "3 · Blue"), new(4, "4 · Yellow + green"),
+     new(5, "5 · Yellow + blue"), new(6, "6 · Green + blue"), new(7, "7 · All three"), new(8, "8 · All off")];
+    public int SelectedTartarusKeymap => _tartarusKeymap ?? 0;
+    private int TartarusIndicatorMask => HasTartarusKeymaps ? RazerTartarusLayout.IndicatorMask(_tartarusKeymap!.Value) : 0;
+    public string TartarusYellowLed => (TartarusIndicatorMask & 1) != 0 ? "#FFE45C" : "#30343A";
+    public string TartarusGreenLed => (TartarusIndicatorMask & 2) != 0 ? "#53EF70" : "#30343A";
+    public string TartarusBlueLed => (TartarusIndicatorMask & 4) != 0 ? "#49B8FF" : "#30343A";
+    public string TartarusIndicatorStatus => _tartarusLedBusy ? "Synchronizing this Tartarus's bank indicators…" :
+        _tartarusLedError ?? (_tartarusVerifiedLedMask == TartarusIndicatorMask
+            ? $"Keymap {SelectedTartarusKeymap} LEDs confirmed by device readback at last sync."
+            : $"Tappy keymap {SelectedTartarusKeymap} preview — physical LEDs not synchronized.");
+    public async Task SyncTartarusIndicatorsAsync()
+    {
+        if (!CanChangeTartarusKeymap) { return; }
+        _tartarusLedBusy = true; _tartarusLedError = null;
+        Raise(nameof(CanChangeTartarusKeymap)); Raise(nameof(TartarusIndicatorStatus));
+        try
+        {
+            var result = await _runtime.SyncTartarusIndicatorsAsync().ConfigureAwait(true);
+            if (!_isDisposed && _canChangeTartarusKeymap)
+            {
+                MappingStatus = result.Message;
+                _tartarusLedError = result.Succeeded ? null : result.Message;
+                // A failed operation must be explicitly retried, not repeated on every bank change.
+                if (!result.Succeeded) { TartarusFollowKeymaps = false; }
+            }
+        }
+        finally
+        {
+            _tartarusLedBusy = false;
+            Raise(nameof(CanChangeTartarusKeymap)); Raise(nameof(TartarusIndicatorStatus));
+        }
+    }
+    public async Task SelectTartarusKeymapAsync(int bank)
+    {
+        if (bank == _tartarusKeymap || !CanChangeTartarusKeymap) { return; }
+        var result = _runtime.SelectTartarusKeymap(bank);
+        MappingStatus = result.Message;
+        Raise(nameof(SelectedTartarusKeymap));
+        if (result.Succeeded)
+        {
+            if (TartarusFollowKeymaps) { await SyncTartarusIndicatorsAsync().ConfigureAwait(true); }
+            try
+            {
+                var saved = await _runtime.SaveProfileAsync().ConfigureAwait(true);
+                MappingStatus = saved.Succeeded ? $"Tartarus keymap {bank} selected and saved." : saved.Message;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            { MappingStatus = "The keymap changed, but the profile could not be saved. Use Save profile to retry. " + exception.Message; }
+        }
+    }
+    public string InputBankLabel { get => _inputBankLabel; private set => Set(ref _inputBankLabel, value); }
+    public bool HasInputBank => !string.IsNullOrEmpty(InputBankLabel);
+    public string NumLockLedBrush => _numLockOn switch { true => "#48FF63", false => "#122C19", null => "#696969" };
+    public string NumLockLedDescription => _numLockOn switch
+    {
+        true => "Last detected numeric report — not live LED readback",
+        false => "Last detected navigation report — not live LED readback",
+        null => "No numeric or navigation report detected yet"
+    };
     private string _pressedSummary = "None";
     private string _eventSummary = "No selected-device events retained";
     private string _status = "Tappy is not listening to a controller.";
@@ -59,6 +161,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private int _layoutColumns = 7;
     private int _layoutRows = 6;
     private bool _snapLayoutToGrid = true;
+    private bool _isLayoutLocked;
+    private double _zoom = 1.0;
+    private double _photoPaneWidth = 420;
     private TileColorChoice _selectedTileColor;
     private ControllerLedColorCapability? _controllerLedCapability;
     private double _layoutSurfaceWidth = LayoutCellWidth * 7;
@@ -93,6 +198,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
 
     public ObservableCollection<ControllerChoice> Devices { get; }
+    internal Func<ControllerChoice, string?>? IdentificationGuard { get; set; }
+    internal Func<string?>? NormalOutputGuard { get; set; }
     public ObservableCollection<ControlTileViewModel> Controls { get; }
     public ObservableCollection<ControllerPhotoHotspotViewModel> ControllerPhotoHotspots { get; }
     public IReadOnlyList<string> HarmlessOutputKeys { get; }
@@ -109,6 +216,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string GroupSelectionLabel => $"{GroupSelectedCount} selected";
     public bool HasSupportedTileColors => _controllerLedCapability?.SupportedColorKeys.Count > 1;
     public bool UsesGlobalTileColor => _controllerLedCapability?.Topology == ControllerLightingTopology.Global;
+    public bool HasFreeformColorSupport => _controllerLedCapability?.SupportsFreeformColor == true;
+    public bool HasAnimatableLighting => _controllerLedCapability is { } capability &&
+                                          LedGridAdapterCatalog.Find(capability.ModelId) is not null;
+    public bool HasOledDisplay => _controllerLedCapability?.ModelId == MidiControllerModelCatalog.AkaiFireV1Id;
     public string TileColorApplyButtonLabel => UsesGlobalTileColor ? "Preview whole device" : "Color selected";
     public string TileColorSyncButtonLabel => UsesGlobalTileColor ? "Sync G13 lighting" : "Sync supported LEDs";
     public string TileColorSyncToolTip => UsesGlobalTileColor
@@ -129,10 +240,34 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         set => Set(ref _layoutRows, Math.Clamp(value, 1, 40));
     }
 
+    // Per-controller, not per-window: each device tab has its own MainViewModel,
+    // so zoom and photo-pane width naturally stay independent per confirmed
+    // controller rather than leaking across tabs.
+    public double Zoom
+    {
+        get => _zoom;
+        set => Set(ref _zoom, Math.Clamp(value, 0.25, 2.0));
+    }
+
+    public double PhotoPaneWidth
+    {
+        get => _photoPaneWidth;
+        set => Set(ref _photoPaneWidth, Math.Clamp(value, 240, 1200));
+    }
+
     public bool SnapLayoutToGrid
     {
         get => _snapLayoutToGrid;
         set => Set(ref _snapLayoutToGrid, value);
+    }
+
+    // Per-controller, like Zoom/SnapLayoutToGrid above — once a layout is
+    // arranged the way the owner wants it, locking it stops accidental
+    // drags/resizes without affecting selection or color actions.
+    public bool IsLayoutLocked
+    {
+        get => _isLayoutLocked;
+        set => Set(ref _isLayoutLocked, value);
     }
 
     public double LayoutSurfaceWidth
@@ -164,6 +299,12 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         get => _isRehearsal;
         set
         {
+            if (!value && NormalOutputGuard?.Invoke() is { } refusal)
+            {
+                MappingStatus = refusal;
+                Raise(nameof(IsRehearsal));
+                return;
+            }
             if (_isRehearsal == value && _runtime.IsRehearsal == value)
             {
                 return;
@@ -205,6 +346,15 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         private set => Set(ref _isIdentificationCaptureActive, value);
     }
 
+    private bool _isWaitingForReconnect;
+    private bool _hasActiveDeviceTab;
+    public bool HasActiveDeviceTab { get => _hasActiveDeviceTab; private set => Set(ref _hasActiveDeviceTab, value); }
+    public bool IsWaitingForReconnect
+    {
+        get => _isWaitingForReconnect;
+        private set => Set(ref _isWaitingForReconnect, value);
+    }
+
     public string IdentificationStatus
     {
         get => _identificationStatus;
@@ -230,9 +380,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
 
     public string SelectedControlLabel => _selectedControl?.Label ?? "None";
-    public bool CanAssignSelectedControl => _selectedControl is not null;
+    public bool CanAssignSelectedControl => _selectedControl is { CanAssign: true } &&
+        _selectedControl.ControlId != TargusKeypadLayout.TripleZeroReference;
     public bool SelectedControlHasAssignment =>
-        _selectedControl is not null &&
+        _selectedControl is { CanAssign: true } &&
         !string.Equals(_selectedControl.Action, "Unassigned", StringComparison.OrdinalIgnoreCase);
     public string AssignmentEditorButtonLabel =>
         SelectedControlHasAssignment ? "Edit assignment…" : "Build an assignment…";
@@ -318,6 +469,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _runtime.RefreshDevices();
     }
 
+    public void PollRememberedReconnect()
+    {
+        if (!_isDisposed) { _runtime.PollRememberedReconnect(); }
+    }
+
     public void BeginIdentification()
     {
         if (SelectedDevice is null)
@@ -326,6 +482,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
+        if (IdentificationGuard?.Invoke(SelectedDevice) is { } refusal)
+        {
+            IdentificationStatus = refusal;
+            return;
+        }
         var result = _runtime.BeginIdentification(SelectedDevice);
         IdentificationStatus = result.Message;
         SynchronizeRuntimeModes();
@@ -359,6 +520,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
         _selectedControl = tile;
         tile.IsSelected = true;
+        Raise(nameof(SelectedIsCombination));
         Raise(nameof(SelectedControlLabel));
         Raise(nameof(CanAssignSelectedControl));
         Raise(nameof(SelectedControlHasAssignment));
@@ -455,6 +617,17 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public ControllerActionAssignment? GetSelectedControllerAction() =>
         _selectedControl is null ? null : _runtime.GetControllerAction(_selectedControl.ControlId);
 
+    public ControllerAssignmentEditContext? BeginSelectedAssignmentEdit()
+    {
+        var context = _selectedControl is null ? null : _runtime.BeginAssignmentEdit(_selectedControl.ControlId);
+        if (context is null)
+        {
+            MappingStatus = "Confirm the controller and select its control before editing an assignment.";
+        }
+
+        return context;
+    }
+
     public async Task ReorderControlsAsync(
         ControlTileViewModel source,
         ControlTileViewModel target,
@@ -514,12 +687,24 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public IReadOnlyList<ControlTileViewModel> PrepareGroupDrag(ControlTileViewModel tile)
     {
         ArgumentNullException.ThrowIfNull(tile);
-        if (!tile.IsGroupSelected)
+        if (tile.IsGroupSelected)
         {
-            ClearGroupSelection();
-            SetGroupSelection(tile, true);
+            return Controls.Where(item => item.IsGroupSelected).ToArray();
         }
 
+        // An encoder's three tiles (increase/touch/decrease) are drawn as one
+        // concentric cluster sharing one bounding box — dragging any one of
+        // them must move all three together, or the cluster would visually
+        // fall apart. This doesn't touch IsGroupSelected/the checkbox UI, so
+        // it stays invisible plumbing rather than lighting up the
+        // group-select toolbar for an ordinary encoder drag.
+        if (tile.ClusterId is { } clusterId)
+        {
+            return Controls.Where(item => item.ClusterId == clusterId).ToArray();
+        }
+
+        ClearGroupSelection();
+        SetGroupSelection(tile, true);
         return Controls.Where(item => item.IsGroupSelected).ToArray();
     }
 
@@ -639,14 +824,20 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
         var selectedTargets = Controls.Where(tile => tile.IsGroupSelected).ToArray();
         var targets = selectedTargets.Where(tile => tile.CanUseHardwareColor).ToArray();
-        if (targets.Length == 0 && _selectedControl is not null)
+        // Only fall back to the single focused control when nothing is checked at
+        // all. If the user explicitly checked a group that just turned out to have
+        // no addressable members, silently recoloring some unrelated tile that
+        // still happens to hold focus is more surprising than doing nothing.
+        if (selectedTargets.Length == 0 && _selectedControl is not null)
         {
             targets = _selectedControl.CanUseHardwareColor ? [_selectedControl] : [];
         }
 
         if (targets.Length == 0)
         {
-            MappingStatus = "Select a color-addressable controller control. Non-lighted and fixed-color controls keep their photographed appearance.";
+            MappingStatus = selectedTargets.Length > 0
+                ? $"None of the {selectedTargets.Length} selected squares are color-addressable on this controller. Non-lighted and fixed-color controls keep their photographed appearance."
+                : "Select a color-addressable controller control. Non-lighted and fixed-color controls keep their photographed appearance.";
             return;
         }
 
@@ -659,6 +850,56 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         var skipped = Math.Max(0, selectedTargets.Length - targets.Length);
         MappingStatus = $"Applied {SelectedTileColor.Label} to {targets.Length} color-addressable square{(targets.Length == 1 ? string.Empty : "s")} and saved the controller layout." +
                         (skipped > 0 ? $" Kept {skipped} non-addressable control{(skipped == 1 ? string.Empty : "s")} unchanged." : string.Empty);
+    }
+
+    /// <summary>
+    /// Bulk-sets TileWidth/TileHeight for every checked (group-selected)
+    /// tile, falling back to the single focused control when nothing is
+    /// checked — the same selection-resolution rule
+    /// ApplySelectedTileColorAsync already establishes for "Color
+    /// selected." Excludes any encoder cluster member
+    /// (ControlTileViewModel.IsEncoderClusterMember): resizing one third of
+    /// a concentric ring cluster independently would desync the shared
+    /// bounding box the three parts depend on, the same reasoning D-038
+    /// used to hide their per-tile resize Thumb.
+    /// </summary>
+    public async Task ResizeGroupSelectionAsync(
+        double width, double height, CancellationToken cancellationToken = default)
+    {
+        if (!double.IsFinite(width) || !double.IsFinite(height))
+        {
+            return;
+        }
+
+        var clampedWidth = Math.Clamp(width, MinimumTileSize, 600);
+        var clampedHeight = Math.Clamp(height, MinimumTileSize, 400);
+
+        var selectedTargets = Controls.Where(tile => tile.IsGroupSelected).ToArray();
+        var targets = selectedTargets.Where(tile => !tile.IsEncoderClusterMember).ToArray();
+        if (selectedTargets.Length == 0 && _selectedControl is not null)
+        {
+            targets = _selectedControl.IsEncoderClusterMember ? [] : [_selectedControl];
+        }
+
+        if (targets.Length == 0)
+        {
+            MappingStatus = selectedTargets.Length > 0
+                ? $"None of the {selectedTargets.Length} selected squares can be resized independently — an encoder's ring cluster shares one size with its other parts."
+                : "Select one or more squares to resize.";
+            return;
+        }
+
+        foreach (var tile in targets)
+        {
+            tile.TileWidth = clampedWidth;
+            tile.TileHeight = clampedHeight;
+            EnsureLayoutSurface(tile.X + tile.TileWidth + 10, tile.Y + tile.TileHeight + 10);
+        }
+
+        await SaveControllerLayoutAsync(cancellationToken).ConfigureAwait(true);
+        var skipped = Math.Max(0, selectedTargets.Length - targets.Length);
+        MappingStatus = $"Resized {targets.Length} square{(targets.Length == 1 ? string.Empty : "s")} to {clampedWidth:0}×{clampedHeight:0} and saved the controller layout." +
+                        (skipped > 0 ? $" Kept {skipped} encoder ring part{(skipped == 1 ? string.Empty : "s")} unchanged." : string.Empty);
     }
 
     public void SyncTileColorsToHardware()
@@ -692,6 +933,24 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         MappingStatus = result.Message;
     }
 
+    /// <summary>
+    /// Sends a fixed diagnostic pattern to a confirmed Fire's OLED — the very
+    /// first real use of this SysEx sub-command against hardware. Deliberately
+    /// not a general drawing API yet; see DeviceAwareControllerRuntime.
+    /// SendFireOledDiagnosticPattern and docs/AKAI_FIRE.md.
+    /// </summary>
+    public void SendOledTestPattern()
+    {
+        if (!HasOledDisplay)
+        {
+            MappingStatus = "This controller has no Tappy-supported OLED display.";
+            return;
+        }
+
+        var result = _runtime.SendFireOledDiagnosticPattern();
+        MappingStatus = result.Message;
+    }
+
     public void ResizeControl(ControlTileViewModel tile, double horizontalChange, double verticalChange)
     {
         ArgumentNullException.ThrowIfNull(tile);
@@ -721,50 +980,70 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    public async Task ApplyLayoutWorkspaceAsync(
-        bool arrangeAsGrid,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The tight bounding box of the currently placed tiles — deliberately
+    /// NOT LayoutSurfaceWidth/Height, which is a grow-only high-water mark
+    /// (see EnsureLayoutSurface) that also grows to match the viewport's own
+    /// size on every resize (ControllerLayoutViewport_OnSizeChanged) and
+    /// never shrinks back down from ordinary dragging. Fitting/filling the
+    /// viewport to that stale, often-viewport-sized number was a near
+    /// no-op regardless of how compact the actual arrangement was; this is
+    /// what Fit/Fill to view should measure against instead.
+    /// </summary>
+    public (double Width, double Height) GetLayoutContentBounds() =>
+        Controls.Count == 0
+            ? (LayoutSurfaceWidth, LayoutSurfaceHeight)
+            : (Controls.Max(tile => tile.X + tile.TileWidth) + 10, Controls.Max(tile => tile.Y + tile.TileHeight) + 10);
+
+    public async Task ArrangeLayoutAsGridAsync(CancellationToken cancellationToken = default)
     {
-        if (arrangeAsGrid)
+        LayoutRows = Math.Max(LayoutRows, (int)Math.Ceiling(Controls.Count / (double)LayoutColumns));
+        for (var index = 0; index < Controls.Count; index++)
         {
-            LayoutRows = Math.Max(LayoutRows, (int)Math.Ceiling(Controls.Count / (double)LayoutColumns));
-            for (var index = 0; index < Controls.Count; index++)
-            {
-                var tile = Controls[index];
-                tile.X = (index % LayoutColumns) * LayoutCellWidth;
-                tile.Y = (index / LayoutColumns) * LayoutCellHeight;
-                tile.TileWidth = DefaultTileWidth;
-                tile.TileHeight = DefaultTileHeight;
-            }
+            var tile = Controls[index];
+            tile.X = (index % LayoutColumns) * LayoutCellWidth;
+            tile.Y = (index / LayoutColumns) * LayoutCellHeight;
+            var natural = NaturalTileSize(tile);
+            tile.TileWidth = natural.Width;
+            tile.TileHeight = natural.Height;
         }
 
         RecalculateLayoutSurface();
         await SaveControllerLayoutAsync(cancellationToken).ConfigureAwait(true);
     }
 
-    public async Task SaveControllerLayoutAsync(CancellationToken cancellationToken = default)
+    // Pushes the viewmodel's current layout state (tile placements, Zoom,
+    // PhotoPaneWidth, ...) into the runtime's in-memory layout only — no disk
+    // write. This must happen synchronously and immediately whenever any of that
+    // state changes, not just when SaveControllerLayoutAsync eventually runs:
+    // Runtime_OnStateChanged fires on essentially any runtime event (a control
+    // press, a bank change, ...) and re-reads GetControllerLayout() to resync this
+    // viewmodel. If Zoom/PhotoPaneWidth were only pushed into the runtime at the
+    // end of a debounce/await, any such event in that window would stomp the
+    // viewmodel's newer value back to the runtime's still-stale one.
+    private RuntimeOperation? ApplyControllerLayoutToRuntime()
     {
         var current = _runtime.GetControllerLayout();
         if (current is null)
         {
-            MappingStatus = "Confirm a controller before saving its layout.";
-            return;
+            return null;
         }
 
-        var natural = current.Controls.ToDictionary(control => control.ControlId, StringComparer.Ordinal);
+        var runtimeControls = current.Controls.ToDictionary(control => control.ControlId, StringComparer.Ordinal);
         var placements = Controls
-            .Where(tile => natural.ContainsKey(tile.ControlId))
+            .Where(tile => runtimeControls.ContainsKey(tile.ControlId))
             .Select(tile =>
             {
-                var source = natural[tile.ControlId];
+                var source = runtimeControls[tile.ControlId];
+                var naturalSize = NaturalTileSize(tile);
                 return new ControllerControlPlacement(
                     tile.ControlId,
                     source.NaturalRow,
                     source.NaturalColumn,
                     tile.X,
                     tile.Y,
-                    tile.TileWidth / DefaultTileWidth,
-                    tile.TileHeight / DefaultTileHeight,
+                    tile.TileWidth / naturalSize.Width,
+                    tile.TileHeight / naturalSize.Height,
                     tile.ColorKey,
                     tile.AnalogRawAtMinimum,
                     tile.AnalogRawAtMaximum,
@@ -773,11 +1052,31 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
                     tile.EncoderReversed);
             })
             .ToArray();
-        var result = _runtime.UpdateControllerLayout(new ControllerLayoutWorkspace(
+        return _runtime.UpdateControllerLayout(new ControllerLayoutWorkspace(
             LayoutColumns,
             LayoutRows,
             SnapLayoutToGrid,
-            placements));
+            placements,
+            Zoom,
+            PhotoPaneWidth,
+            IsLayoutLocked));
+    }
+
+    // Call immediately (synchronously, same call as the property change) whenever
+    // Zoom or PhotoPaneWidth changes outside of a full SaveControllerLayoutAsync,
+    // e.g. on every zoom-wheel tick, before any debounced disk save runs. See
+    // ApplyControllerLayoutToRuntime for why this cannot wait.
+    public void SyncLayoutPresentationToRuntime() => ApplyControllerLayoutToRuntime();
+
+    public async Task SaveControllerLayoutAsync(CancellationToken cancellationToken = default)
+    {
+        var result = ApplyControllerLayoutToRuntime();
+        if (result is null)
+        {
+            MappingStatus = "Confirm a controller before saving its layout.";
+            return;
+        }
+
         if (!result.Succeeded)
         {
             MappingStatus = result.Message;
@@ -889,21 +1188,55 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         MappingStatus = result.Message;
     }
 
+    public RuntimeOperation AssignKeyboardMapping(
+        ControllerAssignmentTarget target,
+        KeyboardMappingAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(assignment);
+        var result = _runtime.AssignKeyboardMapping(target, assignment);
+        CompleteTargetedAssignment(target, assignment.Name, result);
+        return result;
+    }
+
+    public RuntimeOperation AssignControllerAction(
+        ControllerAssignmentTarget target,
+        ControllerActionAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(assignment);
+        var result = _runtime.AssignControllerAction(target, assignment);
+        CompleteTargetedAssignment(target, assignment.Name, result);
+        return result;
+    }
+
+    private void CompleteTargetedAssignment(
+        ControllerAssignmentTarget target,
+        string name,
+        RuntimeOperation result)
+    {
+        MappingStatus = result.Message;
+        var visualId = target.ControlId;
+        if (result.Succeeded && _tiles.TryGetValue(visualId, out var tile))
+        {
+            tile.Action = name;
+            Raise(nameof(SelectedControlHasAssignment));
+            Raise(nameof(AssignmentEditorButtonLabel));
+        }
+    }
+
+    // Windows shutdown synchronously waits for persistence on the dispatcher.
+    // Return the runtime's context-free task without any UI continuation.
+    internal Task<RuntimeOperation> SaveProfileForShutdownAsync(CancellationToken cancellationToken = default) =>
+        _runtime.SaveProfileAsync(cancellationToken);
+
     public RuntimeOperation EmergencyStop(string reason)
     {
         var result = _runtime.EmergencyStop(reason);
         SynchronizeRuntimeModes();
         SynchronizeRuntimeActivation();
         Status = result.Message;
-        _pendingVisuals.Clear();
-        _illuminationStates.Clear();
-        foreach (var tile in Controls)
-        {
-            tile.IsPressed = false;
-            tile.IsIlluminated = false;
-        }
-
-        PressedSummary = "None";
+        ClearControls();
         return result;
     }
 
@@ -932,7 +1265,16 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         Devices.Clear();
         foreach (var device in _runtime.Devices)
         {
-            Devices.Add(device);
+            var name = TargusKeypadLayout.Matches(device.ProviderId, device.VendorId, device.ProductId)
+                ? "Targus PAUK10U number pad" : device.DisplayName;
+            var sameModelCount = _runtime.Devices.Count(other => other.ProviderId == device.ProviderId &&
+                other.VendorId == device.VendorId && other.ProductId == device.ProductId && other.DisplayName == device.DisplayName);
+            if (sameModelCount > 1)
+            {
+                name += $" · ID {device.DeviceTag}";
+            }
+            if (device.IsProtectedForTyping) { name += " · protected typing"; }
+            Devices.Add(device with { DisplayName = name });
         }
 
         SelectedDevice = selectedSession is null
@@ -988,6 +1330,14 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (!_tiles.TryGetValue(update.ControlId, out var tile))
         {
+            // The runtime may have just appended a learned report with an explicit
+            // collision-free position. Refresh before creating its tile instead of
+            // letting a stale cache fall back to collection-index coordinates.
+            if (_runtime.GetControllerLayout() is { } workspace)
+            {
+                foreach (var placement in workspace.Controls)
+                { _layoutPlacements[placement.ControlId] = placement; }
+            }
             var index = Controls.Count;
             tile = new ControlTileViewModel
             {
@@ -1001,23 +1351,26 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             Controls.Add(tile);
             SynchronizeTileColorCapability(tile);
             ApplyControlPlacement(tile);
+            RecalculateLayoutSurface();
         }
 
         EnsurePhotoHotspot(tile);
         ApplyAnalogControlUpdate(tile, update);
 
         tile.IsPressed = update.IsPressed;
+        tile.CanAssign = update.CanAssign;
         UpdateIllumination(tile, update);
         tile.Action = update.AssignedAction;
         if (ReferenceEquals(tile, _selectedControl))
         {
             Raise(nameof(SelectedControlHasAssignment));
             Raise(nameof(AssignmentEditorButtonLabel));
+            Raise(nameof(CanAssignSelectedControl));
             Raise(nameof(SelectedAnalogValueText));
             Raise(nameof(SelectedAnalogCalibrationText));
             Raise(nameof(SelectedEncoderCalibrationText));
         }
-        if (update.IsPressed && !update.IsRepeat)
+        if (update.IsPressed && !update.IsRepeat && !update.IsSnapshot)
         {
             SelectControl(tile);
         }
@@ -1086,16 +1439,42 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         IdentificationStatus = state.IdentificationStatus;
         ActiveControllerLabel = state.ActiveControllerLabel;
         ActiveLayerName = state.ActiveLayerName;
+        _bankEndpoint = _runtime.GetBankEndpoint();
+        Raise(nameof(BankChoices)); Raise(nameof(SelectedBankId)); Raise(nameof(CanChangeBank));
+        _tartarusKeymap = state.TartarusKeymap;
+        _tartarusVerifiedLedMask = state.TartarusVerifiedLedMask;
+        _tartarusLedError = null;
+        _canChangeTartarusKeymap = state.IsConfirmed && HasTartarusKeymaps;
+        if (!_canChangeTartarusKeymap) { TartarusFollowKeymaps = false; }
+        Raise(nameof(HasTartarusKeymaps)); Raise(nameof(CanChangeTartarusKeymap)); Raise(nameof(SelectedTartarusKeymap));
+        Raise(nameof(TartarusYellowLed)); Raise(nameof(TartarusGreenLed)); Raise(nameof(TartarusBlueLed));
+        Raise(nameof(TartarusIndicatorStatus));
+        InputBankLabel = state.InputBankLabel ?? string.Empty;
+        _numLockOn = state.NumLockOn;
+        Raise(nameof(HasInputBank));
+        Raise(nameof(NumLockLedBrush));
+        Raise(nameof(NumLockLedDescription));
         MappingStatus = state.MappingStatus;
         Status = state.Status;
         EffectiveSourceLabel = state.EffectiveSourceLabel;
-        SynchronizeTileColorChoices(state.IsConfirmed);
+        var hasPresentation = state.IsConfirmed || state.IsRememberedReconnect || state.IsLifecyclePaused;
+        SynchronizeTileColorChoices(hasPresentation);
         SynchronizeControllerPhoto(state);
-        SynchronizeControllerLayout(state.IsConfirmed);
-        if (!state.IsConfirmed && !state.IsIdentificationCaptureActive)
+        SynchronizeControllerLayout(hasPresentation);
+        if (state.IsLifecyclePaused && state.RetainedControls is { } retainedControls)
         {
-            ClearPressedVisuals();
+            // A queued lock state may have cleared coalesced visuals before this
+            // sleep state reaches the UI. Its own released snapshot restores them.
+            foreach (var update in retainedControls) { ApplyControlUpdate(update); }
         }
+        if (!hasPresentation && !state.IsIdentificationCaptureActive)
+        {
+            // Disarming clears the live presentation, not the saved controller profile.
+            ClearControls();
+        }
+        // Publish visibility only after the disconnected presentation is cleared.
+        IsWaitingForReconnect = state.IsWaitingForReconnect;
+        HasActiveDeviceTab = hasPresentation || state.IsIdentificationCaptureActive;
     });
 
     private void SynchronizeRuntimeModes()
@@ -1116,12 +1495,13 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void SynchronizeControllerPhoto(RuntimeState state)
     {
-        var next = state.IsConfirmed
+        var next = state.IsConfirmed || state.IsRememberedReconnect || state.IsLifecyclePaused
             ? ControllerPhotoCatalog.Find(
                 state.ActiveControllerProviderId,
                 state.ActiveControllerVendorId,
                 state.ActiveControllerProductId,
-                state.ActiveControllerLabel)
+                state.ActiveControllerLabel,
+                state.ActiveControllerPresentationModelId)
             : null;
         if (string.Equals(_activeControllerPhoto?.Id, next?.Id, StringComparison.Ordinal))
         {
@@ -1161,6 +1541,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         LayoutColumns = workspace.GridColumns;
         LayoutRows = workspace.GridRows;
         SnapLayoutToGrid = workspace.SnapToGrid;
+        Zoom = workspace.Zoom;
+        PhotoPaneWidth = workspace.PhotoPaneWidth;
+        IsLayoutLocked = workspace.IsLayoutLocked;
         foreach (var placement in workspace.Controls)
         {
             _layoutPlacements[placement.ControlId] = placement;
@@ -1198,19 +1581,44 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (!_layoutPlacements.TryGetValue(tile.ControlId, out var placement))
         {
+            // No saved placement yet (a brand-new control) — start at this
+            // control's own correctly-shaped size rather than the plain
+            // rectangular default.
+            var (naturalWidth, naturalHeight) = NaturalTileSize(tile);
+            tile.TileWidth = naturalWidth;
+            tile.TileHeight = naturalHeight;
             return;
         }
 
         tile.X = placement.X ?? placement.NaturalColumn * LayoutCellWidth;
         tile.Y = placement.Y ?? placement.NaturalRow * LayoutCellHeight;
-        tile.TileWidth = Math.Clamp(placement.Width * DefaultTileWidth, MinimumTileSize, 600);
-        tile.TileHeight = Math.Clamp(placement.Height * DefaultTileHeight, MinimumTileSize, 400);
+        var natural = NaturalTileSize(tile);
+        tile.TileWidth = Math.Clamp(placement.Width * natural.Width, MinimumTileSize, 600);
+        tile.TileHeight = Math.Clamp(placement.Height * natural.Height, MinimumTileSize, 400);
         tile.AnalogRawAtMinimum = placement.AnalogRawAtMinimum;
         tile.AnalogRawAtMaximum = placement.AnalogRawAtMaximum;
         tile.AnalogRawAtCenter = placement.AnalogRawAtCenter;
         tile.EncoderDegreesPerStep = placement.EncoderDegreesPerStep;
         tile.EncoderReversed = placement.EncoderReversed;
         ApplyTileColor(tile, UsesGlobalTileColor ? SelectedTileColor.Key : placement.ColorKey);
+    }
+
+    /// <summary>
+    /// Live preview for an in-progress LED animation tick — reuses the same
+    /// per-tile color application every one-off apply already uses, but
+    /// deliberately never calls SaveControllerLayoutAsync. An animation can tick
+    /// up to ~15 times a second; treating every tick as a profile edit would turn
+    /// playback into a stream of disk writes.
+    /// </summary>
+    internal void ApplyAnimationPreviewColors(IReadOnlyDictionary<string, string> colorsByControlId)
+    {
+        foreach (var tile in Controls)
+        {
+            if (colorsByControlId.TryGetValue(tile.ControlId, out var color))
+            {
+                ApplyTileColor(tile, color);
+            }
+        }
     }
 
     private void ApplyTileColor(ControlTileViewModel tile, string? colorKey)
@@ -1221,9 +1629,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         var supportedKey = ResolveSupportedColorKey(colorKey);
-        var choice = TileColorChoices.FirstOrDefault(item =>
-                         string.Equals(item.Key, supportedKey, StringComparison.OrdinalIgnoreCase)) ??
-                     TileColorChoices[0];
+        var choice = IsHexColor(supportedKey)
+            ? BuildCustomColorChoice(supportedKey)
+            : TileColorChoices.FirstOrDefault(item =>
+                  string.Equals(item.Key, supportedKey, StringComparison.OrdinalIgnoreCase)) ??
+              TileColorChoices[0];
         tile.ColorKey = choice.Key;
         tile.TileBackground = choice.Background;
         tile.TileForeground = choice.Foreground;
@@ -1231,6 +1641,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void SynchronizeTileColorChoices(bool isConfirmed)
     {
+        var previousModelId = _controllerLedCapability?.ModelId;
+        var previousCustomSelection = HasFreeformColorSupport && IsHexColor(_selectedTileColor.Key)
+            ? _selectedTileColor.Key
+            : null;
         _controllerLedCapability = isConfirmed ? _runtime.GetControllerLedColorCapability() : null;
         var supportedKeys = HasSupportedTileColors
             ? _controllerLedCapability!.SupportedColorKeys
@@ -1251,17 +1665,84 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             TileColorChoices.Add(AllTileColorChoices[0]);
         }
 
-        SelectedTileColor = TileColorChoices[0];
+        // A custom color the user just picked but has not yet applied/synced must
+        // survive an unrelated runtime event resyncing this list — otherwise it is
+        // the same "stomping" bug class as the per-tab zoom fix (see D-019):
+        // background noise would silently discard an armed, unapplied selection.
+        if (previousCustomSelection is not null && HasFreeformColorSupport &&
+            _controllerLedCapability?.ModelId == previousModelId)
+        {
+            var restored = BuildCustomColorChoice(previousCustomSelection);
+            TileColorChoices.Add(restored);
+            SelectedTileColor = restored;
+        }
+        else
+        {
+            SelectedTileColor = TileColorChoices[0];
+        }
+
         foreach (var tile in Controls)
         {
             SynchronizeTileColorCapability(tile);
         }
         Raise(nameof(HasSupportedTileColors));
         Raise(nameof(UsesGlobalTileColor));
+        Raise(nameof(HasFreeformColorSupport));
+        Raise(nameof(HasAnimatableLighting));
+        Raise(nameof(HasOledDisplay));
         Raise(nameof(TileColorApplyButtonLabel));
         Raise(nameof(TileColorSyncButtonLabel));
         Raise(nameof(TileColorSyncToolTip));
         Raise(nameof(TileColorAvailabilityLabel));
+    }
+
+    /// <summary>
+    /// Applies an arbitrary "#RRGGBB" color picked in the custom color dialog.
+    /// Only the Akai Fire currently advertises freeform color support; other
+    /// controllers keep their fixed, physically-verified named palette.
+    /// </summary>
+    public void SelectCustomColor(string hex)
+    {
+        if (!HasFreeformColorSupport || !IsHexColor(hex))
+        {
+            return;
+        }
+
+        var choice = BuildCustomColorChoice(hex);
+        var existingIndex = -1;
+        for (var i = 0; i < TileColorChoices.Count; i++)
+        {
+            if (IsHexColor(TileColorChoices[i].Key)) { existingIndex = i; break; }
+        }
+
+        if (existingIndex >= 0) { TileColorChoices[existingIndex] = choice; }
+        else { TileColorChoices.Add(choice); }
+        SelectedTileColor = choice;
+    }
+
+    internal static bool IsHexColor(string? value) =>
+        value is { Length: 7 } && value[0] == '#' && value.Skip(1).All(Uri.IsHexDigit);
+
+    internal static bool TryParseHexColor(string? value, out byte red, out byte green, out byte blue)
+    {
+        red = green = blue = 0;
+        if (!IsHexColor(value))
+        {
+            return false;
+        }
+
+        red = Convert.ToByte(value!.Substring(1, 2), 16);
+        green = Convert.ToByte(value.Substring(3, 2), 16);
+        blue = Convert.ToByte(value.Substring(5, 2), 16);
+        return true;
+    }
+
+    internal static TileColorChoice BuildCustomColorChoice(string hex)
+    {
+        TryParseHexColor(hex, out var red, out var green, out var blue);
+        var luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255.0;
+        var foreground = luminance > 0.55 ? "#171B22" : "#F7FAFC";
+        return new TileColorChoice(hex, hex, hex, foreground);
     }
 
     private void SynchronizeTileColorCapability(ControlTileViewModel tile)
@@ -1278,6 +1759,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private string ResolveSupportedColorKey(string? colorKey)
     {
         var requested = string.IsNullOrWhiteSpace(colorKey) ? "Default" : colorKey.Trim();
+        if (HasFreeformColorSupport && IsHexColor(requested))
+        {
+            return requested;
+        }
+
         if (TileColorChoices.Any(choice => string.Equals(choice.Key, requested, StringComparison.OrdinalIgnoreCase)))
         {
             return requested;
@@ -1306,6 +1792,66 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             Controls.Select(tile => tile.Y + tile.TileHeight + 10).DefaultIfEmpty(0).Max());
     }
 
+    /// <summary>
+    /// The tile size a control gets before any user resizing — the real
+    /// measured photo hotspot's width/height scaled up by
+    /// PhotoShapeTileScale, or the plain DefaultTileWidth/Height for a
+    /// control with no measured photo data. Saved placements store a
+    /// multiplier against this (see ApplyControlPlacement/
+    /// ApplyControllerLayoutToRuntime), so an untouched tile's saved 1.0x
+    /// automatically follows this shape, and a tile the owner explicitly
+    /// resized to e.g. 1.5x stays 1.5x its own correct shape.
+    /// Scoped to grid-style LED controllers (HasAnimatableLighting — Fire/APC
+    /// MINI) only: Targus, the Microsoft Number Pad, and other keyboard-class
+    /// devices also carry real measured photo hotspots (tightly packed key
+    /// geometry, not a spaced-out pad grid), so applying this to them would
+    /// scale their tiles into overlapping each other.
+    /// </summary>
+    private (double Width, double Height) NaturalTileSize(ControlTileViewModel tile)
+    {
+        if (!HasAnimatableLighting || _activeControllerPhoto is null ||
+            !_activeControllerPhoto.Hotspots.TryGetValue(tile.ControlId, out var definition))
+        {
+            return (DefaultTileWidth, DefaultTileHeight);
+        }
+
+        var scale = TryGetEncoderClusterRole(definition) is null ? PhotoShapeTileScale : EncoderClusterTileScale;
+        return (definition.Width * scale, definition.Height * scale);
+    }
+
+    /// <summary>
+    /// Which of a rotary encoder's three overlapping tiles this hotspot is,
+    /// or null for an ordinary (non-encoder) control. Reuses
+    /// ControllerPhotoCatalog's existing VisualId aliasing — the
+    /// clockwise/increase hotspot is the canonical entry (no VisualId, so
+    /// EffectiveVisualId == its own ControlId, Kind == RotaryEncoder); the
+    /// counter-clockwise/decrease hotspot (Kind == RotaryEncoder) and the
+    /// touch hotspot (Kind == Button) both point their VisualId back at it —
+    /// no new authoring, just reading the shape already measured for the
+    /// photo locator. Deliberately independent of tile.ClusterId/RingRole
+    /// (which EnsurePhotoHotspot sets from this same result) so sizing works
+    /// correctly even when called before EnsurePhotoHotspot has run for a
+    /// brand-new tile.
+    /// </summary>
+    private EncoderRingRole? TryGetEncoderClusterRole(ControllerPhotoHotspotDefinition definition)
+    {
+        if (_activeControllerPhoto is null ||
+            !_activeControllerPhoto.Hotspots.TryGetValue(definition.EffectiveVisualId, out var canonical) ||
+            canonical.Kind != ControllerPhotoControlKind.RotaryEncoder)
+        {
+            return null;
+        }
+
+        if (string.Equals(definition.ControlId, definition.EffectiveVisualId, StringComparison.Ordinal))
+        {
+            return EncoderRingRole.IncreaseHalf;
+        }
+
+        return definition.Kind == ControllerPhotoControlKind.RotaryEncoder
+            ? EncoderRingRole.DecreaseHalf
+            : EncoderRingRole.Center;
+    }
+
     private void EnsurePhotoHotspot(ControlTileViewModel tile)
     {
         if (_activeControllerPhoto is null ||
@@ -1313,6 +1859,22 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         {
             return;
         }
+
+        // Reuses the same measured photo shape the locator hotspot renders
+        // with — a knob/round button (Ellipse) gets a tile that looks round
+        // too, instead of every tile being the same plain rectangle
+        // regardless of what the physical control actually looks like.
+        tile.CornerRadius = definition.Shape == ControllerPhotoHotspotShape.Ellipse ? 999 : 2;
+
+        var clusterRole = TryGetEncoderClusterRole(definition);
+        tile.ClusterId = clusterRole is null ? null : definition.EffectiveVisualId;
+        tile.RingRole = clusterRole ?? EncoderRingRole.None;
+        tile.RingGlyph = clusterRole switch
+        {
+            EncoderRingRole.IncreaseHalf => "▲",
+            EncoderRingRole.DecreaseHalf => "▼",
+            _ => string.Empty,
+        };
 
         if (_photoHotspotsByVisualId.TryGetValue(definition.EffectiveVisualId, out var existing))
         {
@@ -1453,19 +2015,6 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         EventSummary = "No selected-device events retained";
         Raise(nameof(GroupSelectedCount));
         Raise(nameof(GroupSelectionLabel));
-    }
-
-    private void ClearPressedVisuals()
-    {
-        _pendingVisuals.Clear();
-        _illuminationStates.Clear();
-        foreach (var tile in Controls)
-        {
-            tile.IsPressed = false;
-            tile.IsIlluminated = false;
-        }
-
-        PressedSummary = "None";
     }
 
     public async ValueTask DisposeAsync()

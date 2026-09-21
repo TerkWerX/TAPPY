@@ -26,17 +26,17 @@ Windows MIDI short messages, and typed OSC/UDP messages. The same complete assig
 builder is used whether the selected source is a keyboard key, G13 control, or MIDI
 note/pad/CC direction/program change. Assignments can run once
 on press or release, remain owned until release, or repeat while held. The milestone witness still uses
-the deliberately harmless F24 mapping. The Release solution build passes with zero
-warnings or errors; 396 current automated tests pass
-(Core 58, Windows 135, App 109, Input Broker 16, G13 HIL tool 25, Output Witness 53). Exact package and
+the deliberately harmless F24 mapping. The 2026-09-21 Debug solution build passes with zero
+warnings or errors; 925 current automated tests pass
+(Core 151, Windows 279, App 392, Input Broker 16, G13 HIL tool 25, Output Witness 62). Exact package and
 physical evidence boundaries are in [testing](docs/TESTING.md). The attended
 [first-milestone operator run](docs/FIRST_MILESTONE_OPERATOR_RUN.md) defines the
 finite Targus witness; its
 [fillable evidence record](docs/FIRST_MILESTONE_RECORD_TEMPLATE.md) keeps every
 physical check pending until observed. Broader K15, Tartarus, and G13 promotion is
 separate. The exact physical G13 has now passed the finite attended 39-control input
-verifier; mapped-output, pass-through, reconnect, and full Controller Passport checks
-remain pending.
+verifier and a separate one-control G1-to-F24 mapped-output witness; pass-through,
+reconnect/recovery, and full Controller Passport checks remain pending.
 
 Descriptor-only evidence now shows the attached K15 as one four-interface
 `1A2C:2D43` keyboard group, the user-identified Targus numberpad candidate as one
@@ -45,9 +45,9 @@ Descriptor-only evidence now shows the attached K15 as one four-interface
 `FF00:0000` group with 39 code-defined controls in a stable tile grid. For this exact
 identity, the grid sits beside an owner-supplied G13 photo whose matching control
 glows when its square is selected or its physical input is pressed.
-No complete Controller Passport or full mapping-output HIL run has completed for
-these devices; all remain below Functional/Verified. The G13 additionally has a
-passing finite armed input-functional record. See the
+No complete Controller Passport has been completed for these devices; all remain
+below Functional/Verified. The G13 additionally has passing finite input-functional
+and one-control mapped-output records. See the
 [G13 support boundary](docs/LOGITECH_G13.md).
 
 Windows currently enumerates the attached APC MINI through Tappy's native WinMM
@@ -60,6 +60,33 @@ failure, model-name isolation, and full action-pipeline routing are covered by
 deterministic tests. The spot check is not a finite all-control HIL record, so the
 device remains below Functional/Verified. See the
 [APC MINI v1 support boundary](docs/AKAI_APC_MINI_V1.md).
+
+Akai Fire support is research-stage: a Fire is connected and enumerated on
+TESTBED (USB `09E8:0043`, exact WinMM name `FL STUDIO FIRE`, both confirmed by
+direct enumeration). A code-defined 99-control surface (20 buttons, the 64-pad
+grid, and 5 touch/relative-rotation encoders) publishes immediately on
+confirmation, with the encoders isolated on their own row above the pads and a
+gap column separating Mute/Solo from the pad grid, and a processed photo locator
+covering the buttons and pads, all covered by deterministic tests. The owner has
+physically pressed/turned every button, pad, and encoder through Tappy's generic
+MIDI learn path, independently confirming the researched note/CC numbers and the
+encoders' relative-rotation behavior against real hardware. `WinMmMidiOutput` now
+supports SysEx (not just short MIDI messages), with the native buffer-lifetime
+handling isolated behind a testable backend; Fire pad RGB lighting is implemented
+on top of it, offering both a curated starter palette and a full arbitrary-RGB
+picker (hex entry and sliders) over the same SysEx encoder, both physically
+confirmed working, including several custom colors across more than one pad.
+A second, simultaneously-connected Fire is also recognized (its WinMM name
+carries a leading-number prefix, confirmed against two real units), and a
+longer-lived bug where a Fire confirmed before the encoder/pad-grid
+separation kept its stale, scrambled layout forever has been fixed. Button/
+rectangle/bank LEDs and the OLED display are
+researched but not implemented. A first LED-animation milestone (procedural
+effects — rainbow wave, chase, breathe, sparkle, color wipe — saved in a named
+library with adjustable playback speed) is implemented for the Fire and APC
+MINI but not yet physically confirmed; see
+[LED animations](docs/LED_ANIMATIONS.md). See the
+[Fire support boundary](docs/AKAI_FIRE.md).
 
 The owner has authorized the source, documentation, and CI configuration for the
 public `TerkWerX/TAPPY` repository and approved the supplied tattooed-hand Tappy

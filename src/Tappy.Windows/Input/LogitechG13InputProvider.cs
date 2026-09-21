@@ -550,6 +550,7 @@ public sealed class LogitechG13InputProvider : IInputDeviceProvider, IWindowsLif
                     {
                         Kind = ControlSignalKind.Release,
                         Timestamp = _timestampProvider(),
+                        IsCleanup = true,
                     },
                 },
                 confirmed))

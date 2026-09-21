@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net8.0-windows7.0": {
+      "tappy.core": {
+        "type": "Project"
+      },
+      "tappy.windows": {
+        "type": "Project",
+        "dependencies": {
+          "Tappy.Core": "[0.1.0, )"
+        }
+      }
+    }
+  }
+}

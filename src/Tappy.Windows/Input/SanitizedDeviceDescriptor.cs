@@ -59,6 +59,8 @@ public sealed record SanitizedDeviceDescriptor(
 
     public int InterfaceCount => MemberSessionHandles.Count;
 
+    public string? PresentationModelId { get; init; }
+
     internal bool ContainsSessionHandle(nint handle) =>
         MemberSessionHandles.Contains(handle);
 
@@ -82,7 +84,8 @@ public static partial class DeviceDescriptorSanitizer
         nint sessionHandle,
         string rawDevicePath,
         ushort usagePage = 0x0001,
-        ushort usage = 0x0006)
+        ushort usage = 0x0006,
+        string? reportedProduct = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rawDevicePath);
 
@@ -93,9 +96,7 @@ public static partial class DeviceDescriptorSanitizer
         var modelPart = vendorId is not null && productId is not null
             ? $"vid-{vendorId.Value:X4}:pid-{productId.Value:X4}"
             : "vid-unknown:pid-unknown";
-        var displayName = vendorId is not null && productId is not null
-            ? $"Keyboard VID {vendorId.Value:X4} PID {productId.Value:X4}"
-            : $"Keyboard {fingerprint[..8]}";
+        var displayName = KeyboardDeviceNames.Resolve(vendorId, productId, [normalizedPath], reportedProduct);
 
         return new SanitizedDeviceDescriptor(
             sessionHandle,
@@ -111,6 +112,7 @@ public static partial class DeviceDescriptorSanitizer
         {
             MemberSessionHandles = [sessionHandle],
             Grouping = PhysicalDeviceGrouping.RawInputInterfaceFallback,
+            PresentationModelId = KeyboardPresentationModels.Resolve(rawDevicePath),
         };
     }
 
@@ -137,9 +139,10 @@ public static partial class DeviceDescriptorSanitizer
         var modelPart = vendorId is not null && productId is not null
             ? $"vid-{vendorId.Value:X4}:pid-{productId.Value:X4}"
             : "vid-unknown:pid-unknown";
-        var displayName = vendorId is not null && productId is not null
-            ? $"Keyboard VID {vendorId.Value:X4} PID {productId.Value:X4}"
-            : $"Keyboard {fingerprint[..8]}";
+        var products = members.Select(member => member.ReportedProduct).Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var displayName = KeyboardDeviceNames.Resolve(vendorId, productId,
+            members.Select(member => member.RawDevicePath), products.Length == 1 ? products[0] : null);
 
         return new SanitizedDeviceDescriptor(
             sessionHandle,
@@ -159,6 +162,8 @@ public static partial class DeviceDescriptorSanitizer
                 .OrderBy(handle => unchecked((nuint)handle))
                 .ToArray(),
             Grouping = PhysicalDeviceGrouping.WindowsContainerId,
+            PresentationModelId = members.Select(member => KeyboardPresentationModels.Resolve(member.RawDevicePath))
+                .Distinct(StringComparer.Ordinal).ToArray() is [var model] ? model : null,
         };
     }
 
@@ -211,4 +216,5 @@ internal sealed record RawKeyboardDeviceCandidate(
     string RawDevicePath,
     ushort? VendorId,
     ushort? ProductId,
-    Guid? ContainerId);
+    Guid? ContainerId,
+    string? ReportedProduct = null);

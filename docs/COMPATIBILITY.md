@@ -12,6 +12,17 @@ velocity rules, MIDI SysEx/clock, and user-configurable thresholds remain future
 
 ## Source behavior
 
+### 2026-09-18 original Tartarus update
+
+Exact Raw Input model `1532:0201` now has a factory-ordered 21-report layout,
+owner-photo locator, and eight Tappy assignment banks with a labeled indicator
+preview and opt-in physical bank-LED synchronization. Exact-container HID commands
+and readback were exercised on TESTBED; the updated app's attended LED workflow
+and complete instrumented physical key verification are still pending.
+This supersedes the historical generic-layout-only Tartarus
+entry below; it does not change pass-through behavior or driver certification.
+See [original Tartarus](RAZER_TARTARUS.md).
+
 All currently built controllers operate in **Device-aware pass-through** mode. Tappy routes
 the selected physical source independently but does not suppress its ordinary
 Windows or vendor-software behavior. A keyboard-class original key may still reach
@@ -32,7 +43,7 @@ pass-through. See [exclusive keyboard input](EXCLUSIVE_KEYBOARD_INPUT.md).
 |---|---|---|
 | Architecture-ready | Provider/layout boundary exists, without device proof | Raw keyboard-class controls and generic future provider seams |
 | Enumerated | Windows listed a sanitized logical device; no controls were captured | Freewolf K15 candidate: one authoritative ContainerId group, `1A2C:2D43`, four Raw Input keyboard interfaces, reported totals 56/264. User-identified Targus numberpad candidate: `05A4:9862`, one keyboard interface, reported total 264. Windows-identified Razer Tartarus: `1532:0201`, two grouped keyboard interfaces, reported total 264. Logitech G13: one ContainerId group, exact `046D:C21C`, `FF00:0000`, one vendor-HID interface. APC MINI: one WinMM MIDI input port that Tappy enumerated and opened; WinMM exposes no serial/port identity, so confidence remains Ambiguous. |
-| Code-supported | Provider/layout behavior passes deterministic tests, without complete physical control proof | Logitech G13: dedicated eight-byte report decoder/provider, 39-control tile grid, owner-photo visual locator with one exact hotspot per control, and exact-device global RGB backlight synchronization. Original APC MINI: generic WinMM note, CC-direction, and program-change provider; exact-name fixed 99-direction grid; photo locator; complete Tappy assignment pipeline; attended physical note-input spot check. K15, Targus numberpad, and Tartarus keyboard collections: generic grouped-keyboard path only. |
+| Code-supported | Provider/layout behavior passes deterministic tests, without complete physical control proof | Logitech G13: dedicated eight-byte report decoder/provider, 39-control tile grid, owner-photo visual locator with one exact hotspot per control, and exact-device global RGB backlight synchronization. Original APC MINI: generic WinMM note, CC-direction, and program-change provider; exact-name fixed 99-direction grid; photo locator; complete Tappy assignment pipeline; attended physical note-input spot check. K15, Targus numberpad, and Tartarus keyboard collections: generic grouped-keyboard path only. Akai Fire: generic WinMM note/relative-CC provider; fixed 99-control button/pad/encoder grid published on the confirmed exact WinMM name `FL STUDIO FIRE` (USB `09E8:0043`, confirmed by direct enumeration on TESTBED), with the 5 encoders isolated on their own row above the button/pad rows and a gap column separating Mute/Solo from the pad grid so neither is visually confused with the pads; processed photo locator now covering all 99 controls — the 20 buttons, 64 pads, and (since 2026-09-20) all 15 encoder controls across the 5 knobs — with measured but not physically verified hotspots; the owner physically confirmed every button/pad/encoder note and CC number, and the encoders' relative-rotation magnitude/direction, via Tappy's generic learn path. A new SysEx output transport with correct native buffer-lifetime handling now exists, and Fire pad RGB lighting (curated starter palette plus a full arbitrary-RGB picker, both over the same SysEx encoder) is implemented over it and physically confirmed working, including several custom colors across more than one pad — a larger batch and connection-stability checks are still pending. A second, simultaneously-connected Fire is also recognized now (its WinMM name carries a leading-number prefix, confirmed against two real units), and a longer-lived bug where a Fire confirmed before the encoder/pad-grid separation kept a stale, scrambled layout forever has been fixed. The Fire's Modes/Bank indicator LED now follows Tappy's active bank (4 banks by default), and its OLED shows a live device/layer status, a Tappy logo, or a scrolling wordmark, including a one-time welcome sequence — both physically confirmed; no other button/rectangle LEDs are driven yet. LED animations (procedural effects, saved in a named library, adjustable speed, and any number of confirmed grid controllers sharing one animation as a single continuous canvas) are implemented for both the Fire and APC MINI and physically confirmed, including two real Fires and a real APC MINI animating together as one shared canvas — see [`LED_ANIMATIONS.md`](LED_ANIMATIONS.md). See [`AKAI_FIRE.md`](AKAI_FIRE.md). |
 | Functional | Make/break/repeat/state/mapping checks passed on hardware | None |
 | Verified | Controller Passport and HIL evidence passed review | None |
 
@@ -44,9 +55,10 @@ No K15, Targus, or Tartarus key events or G13 button/stick events were captured 
 that descriptor-only probe. Separately, the operator reported visual response from
 every G13 control during an attended Rehearsal preflight and then completed the
 finite armed G13 input verifier with every aggregate assertion passing. That narrow
-input-functional record still does not include mapped output, pass-through, repeat,
-reconnect, unplug-while-held, or the full Controller Passport, so it does not yet
-promote the device to Functional. Windows also
+input-functional record is supplemented by a passing attended G1-to-F24
+hold-until-release witness through the real application. The two narrow records
+still do not include pass-through, repeat, reconnect, unplug-while-held, or the full
+Controller Passport, so they do not yet promote the device to Functional. Windows also
 exposes non-keyboard Tartarus collections; the current
 generic provider does not claim their mouse, consumer-control, system-control, or
 vendor-HID behavior.
@@ -91,9 +103,9 @@ consumer-control collections, identical serial-less devices, reconnect stability
 sleeping wireless receivers, Windows lock/suspend, and latency targets require real
 hardware evidence before support claims.
 
-The current automated suites pass with a zero-warning Release build: Core 58,
-Windows 135, App 109, Input Broker 16, G13 HIL tool 25, and Output Witness 53
-(396 total).
+The current automated suites pass with a zero-warning Release build: Core 146,
+Windows 279, App 369, Input Broker 16, G13 HIL tool 25, and Output Witness 62
+(897 total).
 Packaged-artifact checkpoint status is in [`TESTING.md`](TESTING.md). Every physical
 or manual check remains a separate gate.
 The current twelve-project NuGet advisory query reports no known vulnerable packages;

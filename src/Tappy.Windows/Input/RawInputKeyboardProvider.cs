@@ -160,6 +160,9 @@ public sealed class RawInputKeyboardProvider : IInputDeviceProvider, IWindowsLif
         return descriptors.ToArray();
     }
 
+    public bool ConsumeMetadataChange() =>
+        !_disposed && _deviceEnumerator is IKeyboardMetadataUpdates updates && updates.ConsumeMetadataChange();
+
     public bool SetCaptureTarget(nint? deviceHandle)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -520,6 +523,7 @@ public sealed class RawInputKeyboardProvider : IInputDeviceProvider, IWindowsLif
             {
                 Kind = ControlSignalKind.Release,
                 Timestamp = _timestampProvider(),
+                IsCleanup = true,
             };
             releases.Add((last with
             {

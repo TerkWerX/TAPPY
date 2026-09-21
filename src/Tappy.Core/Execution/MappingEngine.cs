@@ -70,7 +70,9 @@ public sealed record MappingResult(
     string Message,
     string? FrozenLayerId = null,
     EffectiveSourceMode? FrozenSourceMode = null,
-    ExecutionAncestry? OutputAncestry = null)
+    ExecutionAncestry? OutputAncestry = null,
+    BankControlBinding? BankControl = null,
+    ControlId? TriggeredCombination = null)
 {
     public bool ProducedOutput => Disposition == MappingDisposition.Handled;
 }
@@ -79,7 +81,7 @@ public readonly record struct OutputCleanupResult(
     int ActivePressCount,
     bool OutputReleaseSucceeded);
 
-public sealed class MappingEngine
+public sealed partial class MappingEngine
 {
     private sealed record ActivePress(
         string OwnerId,
@@ -90,10 +92,13 @@ public sealed class MappingEngine
         ExecutionAncestry Ancestry,
         bool Rehearsal,
         bool HeldOutputAcquired,
-        bool ActionOutputStarted);
+        bool ActionOutputStarted,
+        BankControlBinding? BankControl = null);
 
     private readonly object _gate = new();
-    private readonly IKeyboardOutput _keyboardOutput;
+    private readonly OwnedKeyboardOutput _keyboardOutput;
+    // The Core ledger represents direct mappings as one owner in the shared native-output ledger.
+    private readonly string _keyboardOwnerId = $"mapping-engine:{Guid.NewGuid():N}";
     private readonly IControllerActionOutput _actionOutput;
     private readonly IMonotonicClock _clock;
     private readonly MappingEngineOptions _options;
@@ -112,7 +117,8 @@ public sealed class MappingEngine
         IMonotonicClock? clock = null,
         IControllerActionOutput? actionOutput = null)
     {
-        _keyboardOutput = keyboardOutput ?? throw new ArgumentNullException(nameof(keyboardOutput));
+        ArgumentNullException.ThrowIfNull(keyboardOutput);
+        _keyboardOutput = keyboardOutput as OwnedKeyboardOutput ?? new OwnedKeyboardOutput(keyboardOutput);
         _actionOutput = actionOutput ?? NullControllerActionOutput.Instance;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
@@ -270,8 +276,9 @@ public sealed class MappingEngine
                     "Hardware or operating-system repeat was tracked without inventing a new tap.");
             }
 
+            if (ProcessCombination(sessionId, signal) is { } combinationResult) { return combinationResult; }
             return state.EffectiveKind == ControlSignalKind.Release
-                ? ProcessRelease(sessionId, signal.ControlId)
+                ? ProcessRelease(sessionId, signal.ControlId, signal.IsCleanup)
                 : ProcessPress(sessionId, signal);
         }
     }
@@ -318,7 +325,7 @@ public sealed class MappingEngine
         }
     }
 
-    private MappingResult ProcessPress(ControllerSessionId sessionId, ControlSignal signal)
+    private MappingResult ProcessPress(ControllerSessionId sessionId, ControlSignal signal, string? frozenLayer = null)
     {
         if (!_connected.TryGetValue(sessionId, out var controller))
         {
@@ -326,9 +333,11 @@ public sealed class MappingEngine
                 "The active physical controller is not attached to a profile.");
         }
 
-        var layerId = _activeLayers.GetValueOrDefault(sessionId, controller.ActiveLayerId);
+        var layerId = frozenLayer ?? _activeLayers.GetValueOrDefault(sessionId, controller.ActiveLayerId);
         var layer = controller.FindLayer(layerId);
-        var binding = layer?.FindBinding(signal.ControlId);
+        var bankControl = controller.BankControls.FirstOrDefault(control => control.ControlId == signal.ControlId);
+        var binding = bankControl is null ? layer?.FindBinding(signal.ControlId) :
+            new ControlBindingSnapshot(new ControlBindingDefinition { ControlId = signal.ControlId, Name = bankControl.Label });
         if (layer is null || binding is null || !binding.Enabled)
         {
             return new MappingResult(MappingDisposition.NoBinding, "No enabled binding matched the control.",
@@ -364,8 +373,11 @@ public sealed class MappingEngine
         var ownerId = $"press:{sessionId.Value}:{signal.ControlId.Value}:{++_executionSequence}";
         var activeKey = (sessionId, signal.ControlId);
         var press = new ActivePress(ownerId, controller, binding, layerId, controller.SourceMode,
-            outputAncestry, _rehearsalMode, false, false);
+            outputAncestry, _rehearsalMode, false, false, bankControl);
         _activePresses[activeKey] = press;
+
+        if (bankControl is not null)
+        { return new MappingResult(MappingDisposition.Tracked, "Bank control armed for physical release.", layerId); }
 
         if (_rehearsalMode)
         {
@@ -379,7 +391,9 @@ public sealed class MappingEngine
             press.OwnerId,
             sessionId.Value,
             press.Binding.PressSequence,
-            press.Ancestry);
+            press.Ancestry,
+            retainMidiUntilFollowUp: press.Binding.PressSequence.Mode == ControllerActionSequenceMode.RunOnce &&
+                                     !press.Binding.ReleaseSequence.IsEmpty);
         var sequenceStarted = sequenceDisposition == MappingDisposition.Handled &&
                               press.Binding.PressSequence.Mode != ControllerActionSequenceMode.RunOnce;
         disposition = Combine(disposition, sequenceDisposition);
@@ -400,7 +414,7 @@ public sealed class MappingEngine
             layerId, controller.SourceMode.Effective, outputAncestry);
     }
 
-    private MappingResult ProcessRelease(ControllerSessionId sessionId, ControlId controlId)
+    private MappingResult ProcessRelease(ControllerSessionId sessionId, ControlId controlId, bool isCleanup)
     {
         if (!_activePresses.Remove((sessionId, controlId), out var press))
         {
@@ -410,7 +424,7 @@ public sealed class MappingEngine
 
         var outputFailed = false;
         var heldReleaseDispatched = false;
-        if (press.ActionOutputStarted)
+        if (press.ActionOutputStarted || isCleanup)
         {
             heldReleaseDispatched = true;
             outputFailed = !TryReleaseActionOwner(press.OwnerId);
@@ -419,9 +433,21 @@ public sealed class MappingEngine
         if (press.HeldOutputAcquired)
         {
             var heldRelease = _heldOutputs.ReleaseOwner(press.OwnerId);
-            heldReleaseDispatched = !heldRelease.IsEmpty;
-            outputFailed = !TryDispatchDelta(press.OwnerId, heldRelease, press.Ancestry);
+            heldReleaseDispatched |= !heldRelease.IsEmpty;
+            outputFailed |= !TryDispatchDelta(press.OwnerId, heldRelease, press.Ancestry);
         }
+
+        if (isCleanup)
+        {
+            return new MappingResult(outputFailed ? MappingDisposition.OutputFailed : MappingDisposition.Tracked,
+                "Device cleanup released owned outputs without running a user release action.",
+                press.LayerId, press.SourceMode.Effective, press.Ancestry);
+        }
+
+        // Navigation is internal state, not an output macro. Allow it in rehearsal,
+        // but never on repeats, orphan releases, disconnect cleanup or lifecycle reset.
+        if (press.BankControl is { } bankControl)
+        { return new MappingResult(MappingDisposition.Tracked, "Bank control released.", press.LayerId, BankControl: bankControl); }
 
         if (press.Rehearsal || _rehearsalMode)
         {
@@ -439,7 +465,11 @@ public sealed class MappingEngine
                 $"{press.OwnerId}:release",
                 sessionId.Value,
                 press.Binding.ReleaseSequence,
-                press.Ancestry));
+                press.Ancestry,
+                previousOwnerId: !press.Binding.PressSequence.IsEmpty &&
+                                 press.Binding.PressSequence.Mode == ControllerActionSequenceMode.RunOnce
+                    ? press.OwnerId
+                    : null));
         }
 
         if (outputFailed || releaseDisposition == MappingDisposition.OutputFailed)
@@ -525,7 +555,9 @@ public sealed class MappingEngine
         string ownerId,
         string scopeId,
         ControllerActionSequenceSnapshot sequence,
-        ExecutionAncestry ancestry)
+        ExecutionAncestry ancestry,
+        string? previousOwnerId = null,
+        bool retainMidiUntilFollowUp = false)
     {
         if (sequence.IsEmpty)
         {
@@ -535,7 +567,8 @@ public sealed class MappingEngine
         try
         {
             return _actionOutput.Start(new ControllerActionOutputRequest(
-                    ownerId, scopeId, sequence, _options.SelfInjectionMarker, ancestry))
+                    ownerId, scopeId, sequence, _options.SelfInjectionMarker, ancestry,
+                    previousOwnerId, retainMidiUntilFollowUp))
                 ? MappingDisposition.Handled
                 : MappingDisposition.OutputFailed;
         }
@@ -586,6 +619,7 @@ public sealed class MappingEngine
 
     private OutputCleanupResult ReleaseControllerOutputs(ControllerSessionId sessionId, string reason)
     {
+        _combinationGestures.Remove(sessionId);
         var active = _activePresses
             .Where(pair => pair.Key.SessionId == sessionId)
             .Select(pair => (pair.Key, pair.Value))
@@ -608,13 +642,19 @@ public sealed class MappingEngine
 
     private OutputCleanupResult ReleaseAllOwnedOutputs(string reason)
     {
+        _combinationGestures.Clear();
         var count = _activePresses.Count;
         _activePresses.Clear();
-        var ancestry = new ExecutionAncestry($"cleanup:{reason}:{_clock.GetTimestamp()}:{++_executionSequence}");
-        var releaseSucceeded = TryDispatchDelta(
-            $"cleanup:{reason}",
-            _heldOutputs.ReleaseAll(),
-            ancestry);
+        _ = _heldOutputs.ReleaseAll();
+        var releaseSucceeded = true;
+        try
+        {
+            _keyboardOutput.ReleaseOwner(_keyboardOwnerId);
+        }
+        catch
+        {
+            releaseSucceeded = false;
+        }
         releaseSucceeded &= TryReleaseAllActions();
         _rateGuard.Clear();
         return new OutputCleanupResult(count, releaseSucceeded);
@@ -624,7 +664,7 @@ public sealed class MappingEngine
         string ownerId,
         IReadOnlyList<KeyboardOutputKey> keys,
         ExecutionAncestry ancestry) =>
-        new(ownerId, keys, _options.SelfInjectionMarker, ancestry);
+        new(_keyboardOwnerId, keys, _options.SelfInjectionMarker, ancestry);
 
     private bool TryReleaseActionOwner(string ownerId)
     {

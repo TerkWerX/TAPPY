@@ -89,6 +89,39 @@ public sealed class AtomicProfileStoreTests
     }
 
     [Theory]
+    [InlineData("{\"Controllers\":[null]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[null]}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[null]}]}]}")]
+    [InlineData("{\"Controllers\":[{\"Layout\":{\"Rows\":[null]}}]}")]
+    [InlineData("{\"Controllers\":[{\"Layout\":{\"Rows\":[{\"Controls\":[null]}]}}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[{\"PressSequence\":{\"Steps\":[null]}}]}]}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[{\"ReleaseSequence\":{\"Steps\":[null]}}]}]}]}")]
+    [InlineData("{\"Controllers\":[{\"Identity\":{\"SessionId\":7}}]}")]
+    [InlineData("{\"Controllers\":[{\"Identity\":{}}]}")]
+    [InlineData("{\"Controllers\":[{\"Identity\":{\"SessionId\":null}}]}")]
+    [InlineData("{\"Controllers\":[{\"Identity\":{\"PersistentId\":\" \"}}]}")]
+    [InlineData("{\"Controllers\":[{\"Identity\":{\"PersistentId\":true}}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[{\"ControlId\":7}]}]}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[{\"ControlId\":\"\"}]}]}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[{\"PressAction\":{\"Keys\":[7]}}]}]}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[{\"PressAction\":{\"Keys\":[null]}}]}]}]}")]
+    [InlineData("{\"Controllers\":[{\"Layers\":[{\"Bindings\":[{\"PressAction\":{\"Keys\":[\"\"]}}]}]}]}")]
+    public async Task StructurallyInvalidJsonRecoversKnownGoodProfile(string invalidJson)
+    {
+        using var directory = new TemporaryDirectory();
+        var store = new AtomicProfileStore(directory.Path);
+        await store.SaveAsync("main", new TappyProfile { Name = "Known good" });
+        await File.WriteAllTextAsync(store.GetProfilePath("main"), invalidJson, Encoding.UTF8);
+
+        var loaded = await store.LoadWithRecoveryAsync("main");
+
+        Assert.Equal(ProfileRecoveryState.LastKnownGood, loaded.RecoveryState);
+        Assert.Equal("Known good", loaded.Snapshot.Name);
+        Assert.NotNull(loaded.QuarantinedFileName);
+        Assert.False(File.Exists(store.GetProfilePath("main")));
+    }
+
+    [Theory]
     [InlineData("../escape")]
     [InlineData("..\\escape")]
     [InlineData("C:\\escape")]

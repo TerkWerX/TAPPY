@@ -1,13 +1,16 @@
 using Tappy.App.Runtime;
+using Tappy.App.Services;
+using Tappy.App.ViewModels;
 using Tappy.Core.Models;
 using Tappy.Core.Output;
 using Tappy.Windows.Input;
 using Tappy.Windows.Lifecycle;
+using Tappy.Windows.Output;
 using Tappy.Windows.Profiles;
 
 namespace Tappy.App.Tests;
 
-public sealed class DeviceAwareControllerRuntimeTests
+public sealed partial class DeviceAwareControllerRuntimeTests
 {
     [Theory]
     [InlineData("winmm-midi:channel-1:note-0", 0)]
@@ -34,6 +37,295 @@ public sealed class DeviceAwareControllerRuntimeTests
     [InlineData("Purple", 0)]
     public void Apc_mini_visual_colors_map_to_its_verified_bicolor_palette(string color, int expected) =>
         Assert.Equal(expected, DeviceAwareControllerRuntime.ApcMiniVelocity(color));
+
+    [Theory]
+    [InlineData("winmm-midi:channel-1:note-54", 0)] // Pad R1 C1
+    [InlineData("winmm-midi:channel-1:note-117", 63)] // Pad R4 C16
+    [InlineData("winmm-midi:channel-1:note-70", 16)] // Pad R2 C1
+    [InlineData("winmm-midi:channel-1:note-53", null)] // Record / Loop Record (button, not a pad)
+    [InlineData("winmm-midi:channel-1:note-118", null)] // one past the pad range
+    [InlineData("winmm-midi:channel-1:cc-16:increase", null)] // encoder rotation, not a note
+    [InlineData("winmm-midi:channel-1:note-16", null)] // encoder touch, not a pad
+    public void Akai_Fire_pad_index_is_parsed_only_for_the_64_pad_notes(string controlId, int? expected) =>
+        Assert.Equal(expected, DeviceAwareControllerRuntime.TryParseAkaiFirePadIndex(controlId));
+
+    [Theory]
+    [InlineData("Default", 0, 0, 0)]
+    [InlineData("Red", 255, 0, 0)]
+    [InlineData("Green", 0, 255, 0)]
+    [InlineData("White", 255, 255, 255)]
+    [InlineData(null, 0, 0, 0)]
+    [InlineData("not-a-real-color", 0, 0, 0)]
+    [InlineData("#FF6A00", 0xFF, 0x6A, 0x00)]
+    [InlineData("#000000", 0, 0, 0)]
+    [InlineData(" #112233 ", 0x11, 0x22, 0x33)]
+    [InlineData("#gggggg", 0, 0, 0)] // malformed hex falls back to the named default, not a crash
+    public void Akai_Fire_visual_colors_map_to_starter_palette_rgb(string? color, byte red, byte green, byte blue)
+    {
+        var (r, g, b) = DeviceAwareControllerRuntime.FireRgb(color);
+        Assert.Equal((red, green, blue), (r, g, b));
+    }
+
+    [Theory]
+    [InlineData("#FF6A00", true, (byte)0xFF, (byte)0x6A, (byte)0x00)]
+    [InlineData("#000000", true, (byte)0, (byte)0, (byte)0)]
+    [InlineData("#ffffff", true, (byte)255, (byte)255, (byte)255)]
+    [InlineData("#12345", false, (byte)0, (byte)0, (byte)0)] // one digit short
+    [InlineData("#gggggg", false, (byte)0, (byte)0, (byte)0)] // not hex digits
+    [InlineData("112233", false, (byte)0, (byte)0, (byte)0)] // missing leading '#'
+    [InlineData("Red", false, (byte)0, (byte)0, (byte)0)]
+    [InlineData(null, false, (byte)0, (byte)0, (byte)0)]
+    public void Hex_color_parsing_accepts_only_a_well_formed_rrggbb_value(
+        string? value, bool expectedResult, byte expectedRed, byte expectedGreen, byte expectedBlue)
+    {
+        var result = DeviceAwareControllerRuntime.TryParseHexColor(value, out var red, out var green, out var blue);
+        Assert.Equal(expectedResult, result);
+        if (expectedResult)
+        {
+            Assert.Equal((expectedRed, expectedGreen, expectedBlue), (red, green, blue));
+        }
+    }
+
+    [Theory]
+    [InlineData("MIDI: FL STUDIO FIRE", "FL STUDIO FIRE")]
+    [InlineData("MIDI: 2 - FL STUDIO FIRE", "2 - FL STUDIO FIRE")]
+    [InlineData("FL STUDIO FIRE", "FL STUDIO FIRE")] // no prefix to strip
+    [InlineData("midi: apc mini", "apc mini")] // case-insensitive prefix match
+    public void MIDI_display_prefix_is_stripped_to_recover_the_raw_output_port_name(
+        string displayName, string expectedPortName) =>
+        Assert.Equal(expectedPortName, DeviceAwareControllerRuntime.StripMidiDisplayPrefix(displayName));
+
+    [Fact]
+    public void A_confirmed_Fire_matches_only_its_own_output_port_when_two_Fires_are_connected()
+    {
+        // Reproduces a real regression found on TESTBED, 2026-09-20, right
+        // after two real Fire units were both recognized (D-023): Sync
+        // supported LEDs started refusing to light either unit, because the
+        // output-port lookup matched by MODEL alone ("is this any Fire's
+        // output port"), which both units' outputs now satisfy. See D-024 in
+        // DECISIONS.md.
+        var outputs = new[]
+        {
+            new WinMmMidiOutput.Device(0, "FL STUDIO FIRE"),
+            new WinMmMidiOutput.Device(1, "2 - FL STUDIO FIRE"),
+        };
+
+        var firstUnit = DeviceAwareControllerRuntime.MatchMidiOutputPorts(outputs, "MIDI: FL STUDIO FIRE");
+        var secondUnit = DeviceAwareControllerRuntime.MatchMidiOutputPorts(outputs, "MIDI: 2 - FL STUDIO FIRE");
+
+        Assert.Equal("FL STUDIO FIRE", Assert.Single(firstUnit).Name);
+        Assert.Equal("2 - FL STUDIO FIRE", Assert.Single(secondUnit).Name);
+    }
+
+    [Fact]
+    public void Akai_Fire_pad_color_sysex_matches_the_documented_format_for_one_pad()
+    {
+        // F0 47 7F 43 65 <lenHi> <lenLo> [index R G B] F7; length = 4 for one pad.
+        // Full-brightness blue (0,0,255) halves to 0x7F for the 7-bit channel.
+        var packet = DeviceAwareControllerRuntime.FirePadColorSysEx([(0x23, 0x00, 0x00, 0xFF)]);
+
+        Assert.Equal(
+            new byte[] { 0xF0, 0x47, 0x7F, 0x43, 0x65, 0x00, 0x04, 0x23, 0x00, 0x00, 0x7F, 0xF7 },
+            packet);
+    }
+
+    [Fact]
+    public void Akai_Fire_pad_color_sysex_batches_every_pad_into_one_message()
+    {
+        var packet = DeviceAwareControllerRuntime.FirePadColorSysEx(
+            [(0, 255, 0, 0), (1, 0, 255, 0), (63, 0, 0, 255)]);
+
+        Assert.Equal(0xF0, packet[0]);
+        Assert.Equal(0x47, packet[1]);
+        Assert.Equal(0x7F, packet[2]);
+        Assert.Equal(0x43, packet[3]);
+        Assert.Equal(0x65, packet[4]);
+        var payloadLength = (packet[5] << 7) | packet[6];
+        Assert.Equal(12, payloadLength); // 3 pads x 4 bytes
+        Assert.Equal(0xF7, packet[^1]);
+        Assert.Equal(8 + payloadLength, packet.Length);
+        // Third pad (index 63, full blue): channel halved from 255 to 127.
+        Assert.Equal(63, packet[15]);
+        Assert.Equal(0, packet[16]);
+        Assert.Equal(0, packet[17]);
+        Assert.Equal(0x7F, packet[18]);
+    }
+
+    [Fact]
+    public async Task Akai_Fire_led_capability_advertises_freeform_rgb_support()
+    {
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var keyboardProvider = new RawInputKeyboardProvider(
+                new FakeEnumerator(),
+                new FakeMessageHost(),
+                keyboardIsNeutral: static () => true);
+            using var midiBackend = new FakeMidiBackend(
+                new WinMmMidiInputDevice(0, "FL STUDIO FIRE", 1, 2, 3));
+            var midiProvider = new WinMmMidiInputProvider(midiBackend);
+            await using var runtime = new DeviceAwareControllerRuntime(
+                keyboardProvider,
+                logitechG13Provider: null,
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                actionOutput: new RecordingActionOutput(),
+                midiInputProvider: midiProvider);
+
+            await runtime.InitializeAsync();
+            var device = Assert.Single(runtime.Devices);
+            Assert.True(runtime.BeginIdentification(device).Succeeded);
+            midiBackend.Publish(PackMidi(0x90, 60, 127));
+            midiBackend.Publish(PackMidi(0x80, 60, 0));
+            Assert.True(runtime.ConfirmController().Succeeded);
+
+            var capability = Assert.IsType<ControllerLedColorCapability>(runtime.GetControllerLedColorCapability());
+            Assert.Equal(MidiControllerModelCatalog.AkaiFireV1Id, capability.ModelId);
+            Assert.True(capability.SupportsFreeformColor);
+
+            // A verified-palette controller must not silently gain freeform support.
+            using var apcBackend = new FakeMidiBackend(new WinMmMidiInputDevice(0, "APC MINI", 1, 2, 3));
+            await using var apcRuntime = new DeviceAwareControllerRuntime(
+                new RawInputKeyboardProvider(
+                    new FakeEnumerator(),
+                    new FakeMessageHost(),
+                    keyboardIsNeutral: static () => true),
+                logitechG13Provider: null,
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                actionOutput: new RecordingActionOutput(),
+                midiInputProvider: new WinMmMidiInputProvider(apcBackend));
+            await apcRuntime.InitializeAsync();
+            var apcDevice = Assert.Single(apcRuntime.Devices);
+            Assert.True(apcRuntime.BeginIdentification(apcDevice).Succeeded);
+            apcBackend.Publish(PackMidi(0x90, 36, 127));
+            apcBackend.Publish(PackMidi(0x80, 36, 0));
+            Assert.True(apcRuntime.ConfirmController().Succeeded);
+            var apcCapability = Assert.IsType<ControllerLedColorCapability>(apcRuntime.GetControllerLedColorCapability());
+            Assert.False(apcCapability.SupportsFreeformColor);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_stale_saved_Fire_layout_is_reset_to_the_current_shape_not_scrambled_into_it()
+    {
+        // Reproduces a real regression found on TESTBED, 2026-09-20: a Fire
+        // confirmed and saved before the encoder/pad-grid separation shipped
+        // kept its old layout Id forever (that Id was never version-bumped), so
+        // every later confirm re-used its stale per-control ordering to fill the
+        // NEW row/column shape - visually interleaving encoders back into the
+        // Mute/Solo and pad rows. See D-022 in DECISIONS.md.
+        var root = NewTemporaryDirectory();
+        try
+        {
+            var midiBackend = new FakeMidiBackend(new WinMmMidiInputDevice(0, "FL STUDIO FIRE", 1, 2, 3));
+            var midiProvider = new WinMmMidiInputProvider(midiBackend);
+            await using (var runtime = new DeviceAwareControllerRuntime(
+                new RawInputKeyboardProvider(
+                    new FakeEnumerator(),
+                    new FakeMessageHost(),
+                    keyboardIsNeutral: static () => true),
+                logitechG13Provider: null,
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                actionOutput: new RecordingActionOutput(),
+                midiInputProvider: midiProvider))
+            {
+                await runtime.InitializeAsync();
+                var device = Assert.Single(runtime.Devices);
+                Assert.True(runtime.BeginIdentification(device).Succeeded);
+                midiBackend.Publish(PackMidi(0x90, 60, 127));
+                midiBackend.Publish(PackMidi(0x80, 60, 0));
+                Assert.True(runtime.ConfirmController().Succeeded);
+                Assert.True((await runtime.SaveProfileAsync()).Succeeded);
+            }
+            midiBackend.Dispose();
+
+            // Corrupt the saved profile the way the real regression did: keep the
+            // pre-separation layout Id, and place the Volume encoder's touch
+            // control where the old shape put it - overlapping Mute/Solo 1 and
+            // the first pad row, rather than its own row above everything.
+            var store = new AtomicProfileStore(root);
+            var profile = (await store.LoadAsync("default")).ToEditableProfile();
+            var fire = Assert.Single(profile.Controllers,
+                c => c.Identity.ProviderId == WinMmMidiInputProvider.ProviderId);
+            fire.Layout.Id = "akai-fire-v1-code-layout-v1";
+            fire.Layout.GridColumns = 16;
+            fire.Layout.GridRows = 8;
+            var volumeTouch = fire.Layout.Rows.SelectMany(r => r.Controls)
+                .Single(c => c.ControlId!.Value.Value == "winmm-midi:channel-1:note-16");
+            volumeTouch.X = 288;
+            volumeTouch.Y = 232;
+            volumeTouch.ColorKey = "Purple";
+            await store.SaveAsync(profile.CreateSnapshot());
+
+            var restoredMidiBackend = new FakeMidiBackend(new WinMmMidiInputDevice(0, "FL STUDIO FIRE", 1, 2, 3));
+            await using var restored = new DeviceAwareControllerRuntime(
+                new RawInputKeyboardProvider(
+                    new FakeEnumerator(),
+                    new FakeMessageHost(),
+                    keyboardIsNeutral: static () => true),
+                logitechG13Provider: null,
+                new RecordingOutput(),
+                new AtomicProfileStore(root),
+                actionOutput: new RecordingActionOutput(),
+                midiInputProvider: new WinMmMidiInputProvider(restoredMidiBackend));
+            await restored.InitializeAsync();
+            var restoredDevice = Assert.Single(restored.Devices);
+            Assert.True(restored.BeginIdentification(restoredDevice).Succeeded);
+            restoredMidiBackend.Publish(PackMidi(0x90, 60, 127));
+            restoredMidiBackend.Publish(PackMidi(0x80, 60, 0));
+            Assert.True(restored.ConfirmController().Succeeded);
+
+            var workspace = Assert.IsType<ControllerLayoutWorkspace>(restored.GetControllerLayout());
+            var restoredVolumeTouch = workspace.Controls.Single(c => c.ControlId == "winmm-midi:channel-1:note-16");
+            // Volume's three controls (increase/touch/decrease) now share one
+            // column — they render as one concentric ring cluster, not three
+            // side-by-side tiles. See MidiControllerModelCatalog.CreateAkaiFireV1.
+            Assert.Equal(2 * MainViewModel.LayoutCellWidth, restoredVolumeTouch.X);
+            Assert.Equal(0 * MainViewModel.LayoutCellHeight, restoredVolumeTouch.Y);
+            Assert.Equal("Purple", restoredVolumeTouch.ColorKey);
+
+            // Every encoder control lands on row 0, never sharing a row with
+            // Mute/Solo (row 2) or any pad.
+            var encoders = new (int TouchNote, int RotationCc)[]
+                { (0x10, 0x10), (0x11, 0x11), (0x12, 0x12), (0x13, 0x13), (0x19, 0x76) };
+            var encoderControlIds = encoders
+                .SelectMany(e => new[]
+                {
+                    $"winmm-midi:channel-1:note-{e.TouchNote}",
+                    $"winmm-midi:channel-1:cc-{e.RotationCc}:increase",
+                    $"winmm-midi:channel-1:cc-{e.RotationCc}:decrease",
+                })
+                .ToHashSet(StringComparer.Ordinal);
+            Assert.All(workspace.Controls.Where(c => encoderControlIds.Contains(c.ControlId)),
+                control => Assert.Equal(0, control.Y));
+
+            restoredMidiBackend.Dispose();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("MIDI: 2 - FL STUDIO FIRE")]
+    [InlineData("2 - FL STUDIO FIRE")]
+    [InlineData("MIDI: 3 - FL STUDIO FIRE")]
+    public void A_second_simultaneously_connected_Fire_is_recognized_by_its_prefixed_name(string displayName)
+    {
+        // Confirmed against two real Fire units connected simultaneously on
+        // TESTBED, 2026-09-20: Windows named the second one "2 - FL STUDIO
+        // FIRE", a leading-number prefix, not Tappy's own "(device N)" suffix.
+        Assert.Equal(
+            MidiControllerModelCatalog.AkaiFireV1Id,
+            MidiControllerModelCatalog.Find(WinMmMidiInputProvider.ProviderId, displayName)?.Id);
+    }
 
     [Fact]
     public async Task Midi_pad_uses_the_same_full_assignment_pipeline_as_keyboard_controllers()
@@ -923,7 +1215,8 @@ public sealed class DeviceAwareControllerRuntimeTests
                     throw new InvalidOperationException($"Unknown cleanup path: {cleanupPath}");
             }
 
-            Assert.Equal(1, output.KeyUpAttempts);
+            // A rejected release remains owned, so the subsequent disarm can retry it.
+            Assert.InRange(output.KeyUpAttempts, 1, 2);
             Assert.True(runtime.IsRehearsal);
             Assert.False(latestState?.IsConfirmed ?? true);
             Assert.Contains("cannot confirm", latestState?.Status ?? string.Empty, StringComparison.OrdinalIgnoreCase);
@@ -1237,7 +1530,9 @@ public sealed class DeviceAwareControllerRuntimeTests
     {
         private readonly IReadOnlyList<WinMmMidiInputDevice> _devices = devices;
 
-        public event Action<uint>? ShortMessageReceived;
+        public event Action<WinMmMidiInputMessage>? ShortMessageReceived;
+        public event EventHandler<Exception>? Faulted { add { } remove { } }
+        public long SessionGeneration { get; private set; }
 
         public bool IsOpen { get; private set; }
 
@@ -1246,6 +1541,7 @@ public sealed class DeviceAwareControllerRuntimeTests
         public void Open(int deviceId)
         {
             Assert.Contains(_devices, device => device.DeviceId == deviceId);
+            SessionGeneration++;
             IsOpen = true;
         }
 
@@ -1260,7 +1556,7 @@ public sealed class DeviceAwareControllerRuntimeTests
         public void Publish(uint message)
         {
             Assert.True(IsOpen);
-            ShortMessageReceived?.Invoke(message);
+            ShortMessageReceived?.Invoke(new WinMmMidiInputMessage(SessionGeneration, message));
         }
 
         public void Dispose() => IsOpen = false;

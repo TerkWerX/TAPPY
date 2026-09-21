@@ -10,6 +10,8 @@ public sealed class OutputWitnessEvidenceTests
     [InlineData(0, "operator-set-tappy-normal-output-mode")]
     [InlineData(1, "operator-set-tappy-rehearsal-mode")]
     [InlineData(2, "operator-set-tappy-normal-output-mode")]
+    [InlineData(3, "operator-set-tappy-normal-output-mode")]
+    [InlineData(4, "operator-held-controller-control-and-unplugged-device-in-tappy-normal-output-mode")]
     public void PassingEvidenceIsExplicitAboutOperatorPrerequisiteAndNoAttribution(
         int scenarioValue,
         string expectedPrerequisite)
@@ -23,11 +25,24 @@ public sealed class OutputWitnessEvidenceTests
             snapshot,
             PassingRuntime());
 
-        Assert.Equal("focused-console-pass-through-and-output-witness", evidence.EvidenceScope);
+        var expectedScope = scenario is OutputWitnessScenario.ControllerBasic or
+            OutputWitnessScenario.ControllerHeldUnplug
+            ? "focused-console-controller-output-witness"
+            : "focused-console-pass-through-and-output-witness";
+        Assert.Equal(2, evidence.SchemaVersion);
+        Assert.Equal("0.3.0", evidence.ToolVersion);
+        Assert.Equal(expectedScope, evidence.EvidenceScope);
         Assert.Equal("none", evidence.DeviceSourceAttribution);
         Assert.Equal("none", evidence.CompatibilityTierClaimed);
         Assert.Equal(expectedPrerequisite, evidence.OperatorPrerequisite);
         Assert.Equal(OutputWitnessOptionParser.ScenarioName(scenario), evidence.Scenario);
+        if (scenario is OutputWitnessScenario.ControllerBasic or
+            OutputWitnessScenario.ControllerHeldUnplug)
+        {
+            Assert.Equal(
+                "none-required; NumPad1 guard-must-remain-silent",
+                evidence.ExpectedKeys.Original);
+        }
         Assert.All(
             evidence.Assertions.GetType().GetProperties(),
             property => Assert.True((bool)property.GetValue(evidence.Assertions)!));
@@ -219,6 +234,16 @@ public sealed class OutputWitnessEvidenceTests
                 break;
             case OutputWitnessScenario.HeldUnplug:
                 Source(true);
+                Output(true);
+                Output(false);
+                clock = 2000;
+                break;
+            case OutputWitnessScenario.ControllerBasic:
+                Output(true);
+                Output(false);
+                clock = 2000;
+                break;
+            case OutputWitnessScenario.ControllerHeldUnplug:
                 Output(true);
                 Output(false);
                 clock = 2000;

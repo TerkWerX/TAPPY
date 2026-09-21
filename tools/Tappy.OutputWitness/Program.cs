@@ -69,9 +69,13 @@ internal static class OutputWitnessApplication
 
         var options = parsed.Options!;
         output.WriteLine("Tappy finite focused-console pass-through/output witness");
+        var sourceDescription = options.Scenario is OutputWitnessScenario.ControllerBasic or
+            OutputWitnessScenario.ControllerHeldUnplug
+            ? $"{options.OutputKey.Name} output is expected; {options.OriginalKey.Name} is a negative guard that must remain silent"
+            : $"expected {options.OriginalKey.Name} and {options.OutputKey.Name} console key records are inspected";
         output.WriteLine(
             $"ARMED for scenario '{OutputWitnessOptionParser.ScenarioName(options.Scenario)}': " +
-            $"only expected {options.OriginalKey.Name} and {options.OutputKey.Name} console key records are inspected.");
+            $"only allowlisted console records are inspected; {sourceDescription}.");
         output.WriteLine(
             "Scope: ordinary input in this console while it has focus. This is not Raw Input, a global hook, or device-source attribution.");
         output.WriteLine(
@@ -97,13 +101,15 @@ internal static class OutputWitnessApplication
         output.WriteLine(
             "Usage: dotnet run --project tools/Tappy.OutputWitness -- --arm " +
             "--ack-focused-console-only --ack-no-device-attribution --ack-tappy-mode-set " +
-            "[--scenario basic|rehearsal|held-unplug] [--original-key NumPad0..NumPad9] " +
+            "[--scenario basic|rehearsal|held-unplug|controller-basic|controller-held-unplug] " +
+            "[--original-key NumPad0..NumPad9] " +
             "[--output-key F13..F24] [--timeout-seconds 10..300]");
         output.WriteLine();
         output.WriteLine(
             "Without all four exact --arm/--ack-* flags, no console handle is opened, input mode changed, buffer flushed, or input captured.");
         output.WriteLine(
-            "Defaults: scenario basic, original key NumPad1, output key F24, timeout 120 seconds. Keep this console focused and Num Lock on.");
+            "Defaults: scenario basic, original key NumPad1, output key F24, timeout 120 seconds. " +
+            "Keep this console focused; source-key scenarios require Num Lock on, while controller-basic requires the selected NumPad guard to remain untouched.");
         output.WriteLine();
         output.WriteLine(
             "basic: manually set Tappy to Normal output; hold the source through OS repeat, then release. " +
@@ -114,6 +120,12 @@ internal static class OutputWitnessApplication
         output.WriteLine(
             "held-unplug: manually set Tappy to Normal output; hold the source, then unplug the selected controller while still holding it. " +
             "Exactly one output make/break with no observed source break through a fixed 2-second post-release window is required.");
+        output.WriteLine(
+            "controller-basic: manually set Tappy to Normal output and map one vendor-HID or MIDI controller control to the selected output. " +
+            "Press/release that control once. Exactly one output make/break and no selected NumPad guard transitions through a fixed 2-second quiet window are required.");
+        output.WriteLine(
+            "controller-held-unplug: with that controller mapping in Normal output, press and physically keep holding its control, then unplug the controller when prompted. " +
+            "The operator supplies device/action attribution; exactly one output make/break, no selected NumPad guard transition, and a fixed 2-second cleanup window are required.");
         output.WriteLine();
         output.WriteLine(
             "Only aggregate allowlisted counts and final held state are written beneath " +

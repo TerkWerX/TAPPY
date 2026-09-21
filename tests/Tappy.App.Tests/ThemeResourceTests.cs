@@ -212,15 +212,18 @@ public sealed class ThemeResourceTests
         var photo = document.Descendants().Single(element =>
             element.Name.LocalName == "Image" &&
             element.Attribute("AutomationProperties.Name")?.Value == "{Binding ControllerPhotoName}");
-        Assert.Equal("{Binding ControllerPhotoSource}", photo.Attribute("Source")?.Value);
+        Assert.Equal("{Binding ControllerPhotoSource, Converter={StaticResource ControllerPhotoSourceConverter}}", photo.Attribute("Source")?.Value);
         Assert.DoesNotContain(photo.Ancestors(), element => element.Name.LocalName == "Button");
         var photoTriggers = photoHotspots.Descendants()
             .Where(element => element.Name.LocalName == "DataTrigger")
             .Select(element => element.Attribute("Binding")?.Value)
             .ToArray();
-        Assert.Contains("{Binding Tile.IsSelected}", photoTriggers);
-        Assert.Contains("{Binding Tile.IsIlluminated}", photoTriggers);
-        Assert.Contains("{Binding Tile.HasCustomColor}", photoTriggers);
+        // One physical face can have multiple reports (e.g. Num Lock modes).
+        // The template must observe the aggregate, not only its first tile.
+        Assert.Contains("{Binding IsSelected}", photoTriggers);
+        Assert.Contains("{Binding IsIlluminated}", photoTriggers);
+        Assert.Contains("{Binding HasCustomColor}", photoTriggers);
+        Assert.DoesNotContain("{Binding Tile.IsIlluminated}", photoTriggers);
 
         var rehearsalLabel = document
             .Descendants()
@@ -230,6 +233,103 @@ public sealed class ThemeResourceTests
                     "Rehearsal Mode —",
                     StringComparison.Ordinal) == true);
         Assert.Equal("Wrap", rehearsalLabel.Attribute("TextWrapping")?.Value);
+    }
+
+    [Theory]
+    [InlineData("MainWindow.xaml")]
+    [InlineData("KeyboardAssignmentWindow.xaml")]
+    [InlineData("BankControlWindow.xaml")]
+    [InlineData("LedAnimationWindow.xaml")]
+    [InlineData("FireColorPickerWindow.xaml")]
+    [InlineData("AboutWindow.xaml")]
+    [InlineData("SplashWindow.xaml")]
+    public void Every_top_level_window_has_an_explicitly_themed_content_root(string windowFile)
+    {
+        // LedAnimationWindow and FireColorPickerWindow both shipped with a
+        // root Grid that had no Background at all, so WPF's plain white
+        // default showed through while every TextBlock still used the
+        // theme's light-on-dark Foreground (an implicit style covering the
+        // whole app) — nearly unreadable light text on a white window,
+        // reported directly by the owner for LedAnimationWindow. A window's
+        // content root must always set an explicit themed Background,
+        // either a Grid using WindowBrush (most windows) or a Border using
+        // PanelBrush (windows built as a single rounded card, e.g.
+        // AboutWindow/SplashWindow).
+        var document = XDocument.Load(SourcePath("src", "Tappy.App", windowFile));
+        // Skip XAML property-element syntax (e.g. <Window.Resources>) — only
+        // the actual content child (a Grid or Border) is the window's root.
+        var contentRoot = document.Root!.Elements()
+            .Single(element => !element.Name.LocalName.Contains('.'));
+
+        var background = contentRoot.Attribute("Background")?.Value;
+        Assert.False(string.IsNullOrEmpty(background),
+            $"{windowFile}'s content root ({contentRoot.Name.LocalName}) has no Background — " +
+            "it will render on WPF's plain white default instead of the app's theme.");
+        Assert.StartsWith("{DynamicResource ", background, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("MainWindow.xaml")]
+    [InlineData("KeyboardAssignmentWindow.xaml")]
+    [InlineData("BankControlWindow.xaml")]
+    [InlineData("LedAnimationWindow.xaml")]
+    [InlineData("FireColorPickerWindow.xaml")]
+    public void Every_data_bound_combo_box_has_an_item_template(string windowFile)
+    {
+        // A ComboBox bound via ItemsSource (a plain object list, e.g. an
+        // enum or string) with no ItemTemplate renders its closed-state
+        // selection text using WPF's default template, which does not
+        // reliably pick up the app-wide ComboBox Style's Foreground setter —
+        // it comes out illegible (very low contrast) even though the
+        // dropdown list itself, and every other themed control, looks fine.
+        // LedAnimationWindow's Effect selector shipped exactly this way and
+        // was reported unreadable directly by the owner. Every other
+        // data-bound ComboBox in the app already works around it with an
+        // explicit ItemTemplate (inline or a named StaticResource); a
+        // ComboBox with static <ComboBoxItem> children instead of
+        // ItemsSource sets Foreground directly on each item and is exempt.
+        var document = XDocument.Load(SourcePath("src", "Tappy.App", windowFile));
+        var boundComboBoxes = document.Descendants()
+            .Where(element => element.Name.LocalName == "ComboBox" && element.Attribute("ItemsSource") is not null);
+
+        Assert.All(boundComboBoxes, comboBox =>
+        {
+            var name = comboBox.Attribute(XamlNamespace + "Name")?.Value ?? "(unnamed)";
+            var hasInlineTemplate = comboBox.Elements()
+                .Any(child => child.Name.LocalName == "ComboBox.ItemTemplate");
+            var hasReferencedTemplate = comboBox.Attribute("ItemTemplate") is not null;
+            Assert.True(hasInlineTemplate || hasReferencedTemplate,
+                $"{windowFile}'s ComboBox '{name}' is bound via ItemsSource with no ItemTemplate — " +
+                "its selected text will render illegibly.");
+        });
+    }
+
+    [Fact]
+    public void Every_data_bound_list_box_sets_its_item_text_foreground_explicitly()
+    {
+        // A ListBox using DisplayMemberPath auto-generates a TextBlock per item
+        // that does not reliably pick up ListBoxItem's themed Foreground setter —
+        // the same class of bug the ComboBox test above guards, but for ListBox.
+        // LedAnimationWindow's Library and Frame-timeline lists both shipped this
+        // way: their auto-generated text rendered in the app-wide light TextBrush
+        // instead of the deliberately white-backgrounded AssignmentListTextBrush,
+        // i.e. invisible white-on-white text, confirmed live in the running app
+        // (the row highlighted blue on click, proving an item existed, but no
+        // label was ever visible). The fix is the same as the ComboBox case: an
+        // explicit ItemTemplate that sets Foreground directly on the TextBlock,
+        // instead of DisplayMemberPath.
+        var document = XDocument.Load(SourcePath("src", "Tappy.App", "LedAnimationWindow.xaml"));
+        var listBoxes = document.Descendants().Where(element => element.Name.LocalName == "ListBox");
+
+        Assert.All(listBoxes, listBox =>
+        {
+            var name = listBox.Attribute(XamlNamespace + "Name")?.Value ??
+                listBox.Attribute("AutomationProperties.Name")?.Value ?? "(unnamed)";
+            Assert.Null(listBox.Attribute("DisplayMemberPath"));
+            var hasItemTemplate = listBox.Elements().Any(child => child.Name.LocalName == "ListBox.ItemTemplate");
+            Assert.True(hasItemTemplate,
+                $"LedAnimationWindow.xaml's ListBox '{name}' has no ItemTemplate — its item text will render illegibly.");
+        });
     }
 
     [Fact]

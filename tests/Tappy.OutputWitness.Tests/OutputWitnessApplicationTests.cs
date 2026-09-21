@@ -179,6 +179,8 @@ public sealed class OutputWitnessOptionParserTests
     [InlineData("basic", 0)]
     [InlineData("rehearsal", 1)]
     [InlineData("held-unplug", 2)]
+    [InlineData("controller-basic", 3)]
+    [InlineData("controller-held-unplug", 4)]
     public void ParserAcceptsEveryFiniteScenario(
         string value,
         int expected)

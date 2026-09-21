@@ -237,6 +237,45 @@ public sealed class MappingEngineTests
     }
 
     [Fact]
+    public void CleanupRetriesARejectedReleaseAfterThePhysicalPressHasBeenRemoved()
+    {
+        var output = new RejectingReleaseOutput();
+        var control = ControlId.FromRawInputKeyboard(0x004F);
+        var controller = ControllerProfile.Create(TestProfiles.Identity(), [control]);
+        controller.Layers[0].Bindings.Add(Binding(control, KeyboardActionDefinition.Hold("F24")));
+        var engine = new MappingEngine(output, new MappingEngineOptions { SelfInjectionMarker = TestProfiles.Marker });
+        engine.SetProfile(new TappyProfile { Controllers = [controller] }.CreateSnapshot());
+        Activate(engine, TestProfiles.Session(), control, 1);
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Press, 10));
+        output.RejectKeyUp = true;
+        var release = engine.Process(ControlSignal.Physical(TestProfiles.Session(), control, ControlSignalKind.Release, 11));
+        Assert.Equal(MappingDisposition.OutputFailed, release.Disposition);
+        Assert.False(engine.EmergencyStop().OutputReleaseSucceeded);
+        output.RejectKeyUp = false;
+        Assert.True(engine.EmergencyStop().OutputReleaseSucceeded);
+        Assert.Equal(3, output.KeyUpAttempts);
+    }
+
+    [Fact]
+    public void DirectModifierAliasesShareOnePhysicalLifetime()
+    {
+        var output = new RecordingKeyboardOutput();
+        var first = ControlId.Create("test", "first");
+        var second = ControlId.Create("test", "second");
+        var engine = TestProfiles.CreateEngine(output,
+            [(first, KeyboardActionDefinition.Hold("Ctrl"), null),
+             (second, KeyboardActionDefinition.Hold("LeftCtrl"), null)]);
+        TestProfiles.Activate(engine, first);
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), first, ControlSignalKind.Press, 10));
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), second, ControlSignalKind.Press, 11));
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), first, ControlSignalKind.Release, 12));
+        Assert.Equal(["CTRL"], output.DownKeys);
+        Assert.Empty(output.UpKeys);
+        engine.Process(ControlSignal.Physical(TestProfiles.Session(), second, ControlSignalKind.Release, 13));
+        Assert.Equal(["CTRL"], output.UpKeys);
+    }
+
+    [Fact]
     public void ReleaseUsesBindingLayerAndSourceFrozenAtKeyDown()
     {
         var output = new RecordingKeyboardOutput();

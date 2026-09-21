@@ -1,8 +1,24 @@
 namespace Tappy.App.ViewModels;
 
+/// <summary>
+/// A rotary encoder's tile is really three logical controls (rotate-increase,
+/// touch, rotate-decrease) rendered as one compact concentric cluster instead
+/// of three separate tiles — see MainViewModel's encoder-cluster detection.
+/// None means "an ordinary tile, not part of any cluster."
+/// </summary>
+public enum EncoderRingRole
+{
+    None,
+    Center,
+    IncreaseHalf,
+    DecreaseHalf
+}
+
 public sealed class ControlTileViewModel : ObservableObject
 {
     private bool _isPressed;
+    private bool _canAssign = true;
+    public bool CanAssign { get => _canAssign; set => Set(ref _canAssign, value); }
     private bool _isIlluminated;
     private bool _isSelected;
     private bool _isGroupSelected;
@@ -15,6 +31,10 @@ public sealed class ControlTileViewModel : ObservableObject
     private double _y;
     private double _tileWidth = 134;
     private double _tileHeight = 106;
+    private double _cornerRadius = 2;
+    private string? _clusterId;
+    private EncoderRingRole _ringRole = EncoderRingRole.None;
+    private string _ringGlyph = string.Empty;
     private int? _analogRawValue;
     private int _analogRawAtMinimum;
     private int _analogRawAtMaximum = 127;
@@ -49,6 +69,75 @@ public sealed class ControlTileViewModel : ObservableObject
         get => _tileHeight;
         set => Set(ref _tileHeight, value);
     }
+
+    /// <summary>
+    /// 2 (today's plain-rectangle default, matching App.xaml's shared Button
+    /// ControlTemplate) for most controls; a large constant for a control whose
+    /// physical shape is round (knobs, some buttons) — WPF's Border clamps an
+    /// over-large CornerRadius to the largest valid rounding for the box, so
+    /// this renders as a full circle/pill regardless of the tile's current
+    /// size and stays correct even if the tile is later resized, without
+    /// needing to recompute per resize. Set once from the model's measured
+    /// photo hotspot shape (see MainViewModel.EnsurePhotoHotspot), never
+    /// inferred from TileWidth/TileHeight.
+    /// </summary>
+    public double CornerRadius
+    {
+        get => _cornerRadius;
+        set => Set(ref _cornerRadius, value);
+    }
+
+    /// <summary>
+    /// Null for an ordinary tile. For a rotary encoder's three controls
+    /// (increase/touch/decrease), all three share the same ClusterId — the
+    /// key MainViewModel.PrepareGroupDrag uses to move them together, and
+    /// the reason they're always positioned/sized identically (see
+    /// MainViewModel.NaturalTileSize and ApplyControlPlacement).
+    /// </summary>
+    public string? ClusterId
+    {
+        get => _clusterId;
+        set => Set(ref _clusterId, value);
+    }
+
+    public EncoderRingRole RingRole
+    {
+        get => _ringRole;
+        set
+        {
+            if (Set(ref _ringRole, value))
+            {
+                Raise(nameof(IsEncoderCenter));
+                Raise(nameof(IsEncoderIncreaseHalf));
+                Raise(nameof(IsEncoderDecreaseHalf));
+                Raise(nameof(IsEncoderClusterMember));
+                Raise(nameof(RingZIndex));
+            }
+        }
+    }
+
+    /// <summary>"▲"/"▼" for an encoder half tile; blank otherwise — there's
+    /// no room for the full Label/Action/State text in a thin half-moon.</summary>
+    public string RingGlyph
+    {
+        get => _ringGlyph;
+        set => Set(ref _ringGlyph, value);
+    }
+
+    public bool IsEncoderCenter => RingRole == EncoderRingRole.Center;
+    public bool IsEncoderIncreaseHalf => RingRole == EncoderRingRole.IncreaseHalf;
+    public bool IsEncoderDecreaseHalf => RingRole == EncoderRingRole.DecreaseHalf;
+    public bool IsEncoderClusterMember => RingRole != EncoderRingRole.None;
+
+    /// <summary>The center circle must paint over the increase/decrease
+    /// half-disks' middle for the ring illusion to read correctly — see
+    /// MainWindow.xaml's ItemContainerStyle.</summary>
+    public int RingZIndex => RingRole switch
+    {
+        EncoderRingRole.Center => 2,
+        EncoderRingRole.None => 0,
+        _ => 1,
+    };
 
     public int? AnalogRawValue
     {

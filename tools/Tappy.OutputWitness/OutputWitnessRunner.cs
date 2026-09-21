@@ -285,12 +285,25 @@ internal sealed class OutputWitnessRunner
                 $"Release {options.OriginalKey.Name} once; keep this console focused.",
             OutputWitnessPhase.AwaitRequiredOutput =>
                 $"The source cycle was observed; waiting for exactly one balanced {options.OutputKey.Name} output cycle.",
+            OutputWitnessPhase.AwaitControllerOutputPress when
+                options.Scenario == OutputWitnessScenario.ControllerHeldUnplug =>
+                $"Press and keep holding the configured controller control; waiting for {options.OutputKey.Name} down before unplugging.",
+            OutputWitnessPhase.AwaitControllerOutputPress =>
+                $"Press and hold the configured controller control once; waiting for {options.OutputKey.Name} down.",
+            OutputWitnessPhase.AwaitControllerOutputRelease =>
+                $"Release the configured controller control once; waiting for {options.OutputKey.Name} up.",
             OutputWitnessPhase.HeldUnplugReady =>
                 $"Keep {options.OriginalKey.Name} physically held and unplug the selected controller now; waiting for synthetic {options.OutputKey.Name} up.",
             OutputWitnessPhase.RehearsalQuietWindow =>
                 $"Keep the console focused during the fixed quiet window; any {options.OutputKey.Name} transition fails Rehearsal evidence.",
+            OutputWitnessPhase.ControllerQuietWindow =>
+                $"Do not press anything while the fixed quiet window checks for duplicate or delayed {options.OutputKey.Name} output.",
             OutputWitnessPhase.HeldUnplugObservationWindow =>
                 $"Keep {options.OriginalKey.Name} physically held while the fixed post-release observation window completes.",
+            OutputWitnessPhase.ControllerHeldUnplugReady =>
+                $"Keep the configured controller control physically held and unplug that controller now; waiting for synthetic {options.OutputKey.Name} up.",
+            OutputWitnessPhase.ControllerHeldUnplugObservationWindow =>
+                "Keep the controller unplugged and its control physically held while the fixed post-release observation window completes.",
             OutputWitnessPhase.AwaitOutputReleaseAfterFailure =>
                 $"A failure is recorded while {options.OutputKey.Name} is held; unplug or use Tappy Emergency stop and wait for its key-up.",
             OutputWitnessPhase.Complete =>

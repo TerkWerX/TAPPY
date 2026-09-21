@@ -59,9 +59,24 @@ all three simultaneous sets, the held-G1 duplicate-suppression sweep, exact iden
 cleanup, and every runtime assertion passed with zero unexpected, duplicate,
 unbalanced, disconnect, provider-fault, or lifecycle events. The aggregate record's
 SHA-256 is `54CE558B9180D541E647D745C214CA778882D0B8C03815B7ED751AB7EE023A86`.
-The record is input-functional only: mapped-output, pass-through, hardware repeat,
-reconnect, unplug-while-held, latency, and full Controller Passport work remain, so
-the device is not yet Functional or Verified.
+The input record is input-functional only. A separate mapped-output record now
+proves one G1-to-F24 hold-until-release path through the real application, but
+pass-through, hardware repeat, reconnect, unplug-while-held, latency, and full
+Controller Passport work remain, so the device is not yet Functional or Verified.
+
+The finite Output Witness includes a `controller-basic` scenario designed for
+vendor-HID and MIDI controls that do not emit an ordinary console source key. It
+requires exactly one balanced F13-F24 output cycle plus a two-second duplicate/late
+output quiet window and records no device-attribution or compatibility-tier claim.
+On 2026-09-07 the operator confirmed the exact G13, mapped G1 to hold F24 until
+release, verified G1 tile/photo response in Rehearsal, switched deliberately to
+normal output, and operated only physical G1 during the armed witness. The record
+passed every assertion with one F24 down/up, zero selected NumPad guard events,
+zero duplicate or unbalanced output, final output released, a completed 2,012 ms
+quiet window, no reader fault, and completed console cleanup. Its SHA-256 is
+`8D1AA1A6F25A5FC197A5D9FA79007C81017453D6B0B2CDED15323CAF60F5E84A`.
+The JSON correctly retains `deviceSourceAttribution: none`; the attended operator
+record supplies the narrow G13/G1 attribution and does not establish pass-through.
 
 On 2026-09-04 an initial broad Logitech lighting path was rejected after it changed
 the owner's protected G910 rather than the G13. Tappy removed that path. The owner

@@ -24,6 +24,18 @@ public sealed record ControllerActionAssignment(
     ControllerActionSequenceDefinition PressSequence,
     ControllerActionSequenceDefinition ReleaseSequence);
 
+public sealed record ControllerAssignmentTarget(
+    string ControllerSessionId,
+    string ControllerPersistentId,
+    string ProviderId,
+    string LayerId,
+    string ControlId,
+    long ConfirmationGeneration);
+
+public sealed record ControllerAssignmentEditContext(
+    ControllerAssignmentTarget Target,
+    ControllerActionAssignment? ExistingAssignment);
+
 public sealed record ControllerControlPlacement(
     string ControlId,
     int NaturalRow,
@@ -43,7 +55,10 @@ public sealed record ControllerLayoutWorkspace(
     int GridColumns,
     int GridRows,
     bool SnapToGrid,
-    IReadOnlyList<ControllerControlPlacement> Controls);
+    IReadOnlyList<ControllerControlPlacement> Controls,
+    double Zoom = 1.0,
+    double PhotoPaneWidth = 420,
+    bool IsLayoutLocked = false);
 
 public enum ControllerLightingTopology
 {
@@ -57,7 +72,8 @@ public sealed record ControllerLedColorCapability(
     string DisplayName,
     IReadOnlyList<string> SupportedColorKeys,
     IReadOnlySet<string> ColorAddressableControlIds,
-    ControllerLightingTopology Topology = ControllerLightingTopology.PerControl);
+    ControllerLightingTopology Topology = ControllerLightingTopology.PerControl,
+    bool SupportsFreeformColor = false);
 
 public sealed record ControllerChoice(
     string SessionId,
@@ -66,7 +82,30 @@ public sealed record ControllerChoice(
     string IdentityConfidence,
     string ProviderId = "raw-input",
     ushort? VendorId = null,
-    ushort? ProductId = null);
+    ushort? ProductId = null)
+{
+    public bool IsProtectedForTyping { get; init; }
+    public string DeviceTag => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        System.Text.Encoding.UTF8.GetBytes(ProviderId + "\0" + PersistentId)))[..6];
+
+    public string Details
+    {
+        get
+        {
+            var hardware = VendorId is { } vendor && ProductId is { } product
+                ? $" · Hardware ID {vendor:X4}:{product:X4}" : string.Empty;
+            var explanation = ProviderId == "raw-input" && VendorId == 0x046D && ProductId == 0xC52B
+                ? "Wireless receiver keyboard input. Paired models are shown when receiver discovery succeeds; a paired entry is not proof the keyboard is awake. Keyboards sharing this receiver remain one Tappy input source and share typing protection. "
+                : DisplayName.Contains("infrared", StringComparison.OrdinalIgnoreCase)
+                    ? "Infrared remote-control input reported by Windows, not another plugged-in USB keyboard. "
+                    : "";
+            var identity = IdentityConfidence == "Ambiguous"
+                ? "This connection cannot reliably distinguish identical devices. "
+                : "";
+            return $"{(IsProtectedForTyping ? "Protected for typing — Tappy assignments are blocked. " : "")}{explanation}{identity}Device ID {DeviceTag}{hardware}. Use Identify and press/release a key on the intended device. The ID may change if you move USB ports.";
+        }
+    }
+}
 
 public sealed record RuntimeControlUpdate(
     string ControllerPersistentId,
@@ -79,7 +118,8 @@ public sealed record RuntimeControlUpdate(
     long AggregateEventCount,
     bool IsSnapshot = false,
     int? AnalogRawValue = null,
-    double? AnalogDelta = null);
+    double? AnalogDelta = null,
+    bool CanAssign = true);
 
 public sealed record RuntimeState(
     bool IsConfirmed,
@@ -93,7 +133,16 @@ public sealed record RuntimeState(
     bool IsIdentificationCaptureActive = false,
     string? ActiveControllerProviderId = null,
     ushort? ActiveControllerVendorId = null,
-    ushort? ActiveControllerProductId = null);
+    ushort? ActiveControllerProductId = null,
+    bool IsRememberedReconnect = false,
+    bool IsLifecyclePaused = false,
+    IReadOnlyList<RuntimeControlUpdate>? RetainedControls = null,
+    string? InputBankLabel = null,
+    bool? NumLockOn = null,
+    bool IsWaitingForReconnect = false,
+    string? ActiveControllerPresentationModelId = null,
+    int? TartarusKeymap = null,
+    int? TartarusVerifiedLedMask = null);
 
 public sealed record RuntimeOperation(bool Succeeded, string Message)
 {
@@ -106,8 +155,22 @@ public interface IControllerRuntime : IAsyncDisposable
     event EventHandler? DevicesChanged;
     event EventHandler<RuntimeControlUpdate>? ControlChanged;
     event EventHandler<RuntimeState>? StateChanged;
+    event EventHandler<ControllerBankRequest>? BankControlRequested { add { } remove { } }
+    ControllerBankEndpoint? GetBankEndpoint() => null;
+    BankControlBinding? GetBankControl(string controlId) => null;
+    RuntimeOperation SetBankControl(ControllerAssignmentTarget source, BankControlBinding? binding) =>
+        RuntimeOperation.Failed("Bank controls are unavailable in this runtime.");
+    RuntimeOperation ChangeBank(ControllerBankEndpoint expected, BankControlOperation operation, string layerId = "", string alternateLayerId = "") =>
+        RuntimeOperation.Failed("Bank controls are unavailable in this runtime.");
+    RuntimeOperation CreateCombination(ControllerBankEndpoint expected, IReadOnlyList<string> members) =>
+        RuntimeOperation.Failed("Combinations are unavailable in this runtime.");
+    RuntimeOperation RemoveCombination(ControllerAssignmentTarget target) =>
+        RuntimeOperation.Failed("Combinations are unavailable in this runtime.");
 
     IReadOnlyList<ControllerChoice> Devices { get; }
+    ControllerChoice? ReservedDevice => null;
+    ControllerChoice? GetVerifiedTypingKeyboard() => null;
+    void SetTypingKeyboardProtection(string? persistentId, bool blockAllKeyboards = false) { }
     bool IsRehearsal { get; set; }
     bool CanConfirmController { get; }
     bool IsIdentificationCaptureActive { get; }
@@ -115,6 +178,7 @@ public interface IControllerRuntime : IAsyncDisposable
 
     Task InitializeAsync(CancellationToken cancellationToken = default);
     void RefreshDevices();
+    void PollRememberedReconnect() { }
     RuntimeOperation BeginIdentification(ControllerChoice device);
     RuntimeOperation ConfirmController();
     RuntimeOperation AssignMapping(string controlId, string outputKey);
@@ -122,6 +186,11 @@ public interface IControllerRuntime : IAsyncDisposable
     RuntimeOperation AssignControllerAction(string controlId, ControllerActionAssignment assignment) =>
         RuntimeOperation.Failed("This runtime does not support multi-action controller assignments.");
     ControllerActionAssignment? GetControllerAction(string controlId) => null;
+    ControllerAssignmentEditContext? BeginAssignmentEdit(string controlId) => null;
+    RuntimeOperation AssignKeyboardMapping(ControllerAssignmentTarget target, KeyboardMappingAssignment assignment) =>
+        RuntimeOperation.Failed("This runtime cannot safely save an assignment to a captured controller target.");
+    RuntimeOperation AssignControllerAction(ControllerAssignmentTarget target, ControllerActionAssignment assignment) =>
+        RuntimeOperation.Failed("This runtime cannot safely save an assignment to a captured controller target.");
     RuntimeOperation ReorderControls(IReadOnlyList<string> orderedControlIds) =>
         RuntimeOperation.Failed("This runtime does not support custom controller layouts.");
     ControllerLayoutWorkspace? GetControllerLayout() => null;
@@ -130,6 +199,12 @@ public interface IControllerRuntime : IAsyncDisposable
     RuntimeOperation SyncControllerLedColors(IReadOnlyDictionary<string, string> colors) =>
         RuntimeOperation.Failed("This controller does not expose a verified hardware-lighting protocol to Tappy.");
     ControllerLedColorCapability? GetControllerLedColorCapability() => null;
+    RuntimeOperation SendFireOledDiagnosticPattern() =>
+        RuntimeOperation.Failed("This controller does not have a Tappy-supported OLED display.");
+    RuntimeOperation SendFireOledFrame(bool[,] pixels) =>
+        RuntimeOperation.Failed("This controller does not have a Tappy-supported OLED display.");
+    RuntimeOperation SelectTartarusKeymap(int bank) => RuntimeOperation.Failed("This controller does not support Tartarus keymaps.");
+    Task<RuntimeOperation> SyncTartarusIndicatorsAsync() => Task.FromResult(RuntimeOperation.Failed("Tartarus indicator output is unavailable."));
     Task<RuntimeOperation> SaveProfileAsync(CancellationToken cancellationToken = default);
     RuntimeOperation EmergencyStop(string reason);
 }

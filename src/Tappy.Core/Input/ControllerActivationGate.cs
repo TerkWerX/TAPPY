@@ -128,6 +128,30 @@ public sealed class ControllerActivationGate
         }
     }
 
+    /// <summary>
+    /// Restores a candidate whose persistent identity was explicitly confirmed earlier
+    /// in this application session. The caller must verify identity and native neutral
+    /// state and suppress output until recovery validation completes; this is not
+    /// first-time identification.
+    /// </summary>
+    public bool TryRestoreRememberedCandidate()
+    {
+        lock (_gate)
+        {
+            if (_candidate is not { } candidate ||
+                _inputStates.GetPressedControls(candidate).Count != 0)
+            {
+                return false;
+            }
+
+            _active.Add(candidate);
+            _candidate = null;
+            _identificationControl = null;
+            _state = ControllerActivationState.Active;
+            return true;
+        }
+    }
+
     public void CancelCandidate()
     {
         lock (_gate)

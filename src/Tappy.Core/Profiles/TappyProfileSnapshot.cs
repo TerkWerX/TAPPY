@@ -237,6 +237,8 @@ public sealed class ControllerLayoutSnapshot
         GridColumns = source.GridColumns;
         GridRows = source.GridRows;
         SnapToGrid = source.SnapToGrid;
+        Zoom = source.Zoom;
+        PhotoPaneWidth = source.PhotoPaneWidth;
         _rows = source.Rows.Select(row => new LayoutRowSnapshot(row)).ToArray();
         Rows = Array.AsReadOnly(_rows);
     }
@@ -247,6 +249,8 @@ public sealed class ControllerLayoutSnapshot
     public int GridColumns { get; }
     public int GridRows { get; }
     public bool SnapToGrid { get; }
+    public double Zoom { get; }
+    public double PhotoPaneWidth { get; }
     public IReadOnlyList<LayoutRowSnapshot> Rows { get; }
 
     internal ControllerLayoutDefinition ToEditable() => new()
@@ -257,6 +261,8 @@ public sealed class ControllerLayoutSnapshot
         GridColumns = GridColumns,
         GridRows = GridRows,
         SnapToGrid = SnapToGrid,
+        Zoom = Zoom,
+        PhotoPaneWidth = PhotoPaneWidth,
         Rows = _rows.Select(row => row.ToEditable()).ToList()
     };
 }
@@ -277,6 +283,8 @@ public sealed class ControllerProfileSnapshot
         SourceMode = new SourceModeSnapshot(source.SourceMode.Requested, source.SourceMode.Effective,
             source.SourceMode.Status);
         ActiveLayerId = source.ActiveLayerId;
+        BankControls = Array.AsReadOnly(source.BankControls.ToArray());
+        Combinations = Array.AsReadOnly(source.Combinations.Select(c => new ControlCombinationSnapshot(c.ControlId, c.Name, Array.AsReadOnly(c.Members.ToArray()))).ToArray());
         _layers = source.Layers.Select(layer => new InputLayerSnapshot(layer)).ToArray();
         Layers = Array.AsReadOnly(_layers);
         _layerLookup = _layers.ToDictionary(layer => layer.Id, StringComparer.OrdinalIgnoreCase);
@@ -288,6 +296,8 @@ public sealed class ControllerProfileSnapshot
     public string DisplayName { get; }
     public SourceModeSnapshot SourceMode { get; }
     public string ActiveLayerId { get; }
+    public IReadOnlyList<BankControlBinding> BankControls { get; }
+    public IReadOnlyList<ControlCombinationSnapshot> Combinations { get; }
     public IReadOnlyList<InputLayerSnapshot> Layers { get; }
     public ControllerLayoutSnapshot Layout { get; }
 
@@ -308,6 +318,8 @@ public sealed class ControllerProfileSnapshot
             Status = SourceMode.Status
         },
         ActiveLayerId = ActiveLayerId,
+        BankControls = [.. BankControls],
+        Combinations = Combinations.Select(c => new ControlCombination { ControlId = c.ControlId, Name = c.Name, Members = c.Members.ToList() }).ToList(),
         Layers = _layers.Select(layer => layer.ToEditable()).ToList(),
         Layout = Layout.ToEditable()
     };
@@ -322,6 +334,7 @@ public sealed class TappyProfileSnapshot
     {
         SchemaVersion = normalizedCopy.SchemaVersion;
         Name = normalizedCopy.Name;
+        RememberedReconnectPersistentId = normalizedCopy.RememberedReconnectPersistentId;
         _controllers = normalizedCopy.Controllers
             .Select(controller => new ControllerProfileSnapshot(controller))
             .ToArray();
@@ -331,6 +344,7 @@ public sealed class TappyProfileSnapshot
 
     public int SchemaVersion { get; }
     public string Name { get; }
+    public string? RememberedReconnectPersistentId { get; }
     public IReadOnlyList<ControllerProfileSnapshot> Controllers { get; }
 
     public static TappyProfileSnapshot Create(TappyProfile source)
@@ -340,6 +354,7 @@ public sealed class TappyProfileSnapshot
         {
             SchemaVersion = source.SchemaVersion,
             Name = source.Name,
+            RememberedReconnectPersistentId = source.RememberedReconnectPersistentId,
             Controllers = source.Controllers?.Select(controller => controller.Clone()).ToList() ?? []
         };
         copy.Normalize();
@@ -371,6 +386,7 @@ public sealed class TappyProfileSnapshot
     {
         SchemaVersion = SchemaVersion,
         Name = Name,
+        RememberedReconnectPersistentId = RememberedReconnectPersistentId,
         Controllers = _controllers.Select(controller => controller.ToEditable()).ToList()
     };
 }

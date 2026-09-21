@@ -238,6 +238,7 @@ public sealed class RawInputKeyboardProviderTests
         Assert.Equal(2, mappedCount);
         Assert.NotNull(syntheticRelease);
         Assert.Equal(0u, syntheticRelease.NativeMessage);
+        Assert.True(syntheticRelease.Signal.IsCleanup);
         Assert.Equal(["synthetic-release", "device-removal"], publicationOrder);
     }
 

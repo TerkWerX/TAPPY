@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Diagnostics;
 
 namespace Tappy.Windows.Input;
 
@@ -10,15 +9,22 @@ internal sealed class WinMmMidiInputBackend : IWinMmMidiInputBackend
     private const uint MidiData = 0x03C3;
     private readonly object _gate = new();
     private readonly MidiInCallback _callback;
+    private readonly MidiInputCallbackQueue _callbackQueue = new();
     private IntPtr _handle;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     internal WinMmMidiInputBackend()
     {
         _callback = OnMidiInput;
+        _callbackQueue.MessageReceived += message => ShortMessageReceived?.Invoke(message);
+        _callbackQueue.Faulted += (_, exception) => Faulted?.Invoke(this, exception);
     }
 
-    public event Action<uint>? ShortMessageReceived;
+    public event Action<WinMmMidiInputMessage>? ShortMessageReceived;
+
+    public event EventHandler<Exception>? Faulted;
+
+    public long SessionGeneration => _callbackQueue.CurrentGeneration;
 
     public IReadOnlyList<WinMmMidiInputDevice> EnumerateDevices()
     {
@@ -51,15 +57,17 @@ internal sealed class WinMmMidiInputBackend : IWinMmMidiInputBackend
         lock (_gate)
         {
             CloseLocked();
+            var generation = _callbackQueue.BeginSession();
             var result = midiInOpen(
                 out _handle,
                 (UIntPtr)(uint)deviceId,
                 _callback,
-                IntPtr.Zero,
+                new IntPtr(generation),
                 CallbackFunction);
             if (result != 0)
             {
                 _handle = IntPtr.Zero;
+                _callbackQueue.EndSession();
                 throw CreateError(result, $"Windows could not open MIDI input device {deviceId}");
             }
         }
@@ -113,11 +121,13 @@ internal sealed class WinMmMidiInputBackend : IWinMmMidiInputBackend
 
             CloseLocked();
             _disposed = true;
+            _callbackQueue.Dispose();
         }
     }
 
     private void CloseLocked()
     {
+        _callbackQueue.EndSession();
         if (_handle == IntPtr.Zero)
         {
             return;
@@ -138,12 +148,12 @@ internal sealed class WinMmMidiInputBackend : IWinMmMidiInputBackend
 
         try
         {
-            ShortMessageReceived?.Invoke(unchecked((uint)parameter1.ToUInt64()));
+            _callbackQueue.Enqueue(instance.ToInt64(), unchecked((uint)parameter1.ToUInt64()));
         }
         catch (Exception exception)
         {
             // No managed exception may cross the native multimedia callback boundary.
-            Debug.WriteLine($"Tappy MIDI callback failure: {exception.Message}");
+            _callbackQueue.ReportCallbackFailure(instance.ToInt64(), exception);
         }
     }
 

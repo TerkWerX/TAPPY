@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <None Include="..\..\src\Tappy.App\App.xaml" Link="AppResources.Source.xaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tappy.App\Tappy.App.csproj" />

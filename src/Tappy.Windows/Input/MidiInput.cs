@@ -8,6 +8,11 @@ public enum MidiInputControlKind
     ControlIncrease,
     ControlDecrease,
     ProgramChange,
+    /// <summary>A relative/signed encoder CC decoded directly from its byte value,
+    /// not compared against a previous absolute reading. See
+    /// WinMmMidiInputProvider.SetRelativeControlChanges.</summary>
+    RelativeControlIncrease,
+    RelativeControlDecrease,
 }
 
 public sealed record MidiInputDeviceDescriptor(
@@ -29,7 +34,16 @@ public sealed record MidiInput(
     int Number,
     int Value,
     string DisplayName,
-    ControlSignal Signal);
+    ControlSignal Signal)
+{
+    public long CaptureGeneration { get; init; }
+}
+
+public sealed class MidiCaptureLostEventArgs(MidiInputDeviceDescriptor descriptor, string reason) : EventArgs
+{
+    public MidiInputDeviceDescriptor Descriptor { get; } = descriptor;
+    public string Reason { get; } = reason;
+}
 
 public sealed class MidiInputReceivedEventArgs(MidiInput input) : EventArgs
 {

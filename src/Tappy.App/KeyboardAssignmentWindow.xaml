@@ -6,6 +6,14 @@
         Icon="/Tappy;component/Assets/Icons/tappy.ico"
         AutomationProperties.Name="Controller assignment editor">
     <Window.Resources>
+        <Style x:Key="EditorActionButtonStyle" TargetType="Button"
+               BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
         <DataTemplate x:Key="AssignmentCategoryItemTemplate">
             <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource ComboBoxTextBrush}" />
         </DataTemplate>
@@ -86,10 +94,25 @@
                BasedOn="{StaticResource {x:Type ListBoxItem}}">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="0" />
+            <!-- Native inactive-selection chrome can override the background
+                 without its foreground, leaving white text on pale gray in HC. -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="AssignmentItemShell" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="{DynamicResource AssignmentListSelectionBrush}" />
                     <Setter Property="Foreground" Value="{DynamicResource AssignmentListSelectionTextBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -329,14 +352,32 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                     <StackPanel Grid.Row="2">
-                        <WrapPanel>
-                            <Button x:Name="MoveUpButton" Content="Up" Click="MoveStepUp_OnClick" IsEnabled="False" />
-                            <Button x:Name="MoveDownButton" Content="Down" Click="MoveStepDown_OnClick" IsEnabled="False" Margin="6,0,0,0" />
-                            <Button x:Name="EditStepButton" Content="Edit step" Click="EditStep_OnClick" IsEnabled="False" Margin="6,0,0,0" />
-                            <Button x:Name="ApplyStepChangesButton" Content="Apply changes" Click="ApplyStepChanges_OnClick" IsEnabled="False" Margin="6,0,0,0" />
-                            <Button x:Name="RemoveStepButton" Content="Remove" Click="RemoveStep_OnClick" IsEnabled="False" Margin="6,0,0,0" />
-                            <Button Content="Clear" Click="ClearSteps_OnClick" Margin="6,0,0,0" />
-                        </WrapPanel>
+                        <Grid x:Name="StepActionsGrid">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="8" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="8" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Button x:Name="MoveUpButton" Content="Up" Click="MoveStepUp_OnClick" IsEnabled="False"
+                                    Style="{StaticResource EditorActionButtonStyle}" />
+                            <Button x:Name="MoveDownButton" Grid.Column="2" Content="Down" Click="MoveStepDown_OnClick" IsEnabled="False"
+                                    Style="{StaticResource EditorActionButtonStyle}" />
+                            <Button x:Name="EditStepButton" Grid.Row="2" Content="Edit step" Click="EditStep_OnClick" IsEnabled="False"
+                                    Style="{StaticResource EditorActionButtonStyle}" />
+                            <Button x:Name="ApplyStepChangesButton" Grid.Row="2" Grid.Column="2" Content="Apply changes" Click="ApplyStepChanges_OnClick" IsEnabled="False"
+                                    Style="{StaticResource EditorActionButtonStyle}" />
+                            <Button x:Name="RemoveStepButton" Grid.Row="4" Content="Remove" Click="RemoveStep_OnClick" IsEnabled="False"
+                                    Style="{StaticResource EditorActionButtonStyle}" />
+                            <Button x:Name="ClearStepsButton" Grid.Row="4" Grid.Column="2" Content="Clear" Click="ClearSteps_OnClick"
+                                    Style="{StaticResource EditorActionButtonStyle}" />
+                        </Grid>
                         <TextBlock x:Name="SequenceCountText" Text="0 of 500 steps" Margin="0,9,0,0"
                                    Foreground="{DynamicResource MutedTextBrush}" />
                     </StackPanel>
@@ -359,11 +400,17 @@
                     <ComboBoxItem Tag="RepeatWhileHeld"><TextBlock Text="Repeat while held" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
                     <ComboBoxItem Tag="ReleaseOnce"><TextBlock Text="Run once when released" Foreground="{DynamicResource ComboBoxTextBrush}" /></ComboBoxItem>
                 </ComboBox>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                    <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0" />
-                    <Button x:Name="AssignButton" Content="Use this assignment" Click="AssignButton_OnClick"
+                <Grid HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="CancelAssignmentButton" Content="Cancel" IsCancel="True" Style="{StaticResource EditorActionButtonStyle}" />
+                    <Button x:Name="AssignButton" Grid.Column="2" Content="Use this assignment" Click="AssignButton_OnClick"
+                            Style="{StaticResource EditorActionButtonStyle}"
                             AutomationProperties.Name="Use this controller assignment" />
-                </StackPanel>
+                </Grid>
             </StackPanel>
         </Grid>
     </Grid>
