@@ -58,6 +58,26 @@ public sealed partial class InputLifecycleRegressionTests
                 // updates the binding, and calls MainWindow's routed handler.
                 void Click() => typeof(System.Windows.Controls.Primitives.ToggleButton)
                     .GetMethod("OnClick", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(checkbox, null);
+                async Task SelectAndWaitForSavedBankAsync(int bank)
+                {
+                    var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var expectedStatus = $"Tartarus keymap {bank} selected and saved.";
+                    void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+                    {
+                        if (args.PropertyName == nameof(MainViewModel.MappingStatus) && vm.MappingStatus == expectedStatus)
+                        { saved.TrySetResult(); }
+                    }
+                    vm.PropertyChanged += OnPropertyChanged;
+                    try
+                    {
+                        picker.SelectedValue = bank;
+                        // Dispatcher idle does not mean the async-void selection
+                        // handler has finished its profile I/O. Observe completion
+                        // before another selection or deletion of the test folder.
+                        await saved.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    }
+                    finally { vm.PropertyChanged -= OnPropertyChanged; }
+                }
                 Click();
                 Assert.True(checkbox.IsChecked);
                 Assert.True(vm.TartarusFollowKeymaps);
@@ -70,7 +90,7 @@ public sealed partial class InputLifecycleRegressionTests
                 Assert.True(checkbox.IsChecked);
                 Assert.Contains("confirmed by device readback", vm.TartarusIndicatorStatus);
                 leds.Block = null;
-                picker.SelectedValue = 3;
+                await SelectAndWaitForSavedBankAsync(3);
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Assert.Equal(3, vm.SelectedTartarusKeymap);
                 Assert.Equal(4, leds.Calls.Last().Mask);
@@ -78,7 +98,7 @@ public sealed partial class InputLifecycleRegressionTests
                 Click();
                 Assert.False(checkbox.IsChecked);
                 var calls = leds.Calls.Count;
-                picker.SelectedValue = 2;
+                await SelectAndWaitForSavedBankAsync(2);
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Assert.Equal(calls, leds.Calls.Count);
                 leds.Fail = true;

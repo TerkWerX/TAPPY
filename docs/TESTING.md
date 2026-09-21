@@ -15,6 +15,15 @@ This includes the frame editor, compact encoder clusters, layout lock, Fit/Fill,
 and bulk resizing recorded in D-034–D-039. These are source-tree automated checks,
 not a new physical-controller verification or a signed/certified release.
 
+The first GitHub run of the publication checkpoint built successfully but exposed
+a test-cleanup race in the Tartarus follow-bank checkbox UI test: reaching WPF
+dispatcher idle did not mean the async selection handler had finished saving its
+temporary profile. The test now observes each bank's completed-save status before
+continuing or deleting its fixture directory. No application behavior was changed.
+After this test-only correction, the Release solution also built with zero
+warnings/errors and all 925 tests passed. The affected UI test passed 10 additional
+consecutive Release runs, and the formatting check remained clean.
+
 ## 2026-09-20 source-tree verification (historical checkpoint)
 
 Environment: Windows NT `10.0.26200.0`, x64, .NET SDK `10.0.401`; product projects
